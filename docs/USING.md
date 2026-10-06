@@ -69,7 +69,7 @@ After **3 minutes** with no touch, button press or movement (change it, or turn 
 
 Open `http://<board-ip>/` on any device on the same network:
 
-- top growers in the last 24 hours, weather, race and leaderboard
+- a side column with top growers in the last 24 hours, weather, race and leaderboard (above the channels on tablets and phones)
 - a card for every channel: live (estimated) count, growth chips, milestone and ETA, a 7 or 30-day graph, and the latest video with thumbnail
 - the new video tracker on your channel's card
 

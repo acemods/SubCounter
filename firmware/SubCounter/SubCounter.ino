@@ -1,5 +1,5 @@
 /*
- * SubCounter v9.3 — YouTube subscriber counter for Waveshare ESP32-C6-Touch-LCD-1.47
+ * SubCounter v9.4 — YouTube subscriber counter for Waveshare ESP32-C6-Touch-LCD-1.47
  *
  *  ON THE BOARD
  *    Swipe left / right ... next / previous channel   (BOOT short press = next)
@@ -2367,8 +2367,12 @@ header{display:flex;align-items:center;gap:12px;padding:16px 20px;border-bottom:
 .logo:after{content:"";border-left:10px solid #fff;border-top:6px solid transparent;border-bottom:6px solid transparent;margin-left:3px}
 header h1{font-size:18px;margin:0;flex:1}header .meta{color:var(--muted);font-size:13px}
 .btn{border:1px solid var(--line);border-radius:9px;padding:7px 12px;font-size:13px;color:var(--text);background:var(--card);cursor:pointer}
-main{max-width:1200px;margin:0 auto;padding:20px;display:grid;gap:16px}
-.row{display:grid;gap:16px;grid-template-columns:repeat(auto-fit,minmax(320px,1fr))}
+main{max-width:1500px;margin:0 auto;padding:20px}
+.layout{display:grid;grid-template-columns:340px minmax(0,1fr);gap:16px;align-items:start}
+.side{display:grid;gap:16px;align-content:start}
+.grid{display:grid;gap:16px;grid-template-columns:repeat(auto-fill,minmax(340px,1fr));align-items:start}
+@media(max-width:1000px){.layout{grid-template-columns:1fr}.side{grid-template-columns:repeat(auto-fit,minmax(280px,1fr));align-items:start}}
+@media(max-width:600px){main{padding:12px}.side,.grid{grid-template-columns:1fr}.big{font-size:38px}.vid img{width:104px}header{padding:12px}header .meta{white-space:nowrap;font-size:12px}}
 .card{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:18px}
 .card h2{font-size:13px;letter-spacing:.06em;text-transform:uppercase;color:var(--gold);margin:0 0 12px}
 .err{background:#3a1210;border-color:#e62117}
@@ -2387,11 +2391,11 @@ main{max-width:1200px;margin:0 auto;padding:20px;display:grid;gap:16px}
 .vid .t{font-weight:600;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
 .live{background:var(--red);color:#fff;border-radius:5px;padding:1px 6px;font-size:11px;font-weight:800;margin-right:6px}
 svg.g{width:100%;height:120px;display:block;margin-top:12px}
-.tabs{display:flex;gap:6px;margin-top:12px}.tabs button{border:0;border-radius:7px;padding:3px 9px;font-size:12px;background:#222226;color:var(--muted);cursor:pointer}.tabs button.on{background:#3a3a40;color:var(--text)}
+.tabs{display:flex;gap:6px;margin-top:12px}.tabs button{border:0;border-radius:8px;padding:5px 12px;font-size:13px;background:#222226;color:var(--muted);cursor:pointer}.tabs button.on{background:#3a3a40;color:var(--text)}
 table{width:100%;border-collapse:collapse}td{padding:8px 4px;border-top:1px solid var(--line)}td.n{text-align:right;font-variant-numeric:tabular-nums}
 tr.me td{color:var(--gold)}
-.race .side{display:flex;justify-content:space-between;align-items:center;margin:8px 0}.race .side span{display:flex;align-items:center;gap:10px;min-width:0}
-td .av{width:32px;height:32px}
+.race .rs{display:flex;justify-content:space-between;align-items:center;margin:8px 0}.race .rs span{display:flex;align-items:center;gap:10px;min-width:0}
+td .av{width:28px;height:28px;display:block}td{padding:6px 4px}td.nm2{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:150px}tr:first-child td{border-top:0}
 .tug{display:flex;height:14px;border-radius:7px;overflow:hidden;margin:10px 0}.tug .a{background:var(--red)}.tug .b{background:var(--blue)}
 .list div{display:flex;justify-content:space-between;padding:5px 0}
 </style></head><body>
@@ -2438,7 +2442,7 @@ if(c.vid){const v=c.vid;card.append(h('a',{class:'vid',href:'https://youtu.be/'+
 return card}
 function render(){const app=$('#app');app.textContent='';const C=D.channels;
 $('#meta').textContent=D.err?D.err:(D.updatedAgo>=0?'Updated '+(D.updatedAgo<60?'just now':(D.updatedAgo/60|0)+' min ago'):'');
-const row=h('div',{class:'row'});
+const row=h('aside',{class:'side'});
 // summary
 const ok=C.filter(c=>c.statsOk).sort((a,b)=>b.d1-a.d1);const nv=C.filter(c=>c.vid&&Date.now()/1000-c.vid.pub<86400);
 row.append(h('div',{class:'card'},h('h2',{text:'Last 24 hours'}),h('div',{class:'list'},ok.length?ok.slice(0,5).map(c=>h('div',{},h('span',{text:name(c)}),h('b',{class:cls(c.d1),text:sg(c.d1)}))):h('div',{class:'sub',text:'Collecting data – check back in a few hours'})),h('div',{class:'sub',style:'margin-top:8px',text:nv.length?`${nv.length} new video${nv.length>1?'s':''} today`:'No new videos in the last day'})));
@@ -2446,12 +2450,11 @@ row.append(h('div',{class:'card'},h('h2',{text:'Last 24 hours'}),h('div',{class:
 if(D.wx){const w=D.wx;row.append(h('div',{class:'card'},h('h2',{text:'Weather · '+w.place}),h('div',{class:'big',text:w.temp+'°'}),h('div',{text:w.text+' · feels '+w.feels+'°'}),h('div',{class:'sub',text:`High ${w.hi}° · Low ${w.lo}° · Wind ${w.wind} mph`}),w.rainHour>=0?h('div',{style:'margin-top:8px;color:var(--blue)',text:`Rain likely around ${String(w.rainHour).padStart(2,'0')}:00 (${w.rainPct}%)`}):null))}
 // race
 if(D.race){const A=C[D.race[0]],B=C[D.race[1]],ea=est(A),eb=est(B),fa=ea+eb?ea/(ea+eb):.5;const lead=ea>=eb?A:B,ch=lead===A?B:A,closing=(ch.rate||0)-(lead.rate||0),gap=Math.abs(ea-eb);
-row.append(h('div',{class:'card race'},h('h2',{text:'Race'}),h('div',{class:'side'},h('span',{},av(A),h('b',{style:'color:var(--red)',text:name(A)})),h('b',{text:fmt(ea)})),h('div',{class:'side'},h('span',{},av(B),h('b',{style:'color:var(--blue)',text:name(B)})),h('b',{text:fmt(eb)})),h('div',{class:'tug'},h('div',{class:'a',style:`width:${fa*100}%`}),h('div',{class:'b',style:`width:${(1-fa)*100}%`})),h('div',{text:`Gap ${fmt(gap)}`}),h('div',{class:'sub',text:closing>0.01?`${name(ch)} is catching up by ${fmt(Math.round(closing))}/day – could pass in about ${Math.max(1,Math.round(gap/closing))} days`:(lead.rate||ch.rate)?`${name(lead)} is pulling away`:'Trend: need more data'})))}
+row.append(h('div',{class:'card race'},h('h2',{text:'Race'}),h('div',{class:'rs'},h('span',{},av(A),h('b',{style:'color:var(--red)',text:name(A)})),h('b',{text:fmt(ea)})),h('div',{class:'rs'},h('span',{},av(B),h('b',{style:'color:var(--blue)',text:name(B)})),h('b',{text:fmt(eb)})),h('div',{class:'tug'},h('div',{class:'a',style:`width:${fa*100}%`}),h('div',{class:'b',style:`width:${(1-fa)*100}%`})),h('div',{text:`Gap ${fmt(gap)}`}),h('div',{class:'sub',text:closing>0.01?`${name(ch)} is catching up by ${fmt(Math.round(closing))}/day – could pass in about ${Math.max(1,Math.round(gap/closing))} days`:(lead.rate||ch.rate)?`${name(lead)} is pulling away`:'Trend: need more data'})))}
 // leaderboard
 const lb=[...C].filter(c=>c.subs>=0).sort((a,b)=>b.subs-a.subs);
-row.append(h('div',{class:'card'},h('h2',{text:'Leaderboard'}),h('table',{},lb.map((c,k)=>h('tr',{class:c.i==0?'me':''},h('td',{text:k+1+'.'}),h('td',{},av(c)),h('td',{text:name(c)}),h('td',{class:'n',text:cmp(c.subs)}),h('td',{class:'n '+cls(c.today),text:c.statsOk?sg(c.today):''}))))));
-app.append(row);
-const grid=h('div',{class:'row'});C.forEach(c=>grid.append(channelCard(c)));app.append(grid)}
+row.append(h('div',{class:'card'},h('h2',{text:'Leaderboard'}),h('table',{},lb.map((c,k)=>h('tr',{class:c.i==0?'me':''},h('td',{text:k+1+'.'}),h('td',{},av(c)),h('td',{class:'nm2',text:name(c)}),h('td',{class:'n',text:cmp(c.subs)}),h('td',{class:'n '+cls(c.today),text:c.statsOk?sg(c.today):''}))))));
+const grid=h('section',{class:'grid'});C.forEach(c=>grid.append(channelCard(c)));app.append(h('div',{class:'layout'},row,grid))}
 async function load(){try{const r=await fetch('/api/data');D=await r.json();render()}catch(e){$('#meta').textContent='Board not reachable'}}
 setInterval(()=>{if(!D)return;document.querySelectorAll('[data-est]').forEach(el=>{const c=D.channels[el.dataset.est];el.textContent=fmt(est(c))})},1000);
 load();setInterval(load,60000);
@@ -3279,7 +3282,7 @@ int portraitRot = 0;
 void setup() {
   Serial.begin(115200);
   delay(300);
-  Serial.println("SubCounter v9.3 starting");
+  Serial.println("SubCounter v9.4 starting");
   setenv("TZ", TZ_UK, 1); tzset();
 
   pinMode(SD_CS, OUTPUT);  digitalWrite(SD_CS, HIGH);

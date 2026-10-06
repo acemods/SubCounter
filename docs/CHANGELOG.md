@@ -2,6 +2,10 @@
 
 All builds are in [`builds/`](../builds). Source snapshots for most versions are in the git history.
 
+## v9.4
+- **Dashboard layout:** on wide screens, Last 24 hours, Weather, Race and Leaderboard sit in a left column with the channel cards in a grid beside them (no more empty space next to the leaderboard). Tablets show the side cards in two columns above the channels; phones stack everything.
+- Tighter leaderboard rows, bigger 7 / 30 day buttons, tidier phone header
+
 ## v9.3
 - **Idle clock:** after 1–10 minutes with no touch, button press or movement (default 3), shows a large clock with date, weather, rain warning and your subscriber count. Picking the board up, touching it or pressing BOOT goes back to where you were. Skipped while Spotify is playing; the dim night clock still takes over overnight.
 - Movement (picking up or nudging the board) now counts as using it

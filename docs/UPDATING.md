@@ -3,7 +3,7 @@
 ## Wireless update (recommended, v9 and later)
 
 1. Open `http://<board-ip>/update` (or Settings → *Update firmware wirelessly*).
-2. Choose the **APP-ONLY** file, e.g. `SubCounter-v9.3-APP-ONLY.bin`.
+2. Choose the **APP-ONLY** file, e.g. `SubCounter-v9.4-APP-ONLY.bin`.
 3. Wait about 30 seconds; the board installs and restarts.
 
 Settings, Wi-Fi networks, Spotify login and subscriber history are all kept. The page refuses FULL images. If an update fails, the board keeps running the old version.
