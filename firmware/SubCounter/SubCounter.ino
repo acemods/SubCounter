@@ -1,5 +1,5 @@
 /*
- * SubCounter v9.1 — YouTube subscriber counter for Waveshare ESP32-C6-Touch-LCD-1.47
+ * SubCounter v9.2 — YouTube subscriber counter for Waveshare ESP32-C6-Touch-LCD-1.47
  *
  *  ON THE BOARD
  *    Swipe left / right ... next / previous channel   (BOOT short press = next)
@@ -2175,6 +2175,52 @@ void drawSpProgress() {
   ftR(x + w, y + 24, mmss(sp.duration), F_S, C_GREY);
 }
 
+// ── Scrolling text (ticker) for long titles / artists ──
+// Each line is drawn into a small off-screen canvas, then copied to the display in one go (no flicker).
+#define MQ_GAP 48
+struct Marquee {
+  Arduino_Canvas *cv = nullptr;
+  int x = 0, y = 0, w = 0, h = 0, baseline = 0;
+  const uint8_t *font = nullptr; uint16_t col = C_WHITE;
+  String text; int textW = 0, off = 0;
+  unsigned long pauseUntil = 0, last = 0;
+};
+Marquee mqTitle, mqArtist;
+
+void mqInit(Marquee &m, int x, int y, int w, int h, int baseline, const uint8_t *font, uint16_t col) {
+  m.x = x; m.y = y; m.w = w; m.h = h; m.baseline = baseline; m.font = font; m.col = col;
+  if (!m.cv) {
+    m.cv = new Arduino_Canvas(w, h, gfx, x, y);
+    if (!m.cv->begin(GFX_SKIP_OUTPUT_BEGIN)) { delete m.cv; m.cv = nullptr; return; }
+    m.cv->setTextWrap(false);
+    m.cv->setUTF8Print(true);
+  }
+}
+
+void mqRender(Marquee &m) {
+  if (!m.cv) { ft(m.x, m.y + m.baseline, fit(m.text, m.font, m.w), m.font, m.col); return; }   // no memory: plain text
+  m.cv->fillScreen(C_BG);
+  m.cv->setFont(m.font); m.cv->setTextSize(1); m.cv->setTextColor(m.col);
+  m.cv->setCursor(-m.off, m.baseline); m.cv->print(m.text);
+  if (m.textW > m.w) { m.cv->setCursor(-m.off + m.textW + MQ_GAP, m.baseline); m.cv->print(m.text); }
+  m.cv->flush();
+}
+
+void mqSet(Marquee &m, const String &text) {
+  m.text = text; m.textW = tw(text, m.font); m.off = 0;
+  m.pauseUntil = millis() + 2000;
+  mqRender(m);
+}
+
+// Call often: scrolls ~33 px a second when the text doesn't fit, pausing at the start of each loop
+void mqTick(Marquee &m) {
+  if (!m.cv || m.textW <= m.w || millis() < m.pauseUntil || millis() - m.last < 30) return;
+  m.last = millis();
+  m.off++;
+  if (m.off >= m.textW + MQ_GAP) { m.off = 0; m.pauseUntil = millis() + 2000; }
+  mqRender(m);
+}
+
 void drawSpotify() {
   gfx->fillScreen(C_BG);
   if (!cfgSpId.length() || !cfgSpRefresh.length()) {
@@ -2192,8 +2238,10 @@ void drawSpotify() {
   }
   if (!drawArt(8, 11)) gfx->fillRoundRect(8, 11, 150, 150, 8, C_DKGREY);
   int x = 170;
-  int y = wrapF(asciiOnly(sp.title), x, 34, RIGHT_EDGE + 10, F_M, C_WHITE, 2, 24);
-  ft(x, y - 2, fit(asciiOnly(sp.artist), F_S, RIGHT_EDGE + 10 - x), F_S, 0x1EE9);
+  mqInit(mqTitle, x, 16, RIGHT_EDGE + 10 - x, 30, 22, F_M, C_WHITE);       // title: one line, scrolls if long
+  mqInit(mqArtist, x, 50, RIGHT_EDGE + 10 - x, 26, 18, F_S, 0x1EE9);       // artist: one line, scrolls if long
+  mqSet(mqTitle, asciiOnly(sp.title));
+  mqSet(mqArtist, asciiOnly(sp.artist));
   // play / pause symbol
   if (sp.playing) { gfx->fillRect(x, 92, 6, 18, C_WHITE); gfx->fillRect(x + 11, 92, 6, 18, C_WHITE); }
   else gfx->fillTriangle(x, 92, x, 110, x + 16, 101, C_WHITE);
@@ -3201,7 +3249,7 @@ int portraitRot = 0;
 void setup() {
   Serial.begin(115200);
   delay(300);
-  Serial.println("SubCounter v9.1 starting");
+  Serial.println("SubCounter v9.2 starting");
   setenv("TZ", TZ_UK, 1); tzset();
 
   pinMode(SD_CS, OUTPUT);  digitalWrite(SD_CS, HIGH);
@@ -3500,6 +3548,7 @@ void loop() {
       drawMainNumber(shownSubs);
     }
   }
+  if (mode == M_NORMAL && !menuOpen && app == APP_SP && sp.hasTrack) { mqTick(mqTitle); mqTick(mqArtist); }
   static unsigned long lastProg = 0;
   if (mode == M_NORMAL && !menuOpen && app == APP_SP && sp.hasTrack && millis() - lastProg > 1000) {
     lastProg = millis(); drawSpProgress();
