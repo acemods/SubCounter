@@ -1,24 +1,24 @@
 /*
- * SubCounter v7 — YouTube subscriber counter for Waveshare ESP32-C6-Touch-LCD-1.47
+ * SubCounter v8.2 — YouTube subscriber counter for Waveshare ESP32-C6-Touch-LCD-1.47
  *
- *  NAVIGATION
+ *  ON THE BOARD
  *    Swipe left / right ... next / previous channel   (BOOT short press = next)
- *    Swipe up ............. more detail for this channel:
- *                             1 Overview (profile picture, views, videos, joined)
- *                             2 Latest video (views, likes, comments, LIVE badge)
- *                             3 Growth (today / 7 days / 30 days)
- *                             4 7-day graph
- *                             5 Next milestone (progress + predicted date)
- *    Swipe down ........... back up; from the main count it opens the Leaderboard
+ *    Swipe up ............. detail cards: Overview, Latest video, Growth, 7-day graph, Milestone
+ *    Swipe down ........... back; from the main count: Leaderboard, then Race
+ *    Shake ................ refresh now
+ *    Face-down ............ screen off
+ *    Stand on its side .... tall leaderboard
+ *    Double-tap the desk .. next channel
+ *    9 am ................. daily summary;  at night: dim clock mode
  *    Hold BOOT 3 s ........ setup mode
- *    After 2 minutes untouched it returns to the main count.
  *
- *  Subscriber history is stored on the board (LittleFS) so growth survives restarts.
- *  "est." numbers are estimates between YouTube's rounded steps (can be turned off).
+ *  IN A BROWSER
+ *    http://<board IP>/          dashboard (all channels, graphs, videos, race)
+ *    http://<board IP>/settings  settings
  *
  *  Arduino IDE: Board "ESP32C6 Dev Module", USB CDC On Boot "Enabled",
  *    Flash Size "8MB", Partition Scheme "8M with spiffs (3MB APP/1.5MB SPIFFS)".
- *    Libraries: "GFX Library for Arduino" 1.6.x, "ArduinoJson" 7.x, "JPEGDEC" 1.8.x
+ *    Libraries: "GFX Library for Arduino" 1.6.x, "ArduinoJson" 7.x, "JPEGDEC" 1.8.x,
  *               "U8g2" (for its fonts)
  */
 
@@ -36,8 +36,8 @@
 #include <esp_wifi.h>
 #include <esp_mac.h>
 #include <time.h>
-#include <U8g2lib.h>   // readable fonts (U8g2 library)
 #include <sys/time.h>
+#include <U8g2lib.h>   // readable fonts (U8g2 library)
 
 // ── Pins (ESP32-C6 version of the board) ────────────────────────────────────
 #define LCD_SCK   1
@@ -60,6 +60,8 @@
 #define VIDEO_REFRESH_MS   (15UL * 60UL * 1000UL)   // latest videos: channels+1 units
 #define AUTO_SWITCH_MS     10000UL
 #define IDLE_RETURN_MS     120000UL
+#define NIGHT_IDLE_MS      60000UL
+#define SUMMARY_SHOW_MS    (10UL * 60UL * 1000UL)
 #define ALERT_MS           3500UL
 #define WIFI_TIMEOUT_MS    20000UL
 #define DHCP_EXTRA_MS      15000UL
@@ -68,6 +70,8 @@
 #define NUM_CARDS          6          // 0 main, 1 overview, 2 latest video, 3 growth, 4 graph, 5 milestone
 #define HIST_MAX_AGE       (31L * 86400L)
 #define TZ_UK              "GMT0BST,M3.5.0/1,M10.5.0/2"
+#define BL_NORMAL          160
+#define BL_NIGHT           18
 
 // ── Display ─────────────────────────────────────────────────────────────────
 Arduino_DataBus *bus = new Arduino_HWSPI(LCD_DC, LCD_CS, LCD_SCK, LCD_MOSI);
@@ -102,7 +106,7 @@ struct Channel {
   // history-derived
   time_t stepChangedAt = 0;
   bool statsOk = false;
-  long gainToday = 0, gain7 = 0, gain30 = 0;
+  long gainToday = 0, gain24 = 0, gain7 = 0, gain30 = 0;
   float span7Days = 0, span30Days = 0, ratePerDay = 0;
   time_t histStart = 0, lastSampleT = 0; long lastSampleS = -1;
 };
@@ -110,12 +114,15 @@ Channel ch[MAX_CH];
 int numCh = 0;
 int page = 0;              // channel on screen
 int card = 0;              // 0..NUM_CARDS-1
-bool board = false;        // leaderboard showing
+bool board = false;        // leaderboard / race showing
+bool raceView = false;     // (when board) showing the race instead of the leaderboard
 long shownSubs = -1;
 
-struct Alert { int idx; long delta; long total; };
-Alert alerts[MAX_CH];
+enum AlertType { A_GAIN, A_MILESTONE, A_OVERTAKE };
+struct Alert { AlertType type; int idx; int idx2; long delta; long total; };
+Alert alerts[MAX_CH * 2];
 int numAlerts = 0;
+int raceLeader = -1;
 
 // ── State ───────────────────────────────────────────────────────────────────
 Preferences prefs;
@@ -125,6 +132,13 @@ DNSServer dns;
 String cfgSsid, cfgPass, cfgChannels, cfgApiKey, cfgUser;
 String cfgIp, cfgGw, cfgMask, cfgDns;
 bool   cfgCompat = false, cfgAuto = false, cfgEst = true;
+bool   cfgCelebrate = true, cfgSummary = true;
+bool   cfgShake = true, cfgFaceDown = true, cfgPortrait = true, cfgFlipPortrait = false, cfgTap = true;
+int    cfgTapSens = 2;
+int    cfgRaceA = -1, cfgRaceB = -1;
+int    cfgNightStart = 23, cfgNightEnd = 7;
+float  cfgG0x = 0, cfgG0y = 0, cfgG0z = 1;       // motion calibration: "normal" gravity direction
+bool   g0Saved = false;                          // false = use the position at power-up
 bool   usedCompatThisBoot = false;
 String wifiFailReason = "";
 volatile int lastDiscReason = 0;
@@ -136,6 +150,15 @@ bool fsOk = false;
 String netError = "";
 unsigned long lastFetch = 0, lastVideoFetch = 0, lastFetchOk = 0, lastInteract = 0;
 unsigned long btnDownAt = 0;
+
+// Forward declarations (functions used before they're defined)
+bool raceSet();
+void drawRace();
+void drawBoard();
+void handleSettings();
+void setBacklight(int v);
+long nextMilestone(long n);
+long prevMilestone(long next);
 
 // ════════════════════════════════════════════════════════════════════════════
 //  Panel init (JD9853 register setup)
@@ -438,6 +461,22 @@ void loadSettings() {
   cfgCompat   = prefs.getBool("compat", false);
   cfgAuto     = prefs.getBool("auto", false);
   cfgEst      = prefs.getBool("est", true);
+  cfgCelebrate = prefs.getBool("celebrate", true);
+  cfgSummary  = prefs.getBool("summary", true);
+  cfgShake    = prefs.getBool("shake", true);
+  cfgFaceDown = prefs.getBool("facedown", true);
+  cfgPortrait = prefs.getBool("portrait", true);
+  cfgFlipPortrait = prefs.getBool("flip", false);
+  cfgTap      = prefs.getBool("tap", true);
+  cfgTapSens  = prefs.getInt("tapsens", 2);
+  cfgRaceA    = prefs.getInt("raceA", -1);
+  cfgRaceB    = prefs.getInt("raceB", -1);
+  cfgNightStart = prefs.getInt("nightS", 23);
+  cfgNightEnd = prefs.getInt("nightE", 7);
+  cfgG0x      = prefs.getFloat("g0x", 0);
+  cfgG0y      = prefs.getFloat("g0y", 0);
+  cfgG0z      = prefs.getFloat("g0z", 1);
+  g0Saved     = prefs.isKey("g0z");
   prefs.end();
   parseChannels();
 }
@@ -456,6 +495,18 @@ void saveSettings() {
   prefs.putBool("compat", cfgCompat);
   prefs.putBool("auto", cfgAuto);
   prefs.putBool("est", cfgEst);
+  prefs.putBool("celebrate", cfgCelebrate);
+  prefs.putBool("summary", cfgSummary);
+  prefs.putBool("shake", cfgShake);
+  prefs.putBool("facedown", cfgFaceDown);
+  prefs.putBool("portrait", cfgPortrait);
+  prefs.putBool("flip", cfgFlipPortrait);
+  prefs.putBool("tap", cfgTap);
+  prefs.putInt("tapsens", cfgTapSens);
+  prefs.putInt("raceA", cfgRaceA);
+  prefs.putInt("raceB", cfgRaceB);
+  prefs.putInt("nightS", cfgNightStart);
+  prefs.putInt("nightE", cfgNightEnd);
   prefs.end();
 }
 
@@ -489,7 +540,7 @@ void computeStats(int i) {
   time_t now = nowT(), mid = localMidnight();
   bool haveToday = false, have7 = false, have30 = false;
   Sample s, beforeMid = {0, -1};
-  long baseToday = -1, base7 = -1, base30 = -1; time_t t7 = 0, t30 = 0, tToday = 0;
+  long baseToday = -1, base7 = -1, base30 = -1, base24 = -1; time_t t7 = 0, t30 = 0, tToday = 0;
   bool first = true;
   while (f.read((uint8_t *)&s, sizeof(s)) == sizeof(s)) {
     if (first) { c.histStart = s.t; first = false; }
@@ -497,11 +548,13 @@ void computeStats(int i) {
     else if (!haveToday) { haveToday = true; baseToday = beforeMid.s >= 0 ? beforeMid.s : s.s; tToday = beforeMid.s >= 0 ? beforeMid.t : s.t; }
     if (!have30 && (time_t)s.t >= now - 30L * 86400) { have30 = true; base30 = s.s; t30 = s.t; }
     if (!have7 && (time_t)s.t >= now - 7L * 86400)   { have7 = true;  base7 = s.s;  t7 = s.t; }
+    if ((time_t)s.t <= now - 86400 || base24 < 0) base24 = s.s;   // last sample at least 24 h old (or the first one)
   }
   f.close();
   if (first) return;
   if (!haveToday) { baseToday = beforeMid.s >= 0 ? beforeMid.s : c.subs; tToday = beforeMid.t; }
   c.gainToday = c.subs - baseToday;
+  c.gain24 = c.subs - base24;
   c.gain7 = have7 ? c.subs - base7 : 0;
   c.gain30 = have30 ? c.subs - base30 : 0;
   c.span7Days = have7 ? (now - t7) / 86400.0f : 0;
@@ -919,7 +972,7 @@ void drawBoard() {
 
 void drawView() {
   if (!numCh) { drawMain(); return; }
-  if (board) { drawBoard(); return; }
+  if (board) { if (raceView) drawRace(); else drawBoard(); return; }
   switch (card) {
     case 1: drawOverview(); break;
     case 2: drawLatestVideo(); break;
@@ -941,6 +994,7 @@ void wipe(int dx, int dy) {
 }
 
 void changePage(int dir) {
+  if (board && raceView) return;
   if (board) {          // on the leaderboard, left/right pages through it
     int pages = (numCh + BOARD_ROWS - 1) / BOARD_ROWS;
     if (pages < 2) return;
@@ -954,26 +1008,18 @@ void changePage(int dir) {
 }
 
 void changeCard(int dir) {   // dir +1 = deeper (swipe up)
-  if (board) { if (dir > 0) { board = false; card = 0; wipe(0, 1); drawView(); } return; }
+  if (board) {
+    if (raceView) { if (dir > 0) { raceView = false; wipe(0, 1); drawView(); } return; }       // race -> leaderboard
+    if (dir > 0) { board = false; card = 0; wipe(0, 1); drawView(); }                         // leaderboard -> main
+    else { raceView = true; wipe(0, -1); drawView(); }                                        // leaderboard -> race
+    return;
+  }
   if (dir < 0 && card == 0) { board = true; boardPage = 0; wipe(0, -1); drawView(); return; }
   int nc = constrain(card + dir, 0, NUM_CARDS - 1);
   if (nc == card) return;
   card = nc;
   wipe(0, dir);
   drawView();
-}
-
-void showAlert(const Alert &a) {
-  for (int i = 0; i < 4; i++) { gfx->fillScreen(i % 2 ? C_PURPLE : C_GOLD); delay(100); }
-  gfx->fillScreen(C_BG);
-  drawAvatar(a.idx, 6, 4, true);
-  ft(58, 24, "New subscribers!", F_M, C_GOLD);
-  ft(58, 46, fit(nameOf(a.idx), F_S, gfx->width() - 66), F_S, C_WHITE);
-  String d = "+" + withCommas(a.delta);
-  ftC(112, d, numFont(d, gfx->width() - 20), C_GREEN, gfx->width());
-  ftC(158, "now " + withCommas(a.total), F_M, C_GREY, gfx->width());
-  unsigned long start = millis();
-  while (millis() - start < ALERT_MS) { server.handleClient(); delay(20); }
 }
 
 // ════════════════════════════════════════════════════════════════════════════
@@ -1028,7 +1074,368 @@ char pollSwipe() {
 }
 
 // ════════════════════════════════════════════════════════════════════════════
-//  Web pages
+//  Motion sensor (QMI8658) — shake, face-down, portrait, desk double-tap
+// ════════════════════════════════════════════════════════════════════════════
+uint8_t imuAddr = 0;
+bool imuOk = false;
+
+bool imuWrite(uint8_t reg, uint8_t val) {
+  Wire.beginTransmission(imuAddr); Wire.write(reg); Wire.write(val);
+  return Wire.endTransmission() == 0;
+}
+bool imuRead(uint8_t reg, uint8_t *buf, uint8_t n) {
+  Wire.beginTransmission(imuAddr); Wire.write(reg);
+  if (Wire.endTransmission(false) != 0) return false;
+  if (Wire.requestFrom(imuAddr, n) != n) return false;
+  Wire.readBytes(buf, n);
+  return true;
+}
+
+void imuInit() {
+  const uint8_t addrs[] = { 0x6B, 0x6A };
+  for (uint8_t a : addrs) {
+    imuAddr = a;
+    uint8_t who = 0;
+    if (imuRead(0x00, &who, 1) && who == 0x05) { imuOk = true; break; }
+  }
+  if (!imuOk) { Serial.println("Motion sensor NOT found"); return; }
+  imuWrite(0x60, 0xB0);  delay(30);    // soft reset
+  imuWrite(0x02, 0x40);                // CTRL1: register auto-increment, little endian
+  imuWrite(0x03, 0x15);                // CTRL2: accel ±4 g, 250 Hz
+  imuWrite(0x08, 0x01);                // CTRL7: accelerometer on
+  delay(20);
+  Serial.printf("Motion sensor found at 0x%02X\n", imuAddr);
+}
+
+bool imuAccel(float &x, float &y, float &z) {
+  uint8_t d[6];
+  if (!imuRead(0x35, d, 6)) return false;
+  x = (int16_t)(d[0] | (d[1] << 8)) / 8192.0f;
+  y = (int16_t)(d[2] | (d[3] << 8)) / 8192.0f;
+  z = (int16_t)(d[4] | (d[5] << 8)) / 8192.0f;
+  return true;
+}
+
+enum Orient { O_NORMAL, O_FACEDOWN, O_PORTRAIT_A, O_PORTRAIT_B };
+Orient orient = O_NORMAL;
+float gX = 0, gY = 0, gZ = 1;            // smoothed gravity (for orientation)
+float fX = 0, fY = 0, fZ = 1;            // fast low-pass (for taps)
+bool imuPrimed = false;
+unsigned long lastImu = 0, orientSince = 0, lastTouchActivity = 0;
+Orient orientCandidate = O_NORMAL;
+// shake
+unsigned long shakeTimes[6]; int shakeN = 0; unsigned long lastShake = 0;
+// taps
+unsigned long tapBurstStart = 0, tapLast = 0, tapFirst = 0, tapSecond = 0, quietBefore = 0;
+int tapCount = 0;
+bool evShake = false, evTap = false;
+
+float tapThreshold() { return cfgTapSens >= 3 ? 0.06f : (cfgTapSens == 1 ? 0.25f : 0.12f); }
+
+// Called often from loop(); sets evShake / evTap and updates `orient`.
+void imuUpdate() {
+  if (!imuOk || millis() - lastImu < 10) return;
+  lastImu = millis();
+  float x, y, z;
+  if (!imuAccel(x, y, z)) return;
+  static unsigned long primedAt = 0;
+  if (!imuPrimed) { gX = fX = x; gY = fY = y; gZ = fZ = z; imuPrimed = true; primedAt = millis(); return; }
+  static bool autoCal = false;
+  if (!g0Saved && !autoCal && millis() - primedAt > 1500) {   // not calibrated yet: power-up position = normal
+    float m = sqrtf(gX * gX + gY * gY + gZ * gZ);
+    if (m > 0.5f) { cfgG0x = gX / m; cfgG0y = gY / m; cfgG0z = gZ / m; }
+    autoCal = true;
+  }
+  if (!g0Saved && !autoCal) { gX += (x - gX) * 0.04f; gY += (y - gY) * 0.04f; gZ += (z - gZ) * 0.04f; return; }
+  fX += (x - fX) * 0.15f; fY += (y - fY) * 0.15f; fZ += (z - fZ) * 0.15f;
+  gX += (x - gX) * 0.04f; gY += (y - gY) * 0.04f; gZ += (z - gZ) * 0.04f;
+  float hx = x - fX, hy = y - fY, hz = z - fZ;
+  float hp = sqrtf(hx * hx + hy * hy + hz * hz);        // sudden movement, in g
+  unsigned long now = millis();
+
+  // ── shake: 4+ big jolts within a second ──
+  if (hp > 0.8f) {
+    if (shakeN == 0 || now - shakeTimes[shakeN - 1] > 60) {
+      if (shakeN == 6) { memmove(shakeTimes, shakeTimes + 1, 5 * sizeof(unsigned long)); shakeN = 5; }
+      shakeTimes[shakeN++] = now;
+    }
+    int recent = 0;
+    for (int i = 0; i < shakeN; i++) if (now - shakeTimes[i] < 1000) recent++;
+    if (recent >= 4 && now - lastShake > 2500) { lastShake = now; shakeN = 0; evShake = true; }
+  }
+
+  // ── desk double-tap: exactly two small knocks 120-600 ms apart, quiet around them ──
+  bool tapsAllowed = now - lastTouchActivity > 1500 && now - lastShake > 1500 && orient == O_NORMAL;
+  if (tapsAllowed && hp > tapThreshold() && hp < 0.8f) {
+    if (now - tapLast > 100) {                  // start of a new knock (not the ringing of the last one)
+      if (tapCount == 0) { tapFirst = now; tapBurstStart = now; }
+      if (tapCount == 1) tapSecond = now;
+      tapCount++;
+    }
+    tapLast = now;
+  }
+  if (tapCount && now - tapLast > 450) {        // burst finished
+    unsigned long gap = tapSecond - tapFirst;
+    if (tapCount == 2 && gap >= 120 && gap <= 600 && tapFirst - quietBefore > 700) evTap = true;
+    quietBefore = tapLast;
+    tapCount = 0;
+  }
+  if (!tapCount && hp > tapThreshold()) quietBefore = now;   // any stray knock resets the quiet timer
+
+  // ── orientation (relative to the calibrated "normal" position) ──
+  float n = sqrtf(gX * gX + gY * gY + gZ * gZ);
+  if (n < 0.5f) return;
+  float ux = gX / n, uy = gY / n, uz = gZ / n;
+  float zUp = (fabsf(cfgG0z) > 0.3f) ? (cfgG0z > 0 ? 1 : -1) : 1;   // which way the screen faces
+  Orient o = O_NORMAL;
+  if (uz * zUp < -0.75f) o = O_FACEDOWN;
+  // Found on the real board: gravity runs along the sensor's Y axis when the board stands
+  // in portrait, and along X when it stands in landscape. The sign of Y says which end is down.
+  else if (fabsf(uy) > 0.75f) o = (uy > 0) ? O_PORTRAIT_A : O_PORTRAIT_B;
+  if (o != orientCandidate) { orientCandidate = o; orientSince = now; }
+  if (orientCandidate != orient && now - orientSince > 700) orient = orientCandidate;
+}
+
+// Store the current position as "normal" (from the web settings page)
+void calibrateMotion() {
+  float n = sqrtf(gX * gX + gY * gY + gZ * gZ);
+  if (n < 0.5f) return;
+  cfgG0x = gX / n; cfgG0y = gY / n; cfgG0z = gZ / n;
+  prefs.begin("subcounter", false);
+  prefs.putFloat("g0x", cfgG0x); prefs.putFloat("g0y", cfgG0y); prefs.putFloat("g0z", cfgG0z);
+  prefs.end();
+  g0Saved = true;
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+//  Celebrations, race, daily summary, night clock, tall leaderboard
+// ════════════════════════════════════════════════════════════════════════════
+// Bigger milestones get bigger parties: 1 = under 1K ... 4 = a million or more
+int tierFor(long milestone) {
+  if (milestone >= 1000000) return 4;
+  if (milestone >= 100000) return 3;
+  if (milestone >= 1000) return 2;
+  return 1;
+}
+
+void confetti(int tier) {
+  const uint16_t cols[] = { C_GOLD, C_RED, C_GREEN, C_BLUE, C_PURPLE, C_WHITE, 0xFD20, 0x07FF };
+  const int MAXP = 120;
+  struct P { float x, y, vx, vy; uint16_t c; uint8_t s; } p[MAXP];
+  int n = 30 * tier; if (n > MAXP) n = MAXP;
+  int W = gfx->width(), H = gfx->height();
+  gfx->fillScreen(C_BG);
+  for (int i = 0; i < n; i++) {
+    bool burst = tier >= 3;                  // big ones explode from the middle, small ones rain down
+    p[i].x = burst ? W / 2 + random(-20, 20) : random(0, W);
+    p[i].y = burst ? H / 2 + random(-10, 10) : -random(0, H);
+    float a = random(0, 628) / 100.0f, sp = random(20, 70) / 10.0f;
+    p[i].vx = burst ? cosf(a) * sp : random(-10, 10) / 10.0f;
+    p[i].vy = burst ? sinf(a) * sp - 2 : random(15, 40) / 10.0f;
+    p[i].c = cols[random(0, 8)];
+    p[i].s = random(2, 2 + tier + 1);
+  }
+  unsigned long until = millis() + 1500 + 700UL * tier;
+  while (millis() < until) {
+    for (int i = 0; i < n; i++) {
+      gfx->fillRect((int)p[i].x, (int)p[i].y, p[i].s, p[i].s, C_BG);
+      p[i].vy += 0.12f;
+      p[i].x += p[i].vx; p[i].y += p[i].vy;
+      if (p[i].y > H && tier < 3) { p[i].y = -5; p[i].x = random(0, W); p[i].vy = random(15, 40) / 10.0f; }
+      gfx->fillRect((int)p[i].x, (int)p[i].y, p[i].s, p[i].s, p[i].c);
+    }
+    server.handleClient();
+    delay(25);
+  }
+}
+
+void sprinkle(int count) {
+  const uint16_t cols[] = { C_GOLD, C_RED, C_GREEN, C_BLUE, C_PURPLE };
+  for (int i = 0; i < count; i++) {
+    int x = random(0, gfx->width()), y = random(0, gfx->height());
+    if (y > 30 && y < 140 && x > 20 && x < gfx->width() - 20) continue;   // keep the middle clear
+    gfx->fillRect(x, y, 3, 3, cols[random(0, 5)]);
+  }
+}
+
+void waitShowing(unsigned long ms) {
+  unsigned long start = millis();
+  while (millis() - start < ms) { server.handleClient(); delay(20); }
+}
+
+void showAlert(const Alert &a) {
+  if (a.type == A_MILESTONE) {
+    int tier = tierFor(a.total);
+    if (cfgCelebrate) confetti(tier);
+    gfx->fillScreen(C_BG);
+    if (cfgCelebrate) sprinkle(30 * tier);
+    drawAvatar(a.idx, 6, 4, true);
+    ft(58, 24, tier >= 4 ? "HUGE MILESTONE!" : "MILESTONE!", F_M, C_GOLD);
+    ft(58, 46, fit(nameOf(a.idx), F_S, gfx->width() - 66), F_S, C_WHITE);
+    String m = withCommas(a.total);
+    ftC(110, m, numFont(m, gfx->width() - 20), C_GOLD, gfx->width());
+    ftC(150, "subscribers", F_M, C_WHITE, gfx->width());
+    waitShowing(ALERT_MS + 1000UL * tier);
+    return;
+  }
+  for (int i = 0; i < 4; i++) { gfx->fillScreen(i % 2 ? C_PURPLE : C_GOLD); delay(100); }
+  gfx->fillScreen(C_BG);
+  if (a.type == A_OVERTAKE) {
+    ftC(30, "OVERTAKE!", F_M, C_GOLD, gfx->width());
+    ftC(70, fit(nameOf(a.idx), F_M, gfx->width() - 20), F_M, C_GREEN, gfx->width());
+    ftC(98, "just passed", F_S, C_GREY, gfx->width());
+    ftC(130, fit(nameOf(a.idx2), F_M, gfx->width() - 20), F_M, C_WHITE, gfx->width());
+    ftC(160, withCommas(ch[a.idx].subs) + " vs " + withCommas(ch[a.idx2].subs), F_S, C_GREY, gfx->width());
+  } else {
+    drawAvatar(a.idx, 6, 4, true);
+    ft(58, 24, "New subscribers!", F_M, C_GOLD);
+    ft(58, 46, fit(nameOf(a.idx), F_S, gfx->width() - 66), F_S, C_WHITE);
+    String d = "+" + withCommas(a.delta);
+    ftC(112, d, numFont(d, gfx->width() - 20), C_GREEN, gfx->width());
+    ftC(158, "now " + withCommas(a.total), F_M, C_GREY, gfx->width());
+  }
+  waitShowing(ALERT_MS);
+}
+
+// ── Subscriber race ─────────────────────────────────────────────────────────
+bool raceSet() { return cfgRaceA >= 0 && cfgRaceB >= 0 && cfgRaceA < numCh && cfgRaceB < numCh && cfgRaceA != cfgRaceB; }
+
+// Days until the chaser catches the leader (0 = not catching up)
+float raceDays(int lead, int chase, float &closing) {
+  closing = ch[chase].ratePerDay - ch[lead].ratePerDay;
+  long gap = ch[lead].subs - ch[chase].subs;
+  if (closing <= 0.01f || gap <= 0) return 0;
+  return gap / closing;
+}
+
+void drawRace() {
+  gfx->fillScreen(C_BG);
+  ft(8, 22, "Race", F_M, C_GOLD);
+  gfx->drawFastHLine(8, 31, gfx->width() - 16, C_DKGREY);
+  if (!raceSet()) {
+    ftC(84, "No race set up", F_M, C_GREY, gfx->width());
+    ftC(116, "Pick two channels on", F_S, C_GREY, gfx->width());
+    ftC(138, "the settings page", F_S, C_GREY, gfx->width());
+    return;
+  }
+  int A = cfgRaceA, B = cfgRaceB;
+  long sa = max(0L, estimateFor(A)), sb = max(0L, estimateFor(B));
+  String ca = compact(sa), cb = compact(sb);
+  ft(8, 56, fit(nameOf(A), F_S, gfx->width() - tw(ca, F_M) - 26), F_S, C_RED);
+  ftR(gfx->width() - 8, 56, ca, F_M, C_WHITE);
+  ft(8, 82, fit(nameOf(B), F_S, gfx->width() - tw(cb, F_M) - 26), F_S, C_BLUE);
+  ftR(gfx->width() - 8, 82, cb, F_M, C_WHITE);
+  // tug-of-war bar
+  int bx = 8, by = 92, bw = gfx->width() - 16, bh = 14;
+  float fa = (sa + sb) ? (float)sa / (sa + sb) : 0.5f;
+  int wa = (int)(bw * fa);
+  gfx->fillRect(bx, by, wa, bh, C_RED);
+  gfx->fillRect(bx + wa, by, bw - wa, bh, C_BLUE);
+  gfx->drawFastVLine(bx + bw / 2, by - 3, bh + 6, C_WHITE);
+  int lead = sa >= sb ? A : B, chase = lead == A ? B : A;
+  ftC(132, "Gap " + withCommas(labs(sa - sb)), F_M, C_WHITE, gfx->width());
+  float closing;
+  float days = raceDays(lead, chase, closing);
+  String t;
+  if (days > 0) t = "Catching up " + withCommas(lroundf(closing)) + "/day - pass in ~" + (days < 1 ? String("<1") : String((long)days)) + "d";
+  else if (ch[A].statsOk && ch[B].statsOk && (ch[A].ratePerDay || ch[B].ratePerDay)) t = fit(nameOf(lead), F_S, 140) + " pulling away";
+  else t = "Trend: need more data";
+  ftC(160, fit(t, F_S, gfx->width() - 10), F_S, C_GREY, gfx->width());
+}
+
+// ── Daily summary (9 am) ────────────────────────────────────────────────────
+void drawSummary() {
+  gfx->fillScreen(C_BG);
+  ft(8, 22, "Good morning!", F_M, C_GOLD);
+  if (timeValid()) ftR(gfx->width() - 8, 22, dateStr(nowT(), "%a %d %b"), F_S, C_GREY);
+  gfx->drawFastHLine(8, 31, gfx->width() - 16, C_DKGREY);
+  int idx[MAX_CH]; int n = 0;
+  for (int i = 0; i < numCh; i++) if (ch[i].statsOk) idx[n++] = i;
+  for (int a = 0; a < n; a++) for (int b = a + 1; b < n; b++)
+    if (ch[idx[b]].gain24 > ch[idx[a]].gain24) { int t = idx[a]; idx[a] = idx[b]; idx[b] = t; }
+  ft(8, 52, "Biggest growth since yesterday", F_S, C_GREY);
+  int y = 76;
+  if (!n) { ft(8, y, "Still collecting data...", F_M, C_GREY); y += 26; }
+  for (int r = 0; r < min(n, 3); r++) {
+    int i = idx[r];
+    String g = signedNum(ch[i].gain24);
+    ft(8, y, fit(nameOf(i), F_M, gfx->width() - tw(g, F_M) - 26), F_M, i == 0 ? C_GOLD : C_WHITE);
+    ftR(gfx->width() - 8, y, g, F_M, ch[i].gain24 > 0 ? C_GREEN : C_GREY);
+    y += 25;
+  }
+  int newVids = 0, newest = -1;
+  for (int i = 0; i < numCh; i++)
+    if (ch[i].vidPublished && timeValid() && nowT() - ch[i].vidPublished < 86400) {
+      newVids++;
+      if (newest < 0 || ch[i].vidPublished > ch[newest].vidPublished) newest = i;
+    }
+  String v = newVids == 0 ? String("No new videos in the last day") :
+             String(newVids) + (newVids == 1 ? " new video, from " : " new videos, latest ") + nameOf(newest);
+  ft(8, 166, fit(v, F_S, gfx->width() - 16), F_S, newVids ? C_BLUE : C_GREY);
+}
+
+// ── Night clock ─────────────────────────────────────────────────────────────
+bool isNight() {
+  if (cfgNightStart < 0 || cfgNightEnd < 0 || !timeValid()) return false;
+  time_t n = nowT(); struct tm lt; localtime_r(&n, &lt);
+  int h = lt.tm_hour;
+  if (cfgNightStart == cfgNightEnd) return false;
+  return cfgNightStart < cfgNightEnd ? (h >= cfgNightStart && h < cfgNightEnd)
+                                     : (h >= cfgNightStart || h < cfgNightEnd);
+}
+
+void drawAmbient() {
+  gfx->fillScreen(C_BG);
+  if (!timeValid()) { ftC(90, "--:--", F_N42, C_DKGREY, gfx->width()); return; }
+  ftC(82, dateStr(nowT(), "%H:%M"), F_N42, 0x7BEF, gfx->width());
+  ftC(110, dateStr(nowT(), "%A %d %B"), F_S, C_DKGREY, gfx->width());
+  if (numCh && ch[0].subs >= 0) {
+    String s = withCommas(estimateFor(0));
+    ftC(156, fit(nameOf(0), F_S, 150) + "   " + s, F_S, 0x6B4D, gfx->width());
+  }
+}
+
+int blNow = 160;
+void fadeBacklight(int target, int stepMs) {
+  while (blNow != target) {
+    blNow += (target > blNow) ? 1 : -1;
+    ledcWrite(LCD_BL, blNow);
+    delay(stepMs);
+  }
+}
+void setBacklight(int v) { blNow = v; ledcWrite(LCD_BL, v); }
+
+// ── Tall leaderboard (board turned on its side) ─────────────────────────────
+void drawPortraitBoard() {
+  gfx->fillScreen(C_BG);
+  int W = gfx->width();     // 172
+  ft(6, 22, "Leaderboard", F_M, C_GOLD);
+  gfx->drawFastHLine(6, 31, W - 12, C_DKGREY);
+  int idx[MAX_CH]; for (int i = 0; i < numCh; i++) idx[i] = i;
+  for (int a = 0; a < numCh; a++) for (int b = a + 1; b < numCh; b++)
+    if (ch[idx[b]].subs > ch[idx[a]].subs) { int t = idx[a]; idx[a] = idx[b]; idx[b] = t; }
+  int rowH = numCh > 0 ? min(48, 284 / numCh) : 28;
+  int y = 34;
+  for (int r = 0; r < numCh; r++) {
+    int i = idx[r];
+    uint16_t col = (i == 0) ? C_GOLD : C_WHITE;
+    String subs = ch[i].subs >= 0 ? compact(ch[i].subs) : String("-");
+    if (rowH >= 44) {     // roomy: name on one line, count + today underneath
+      ft(6, y + 18, String(r + 1) + " " + fit(nameOf(i), F_S, W - 30), F_S, col);
+      ft(6, y + 40, subs, F_M, col);
+      if (ch[i].statsOk && ch[i].gainToday) ftR(W - 6, y + 40, signedNum(ch[i].gainToday), F_S, C_GREEN);
+    } else {
+      int sw = tw(subs, F_S);
+      ft(6, y + 19, String(r + 1), F_S, C_GREY);
+      ft(24, y + 19, fit(nameOf(i), F_S, W - 34 - sw), F_S, col);
+      ftR(W - 6, y + 19, subs, F_S, col);
+    }
+    y += rowH;
+  }
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+//  Web: dashboard (/), data API, settings (/settings)
 // ════════════════════════════════════════════════════════════════════════════
 const char PAGE_HEAD[] PROGMEM = R"HTML(<!doctype html><html><head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
@@ -1045,33 +1452,234 @@ small{display:block;color:#777;font-size:12px;margin-top:6px}a{color:#4ea1ff}
 </style></head><body><div class="card">)HTML";
 
 
-void handleRoot() {
+const char DASH_HTML[] PROGMEM = R"HTML(<!doctype html><html lang="en"><head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>SubCounter</title>
+<style>
+:root{--bg:#0d0d0f;--card:#18181b;--line:#2a2a2e;--text:#f2f2f3;--muted:#8d8d95;--red:#ff3b30;--gold:#ffc53d;--green:#30d158;--blue:#4da3ff}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--text);font:15px/1.4 -apple-system,system-ui,Segoe UI,Roboto,sans-serif}
+a{color:inherit;text-decoration:none}
+header{display:flex;align-items:center;gap:12px;padding:16px 20px;border-bottom:1px solid var(--line);position:sticky;top:0;background:rgba(13,13,15,.92);backdrop-filter:blur(8px);z-index:2}
+.logo{width:34px;height:24px;border-radius:7px;background:var(--red);display:grid;place-items:center}
+.logo:after{content:"";border-left:10px solid #fff;border-top:6px solid transparent;border-bottom:6px solid transparent;margin-left:3px}
+header h1{font-size:18px;margin:0;flex:1}header .meta{color:var(--muted);font-size:13px}
+.btn{border:1px solid var(--line);border-radius:9px;padding:7px 12px;font-size:13px;color:var(--text);background:var(--card);cursor:pointer}
+main{max-width:1200px;margin:0 auto;padding:20px;display:grid;gap:16px}
+.row{display:grid;gap:16px;grid-template-columns:repeat(auto-fit,minmax(320px,1fr))}
+.card{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:18px}
+.card h2{font-size:13px;letter-spacing:.06em;text-transform:uppercase;color:var(--gold);margin:0 0 12px}
+.err{background:#3a1210;border-color:#e62117}
+.av{width:44px;height:44px;border-radius:50%;object-fit:cover;background:#333;flex:none}
+.av.lg{width:64px;height:64px}
+.top{display:flex;gap:12px;align-items:center}.top .nm{font-weight:700;font-size:17px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.sub{color:var(--muted);font-size:13px}
+.big{font-size:44px;font-weight:800;letter-spacing:-.02em;margin:10px 0 2px;font-variant-numeric:tabular-nums}
+.est{font-size:12px;color:var(--muted);font-weight:500;margin-left:6px;letter-spacing:0}
+.chips{display:flex;gap:8px;flex-wrap:wrap;margin:10px 0}
+.chip{background:#222226;border-radius:9px;padding:6px 10px;font-size:13px}.chip b{font-size:15px}
+.pos{color:var(--green)}.neg{color:var(--red)}
+.bar{height:10px;border-radius:6px;background:#2a2a2e;overflow:hidden;margin:8px 0 4px}.bar i{display:block;height:100%;background:var(--gold);border-radius:6px}
+.vid{display:flex;gap:12px;margin-top:14px;padding-top:14px;border-top:1px solid var(--line)}
+.vid img{width:128px;aspect-ratio:16/9;object-fit:cover;border-radius:8px;flex:none;background:#333}
+.vid .t{font-weight:600;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.live{background:var(--red);color:#fff;border-radius:5px;padding:1px 6px;font-size:11px;font-weight:800;margin-right:6px}
+svg.g{width:100%;height:120px;display:block;margin-top:12px}
+.tabs{display:flex;gap:6px;margin-top:12px}.tabs button{border:0;border-radius:7px;padding:3px 9px;font-size:12px;background:#222226;color:var(--muted);cursor:pointer}.tabs button.on{background:#3a3a40;color:var(--text)}
+table{width:100%;border-collapse:collapse}td{padding:8px 4px;border-top:1px solid var(--line)}td.n{text-align:right;font-variant-numeric:tabular-nums}
+tr.me td{color:var(--gold)}
+.race .side{display:flex;justify-content:space-between;align-items:center;margin:8px 0}.race .side span{display:flex;align-items:center;gap:10px;min-width:0}
+td .av{width:32px;height:32px}
+.tug{display:flex;height:14px;border-radius:7px;overflow:hidden;margin:10px 0}.tug .a{background:var(--red)}.tug .b{background:var(--blue)}
+.list div{display:flex;justify-content:space-between;padding:5px 0}
+</style></head><body>
+<header><div class="logo"></div><h1>SubCounter</h1><span class="meta" id="meta"></span><a class="btn" href="/settings">Settings</a></header>
+<main id="app"><div class="card">Loading…</div></main>
+<script>
+const $=s=>document.querySelector(s);
+function h(t,a,...k){const e=document.createElement(t);for(const x in a||{}){if(x=='class')e.className=a[x];else if(x=='text')e.textContent=a[x];else if(x.startsWith('on'))e[x]=a[x];else e.setAttribute(x,a[x])}for(const c of k.flat())if(c!=null)e.append(c.nodeType?c:document.createTextNode(c));return e}
+const fmt=n=>n==null||n<0?'-':Number(n).toLocaleString('en-GB');
+const cmp=n=>{if(n==null||n<0)return'-';if(n<10000)return fmt(n);const u=['K','M','B'];let i=-1;while(n>=1000&&i<2){n/=1000;i++}return(n>=100?n.toFixed(0):n>=10?n.toFixed(1):n.toFixed(2))+u[i]};
+const sg=n=>(n>=0?'+':'')+fmt(n);
+const cls=n=>n>0?'pos':n<0?'neg':'';
+function ago(t){if(!t)return'';let d=Date.now()/1000-t;if(d<3600)return Math.max(1,d/60|0)+' min ago';if(d<86400)return(d/3600|0)+' h ago';if(d<2592000)return(d/86400|0)+' days ago';return(d/2592000|0)+' months ago'}
+function dur(s){if(!s)return'';const p=x=>String(x).padStart(2,'0');return s>=3600?`${s/3600|0}:${p((s/60|0)%60)}:${p(s%60)}`:`${s/60|0}:${p(s%60)}`}
+let D=null,graphs={};
+function est(c){if(!D.est||!c.rate||c.rate<=0||c.step<=1||!c.stepAt)return c.subs;return c.subs+Math.min(c.step-1,Math.max(0,Math.floor(c.rate*(Date.now()/1000-c.stepAt)/86400)))}
+function eta(c){const e=est(c);if(!(c.rate>0.01))return c.rate<0?'Losing subscribers':'Need more data for a date';const d=(c.next-e)/c.rate;if(d<1)return'Expected today';if(d>3650)return'10+ years away';return'Expected around '+new Date(Date.now()+d*864e5).toLocaleDateString('en-GB',{day:'numeric',month:'short',year:d>300?'numeric':undefined})}
+function av(c,lg){return c.avatar?h('img',{class:'av'+(lg?' lg':''),src:c.avatar,alt:''}):h('div',{class:'av'+(lg?' lg':'')})}
+function name(c){return c.title||c.handle}
+async function graph(c,days,box){box.textContent='';const r=await fetch('/api/history?i='+c.i+'&days='+days);const pts=await r.json();if(pts.length<2){box.append(h('div',{class:'sub',text:'Collecting data – recorded every hour'}));return}
+pts.push([Date.now()/1000|0,c.subs]);const W=600,H=120,t0=pts[0][0],t1=pts[pts.length-1][0];let mn=Math.min(...pts.map(p=>p[1])),mx=Math.max(...pts.map(p=>p[1]));if(mx==mn){mx++;mn--}
+const X=t=>(t-t0)/(t1-t0||1)*(W-4)+2,Y=v=>H-6-(v-mn)/(mx-mn)*(H-24);const d=pts.map((p,k)=>(k?'L':'M')+X(p[0]).toFixed(1)+' '+Y(p[1]).toFixed(1)).join(' ');
+const ns='http://www.w3.org/2000/svg',svg=document.createElementNS(ns,'svg');svg.setAttribute('viewBox',`0 0 ${W} ${H}`);svg.setAttribute('class','g');svg.setAttribute('preserveAspectRatio','none');
+const area=document.createElementNS(ns,'path');area.setAttribute('d',d+` L ${X(t1)} ${H} L ${X(t0)} ${H} Z`);area.setAttribute('fill','rgba(48,209,88,.12)');svg.append(area);
+const ln=document.createElementNS(ns,'path');ln.setAttribute('d',d);ln.setAttribute('fill','none');ln.setAttribute('stroke','#30d158');ln.setAttribute('stroke-width','2.5');ln.setAttribute('vector-effect','non-scaling-stroke');svg.append(ln);
+box.append(svg,h('div',{class:'sub',text:`${cmp(mn)} – ${cmp(mx)}  ·  ${new Date(t0*1000).toLocaleDateString('en-GB',{day:'numeric',month:'short'})} to now`}))}
+function channelCard(c){const card=h('div',{class:'card'+(c.err&&c.subs<0?' err':'')});
+const link=c.id?'https://www.youtube.com/channel/'+c.id:'#';
+card.append(h('a',{class:'top',href:link,target:'_blank'},av(c,true),h('div',{style:'min-width:0'},h('div',{class:'nm',text:name(c)}),h('div',{class:'sub',text:[c.handle,c.country,c.joined?'since '+new Date(c.joined*1000).getFullYear():''].filter(Boolean).join(' · ')}))));
+if(c.err&&c.subs<0){card.append(h('p',{text:c.err}));return card}
+const e=est(c);card.append(h('div',{class:'big'},h('span',{'data-est':c.i,text:fmt(e)}),(D.est&&c.step>1&&c.rate>0)?h('span',{class:'est',text:'est.'}):null));
+card.append(h('div',{class:'sub',text:`${cmp(c.views)} views · ${fmt(c.videos)} videos · ${c.videos>0?cmp(Math.round(c.views/c.videos)):'-'} avg`}));
+if(c.statsOk)card.append(h('div',{class:'chips'},[['Today',c.today],['24 h',c.d1],['7 days',c.d7],['30 days',c.d30]].map(([k,v])=>h('div',{class:'chip'},k+' ',h('b',{class:cls(v),text:sg(v)}))),c.rate?h('div',{class:'chip'},'≈ ',h('b',{text:sg(Math.round(c.rate))}),'/day'):null));
+else card.append(h('div',{class:'chips'},h('div',{class:'chip',text:'Growth: collecting data'})));
+const f=Math.max(0,Math.min(1,(e-c.prev)/(c.next-c.prev||1)));
+card.append(h('div',{style:'margin-top:6px;display:flex;justify-content:space-between'},h('span',{class:'sub',text:'Next milestone '}),h('b',{text:fmt(c.next)})),h('div',{class:'bar'},h('i',{style:`width:${(f*100).toFixed(1)}%`})),h('div',{class:'sub',text:`${fmt(c.next-e)} to go · ${eta(c)}`}));
+const tabs=h('div',{class:'tabs'}),gbox=h('div');let cur=graphs[c.i]||7;
+for(const dd of [7,30]){const b=h('button',{text:dd+' days',class:dd==cur?'on':'',onclick:()=>{graphs[c.i]=dd;[...tabs.children].forEach(x=>x.className='');b.className='on';graph(c,dd,gbox)}});tabs.append(b)}
+card.append(tabs,gbox);graph(c,cur,gbox);
+if(c.vid){const v=c.vid;card.append(h('a',{class:'vid',href:'https://youtu.be/'+v.id,target:'_blank'},h('img',{src:`https://i.ytimg.com/vi/${v.id}/mqdefault.jpg`,alt:''}),h('div',{style:'min-width:0'},h('div',{class:'t'},v.live?h('span',{class:'live',text:'LIVE'}):null,v.title),h('div',{class:'sub',text:v.live?`${fmt(v.viewers)} watching now`:`${ago(v.pub)} · ${dur(v.dur)}`}),h('div',{class:'sub',text:`${cmp(v.views)} views · ${v.likes>=0?cmp(v.likes)+' likes':'likes hidden'} · ${v.comments>=0?cmp(v.comments)+' comments':'comments off'}`}))))}
+return card}
+function render(){const app=$('#app');app.textContent='';const C=D.channels;
+$('#meta').textContent=D.err?D.err:(D.updatedAgo>=0?'Updated '+(D.updatedAgo<60?'just now':(D.updatedAgo/60|0)+' min ago'):'');
+const row=h('div',{class:'row'});
+// summary
+const ok=C.filter(c=>c.statsOk).sort((a,b)=>b.d1-a.d1);const nv=C.filter(c=>c.vid&&Date.now()/1000-c.vid.pub<86400);
+row.append(h('div',{class:'card'},h('h2',{text:'Last 24 hours'}),h('div',{class:'list'},ok.length?ok.slice(0,5).map(c=>h('div',{},h('span',{text:name(c)}),h('b',{class:cls(c.d1),text:sg(c.d1)}))):h('div',{class:'sub',text:'Collecting data – check back in a few hours'})),h('div',{class:'sub',style:'margin-top:8px',text:nv.length?`${nv.length} new video${nv.length>1?'s':''} today`:'No new videos in the last day'})));
+// race
+if(D.race){const A=C[D.race[0]],B=C[D.race[1]],ea=est(A),eb=est(B),fa=ea+eb?ea/(ea+eb):.5;const lead=ea>=eb?A:B,ch=lead===A?B:A,closing=(ch.rate||0)-(lead.rate||0),gap=Math.abs(ea-eb);
+row.append(h('div',{class:'card race'},h('h2',{text:'Race'}),h('div',{class:'side'},h('span',{},av(A),h('b',{style:'color:var(--red)',text:name(A)})),h('b',{text:fmt(ea)})),h('div',{class:'side'},h('span',{},av(B),h('b',{style:'color:var(--blue)',text:name(B)})),h('b',{text:fmt(eb)})),h('div',{class:'tug'},h('div',{class:'a',style:`width:${fa*100}%`}),h('div',{class:'b',style:`width:${(1-fa)*100}%`})),h('div',{text:`Gap ${fmt(gap)}`}),h('div',{class:'sub',text:closing>0.01?`${name(ch)} is catching up by ${fmt(Math.round(closing))}/day – could pass in about ${Math.max(1,Math.round(gap/closing))} days`:(lead.rate||ch.rate)?`${name(lead)} is pulling away`:'Trend: need more data'})))}
+// leaderboard
+const lb=[...C].filter(c=>c.subs>=0).sort((a,b)=>b.subs-a.subs);
+row.append(h('div',{class:'card'},h('h2',{text:'Leaderboard'}),h('table',{},lb.map((c,k)=>h('tr',{class:c.i==0?'me':''},h('td',{text:k+1+'.'}),h('td',{},av(c)),h('td',{text:name(c)}),h('td',{class:'n',text:cmp(c.subs)}),h('td',{class:'n '+cls(c.today),text:c.statsOk?sg(c.today):''}))))));
+app.append(row);
+const grid=h('div',{class:'row'});C.forEach(c=>grid.append(channelCard(c)));app.append(grid)}
+async function load(){try{const r=await fetch('/api/data');D=await r.json();render()}catch(e){$('#meta').textContent='Board not reachable'}}
+setInterval(()=>{if(!D)return;document.querySelectorAll('[data-est]').forEach(el=>{const c=D.channels[el.dataset.est];el.textContent=fmt(est(c))})},1000);
+load();setInterval(load,60000);
+</script></body></html>)HTML";
+
+void handleDashboard() {
+  if (portalMode) { handleSettings(); return; }
+  server.send_P(200, "text/html", DASH_HTML);
+}
+
+void handleApiData() {
+  JsonDocument doc;
+  doc["now"] = (long)nowT();
+  doc["updatedAgo"] = lastFetchOk ? (long)((millis() - lastFetchOk) / 1000) : -1;
+  doc["err"] = netError;
+  doc["est"] = cfgEst;
+  doc["ip"] = WiFi.localIP().toString();
+  if (raceSet()) { JsonArray r = doc["race"].to<JsonArray>(); r.add(cfgRaceA); r.add(cfgRaceB); }
+  else doc["race"] = nullptr;
+  JsonArray arr = doc["channels"].to<JsonArray>();
+  for (int i = 0; i < numCh; i++) {
+    Channel &c = ch[i];
+    JsonObject o = arr.add<JsonObject>();
+    o["i"] = i; o["handle"] = c.handle; o["id"] = c.id; o["title"] = c.title;
+    o["subs"] = c.subs; o["step"] = c.subs >= 0 ? stepFor(c.subs) : 1;
+    o["rate"] = c.ratePerDay; o["stepAt"] = (long)c.stepChangedAt;
+    o["views"] = c.views; o["videos"] = c.videos; o["joined"] = (long)c.joined;
+    o["country"] = c.country; o["avatar"] = c.avatarUrl; o["err"] = c.err;
+    o["statsOk"] = c.statsOk; o["today"] = c.gainToday; o["d1"] = c.gain24;
+    o["d7"] = c.gain7; o["d30"] = c.gain30; o["histStart"] = (long)c.histStart;
+    long e = c.subs >= 0 ? estimateFor(i) : 0;
+    long nx = nextMilestone(max(0L, e));
+    o["next"] = nx; o["prev"] = prevMilestone(nx);
+    if (c.vidId.length() && c.vidTitle.length()) {
+      JsonObject v = o["vid"].to<JsonObject>();
+      v["id"] = c.vidId; v["title"] = c.vidTitle; v["pub"] = (long)c.vidPublished; v["dur"] = c.vidDuration;
+      v["views"] = c.vidViews; v["likes"] = c.vidLikes; v["comments"] = c.vidComments;
+      v["live"] = c.live; v["viewers"] = c.liveViewers;
+    }
+  }
+  String out;
+  serializeJson(doc, out);
+  server.send(200, "application/json", out);
+}
+
+// [[time, subs], ...] for one channel, streamed in chunks
+void handleApiHistory() {
+  int i = server.arg("i").toInt();
+  int days = constrain(server.arg("days").toInt(), 1, 31);
+  server.setContentLength(CONTENT_LENGTH_UNKNOWN);
+  server.send(200, "application/json", "");
+  server.sendContent("[");
+  if (i >= 0 && i < numCh && fsOk && ch[i].id.length()) {
+    File f = LittleFS.open(histPath(i), "r");
+    if (f) {
+      time_t from = nowT() - (time_t)days * 86400;
+      String chunk; bool first = true; Sample s;
+      while (f.read((uint8_t *)&s, sizeof(s)) == sizeof(s)) {
+        if ((time_t)s.t < from) continue;
+        chunk += (first ? "[" : ",[") + String(s.t) + "," + String(s.s) + "]";
+        first = false;
+        if (chunk.length() > 1200) { server.sendContent(chunk); chunk = ""; }
+      }
+      f.close();
+      if (chunk.length()) server.sendContent(chunk);
+    }
+  }
+  server.sendContent("]");
+  server.sendContent("");
+}
+
+String checkbox(const char *name, bool on, const char *label) {
+  return String("<label><input type='checkbox' name='") + name + "' value='1' style='width:auto'" + (on ? " checked" : "") + "> " + label + "</label>";
+}
+
+String hourSelect(const char *name, int val) {
+  String s = String("<select name='") + name + "'><option value='-1'" + (val < 0 ? " selected" : "") + ">Off</option>";
+  for (int h = 0; h < 24; h++) {
+    char b[8]; snprintf(b, sizeof(b), "%02d:00", h);
+    s += "<option value='" + String(h) + "'" + (val == h ? " selected" : "") + ">" + b + "</option>";
+  }
+  return s + "</select>";
+}
+
+String channelSelect(const char *name, int val) {
+  String s = String("<select name='") + name + "'><option value='-1'>None</option>";
+  for (int i = 0; i < numCh; i++)
+    s += "<option value='" + String(i) + "'" + (val == i ? " selected" : "") + ">" + htmlEscape(ch[i].title.length() ? ch[i].title : ch[i].handle) + "</option>";
+  return s + "</select>";
+}
+
+void handleSettings() {
   String h = FPSTR(PAGE_HEAD);
-  h += "<h1>&#9654; SubCounter setup</h1><p>Saved on the board only.</p>";
+  h += "<h1>&#9654; SubCounter settings</h1><p>Saved on the board only.";
+  if (!portalMode) h += " <a href='/'>&larr; Dashboard</a>";
+  h += "</p>";
   if (wifiFailReason.length()) {
     h += "<div style='background:#3a1210;border:1px solid #e62117;border-radius:10px;padding:12px;margin-bottom:8px;font-size:14px'>"
          "<b>Last attempt to join " + htmlEscape(cfgSsid) + " failed:</b><br>" + htmlEscape(wifiFailReason) + "</div>";
-  }
-  if (!portalMode && numCh) {
-    h += "<div class='st'>";
-    for (int i = 0; i < numCh; i++)
-      h += "<div>" + htmlEscape(ch[i].handle) + " &rarr; <b>" +
-           (ch[i].subs >= 0 ? withCommas(ch[i].subs) : String("…")) + "</b> " + htmlEscape(ch[i].err) + "</div>";
-    h += "</div>";
   }
   h += "<form method='POST' action='/save'>";
   h += "<label>YouTube channels (up to 10, one per line)</label>";
   h += "<textarea name='channels' autocapitalize='off' autocorrect='off' spellcheck='false' placeholder='@yourchannel&#10;@mkbhd&#10;@veritasium' required>" +
        htmlEscape(cfgChannels) + "</textarea>";
-  h += "<small>Use @handles, UC… channel IDs or paste channel links. Put your own channel first – it's highlighted on the leaderboard.</small>";
-  h += "<label><input type='checkbox' name='auto' value='1' style='width:auto'" + String(cfgAuto ? " checked" : "") +
-       "> Switch channels automatically every 10 seconds</label>";
-  h += "<label><input type='checkbox' name='est' value='1' style='width:auto'" + String(cfgEst ? " checked" : "") +
-       "> Estimated live counts between YouTube's rounded steps (shown as “est.”)</label>";
+  h += "<small>@handles, UC… channel IDs or channel links. Put your own channel first – it's highlighted and shown on the night clock.</small>";
   h += "<label>YouTube Data API key</label>";
   h += "<input name='apikey' autocapitalize='off' placeholder='";
   h += cfgApiKey.length() ? "(saved — leave blank to keep)" : "AIza…";
   h += "'>";
+
+  h += "<h1 style='font-size:17px;margin-top:26px'>Display</h1>";
+  h += checkbox("auto", cfgAuto, "Switch channels automatically every 10 seconds");
+  h += checkbox("est", cfgEst, "Estimated live counts between YouTube's rounded steps (“est.”)");
+  h += checkbox("celebrate", cfgCelebrate, "Confetti for milestones (bigger milestones, bigger party)");
+  h += checkbox("summary", cfgSummary, "Daily summary on screen at 9 am");
+  if (numCh >= 2) {
+    h += "<label>Subscriber race</label><div style='display:flex;gap:8px'>" + channelSelect("raceA", cfgRaceA) +
+         "<span style='align-self:center'>vs</span>" + channelSelect("raceB", cfgRaceB) + "</div>";
+    h += "<small>Swipe down twice from the main count to see it. You get an alert if one overtakes the other.</small>";
+  }
+  h += "<label>Night clock (dims and shows the time)</label><div style='display:flex;gap:8px'>" +
+       hourSelect("nightStart", cfgNightStart) + "<span style='align-self:center'>to</span>" + hourSelect("nightEnd", cfgNightEnd) + "</div>";
+
+  h += "<h1 style='font-size:17px;margin-top:26px'>Motion</h1>";
+  if (!imuOk && !portalMode) h += "<small style='color:#e62117'>Motion sensor not detected.</small>";
+  h += checkbox("shake", cfgShake, "Shake to refresh");
+  h += checkbox("facedown", cfgFaceDown, "Face-down turns the screen off");
+  h += checkbox("portrait", cfgPortrait, "Stand it on its side for a tall leaderboard");
+  h += checkbox("flip", cfgFlipPortrait, "Tall leaderboard is upside down? Tick to flip it");
+  h += checkbox("tap", cfgTap, "Double-tap the desk for the next channel");
+  h += "<label>Desk tap sensitivity</label><select name='tapsens'>";
+  const char *sens[] = { "", "Low (firm knocks)", "Medium", "High (light taps)" };
+  for (int k = 1; k <= 3; k++) h += "<option value='" + String(k) + "'" + (cfgTapSens == k ? " selected" : "") + ">" + sens[k] + "</option>";
+  h += "</select>";
+
+  h += "<h1 style='font-size:17px;margin-top:26px'>Wi-Fi</h1>";
   h += "<label>Wi-Fi network</label>";
   if (scanOptions.length()) {
     h += "<select onchange=\"document.getElementById('s').value=this.value\">";
@@ -1087,8 +1695,7 @@ void handleRoot() {
   h += "<input name='user' value='" + htmlEscape(cfgUser) + "' autocapitalize='off' placeholder='Leave blank for normal Wi-Fi'>";
   h += "<details style='margin-top:18px'" + String(cfgIp.length() || cfgCompat ? " open" : "") +
        "><summary style='color:#aaa;font-size:14px'>Advanced network settings</summary>";
-  h += "<label><input type='checkbox' name='compat' value='1' style='width:auto'" + String(cfgCompat ? " checked" : "") +
-       "> Compatibility mode (Wi-Fi 4 instead of Wi-Fi 6)</label>";
+  h += checkbox("compat", cfgCompat, "Compatibility mode (Wi-Fi 4 instead of Wi-Fi 6)");
   h += "<label>Fixed IP address (blank = automatic)</label>";
   h += "<input name='ip' value='" + htmlEscape(cfgIp) + "' placeholder='e.g. 192.168.1.250' inputmode='decimal'>";
   h += "<label>Gateway (router) address</label>";
@@ -1100,13 +1707,24 @@ void handleRoot() {
   h += "<small>If this one doesn't answer, the board also tries 8.8.8.8.</small>";
   h += "</details>";
   h += "<button type='submit'>Save &amp; restart</button></form>";
+
+  if (!portalMode && imuOk) {
+    h += "<form method='POST' action='/calibrate' style='margin-top:22px'>"
+         "<label>Motion calibration</label><small>Put the board in the position you normally use it (on its stand or flat), then press:</small>"
+         "<button type='submit' style='background:#333'>Set this as the normal position</button></form>";
+  }
   h += "<small style='margin-top:16px'>Board Wi-Fi MAC address: " + boardMac() + "</small></div></body></html>";
   server.send(200, "text/html", h);
 }
 
 void sendMessage(int code, const String &title, const String &body) {
   server.send(code, "text/html", String(FPSTR(PAGE_HEAD)) + "<h1>" + title + "</h1><p>" + body +
-              "</p><a href='/'>Go back</a></div></body></html>");
+              "</p><a href='/settings'>Go back</a></div></body></html>");
+}
+
+void handleCalibrate() {
+  calibrateMotion();
+  sendMessage(200, "Calibrated &#10003;", "This is now the board's normal position.");
 }
 
 void handleSave() {
@@ -1139,6 +1757,16 @@ void handleSave() {
   cfgCompat = server.arg("compat") == "1";
   cfgAuto = server.arg("auto") == "1";
   cfgEst = server.arg("est") == "1";
+  cfgCelebrate = server.arg("celebrate") == "1";
+  cfgSummary = server.arg("summary") == "1";
+  cfgShake = server.arg("shake") == "1";
+  cfgFaceDown = server.arg("facedown") == "1";
+  cfgPortrait = server.arg("portrait") == "1";
+  cfgFlipPortrait = server.arg("flip") == "1";
+  cfgTap = server.arg("tap") == "1";
+  if (server.hasArg("tapsens")) cfgTapSens = constrain(server.arg("tapsens").toInt(), 1, 3);
+  if (server.hasArg("raceA")) { cfgRaceA = server.arg("raceA").toInt(); cfgRaceB = server.arg("raceB").toInt(); }
+  if (server.hasArg("nightStart")) { cfgNightStart = server.arg("nightStart").toInt(); cfgNightEnd = server.arg("nightEnd").toInt(); }
   saveSettings();
   sendMessage(200, "Saved &#10003;", "The board is restarting and will join <b>" + htmlEscape(cfgSsid) + "</b>.");
   drawStatus("Saved!", "Restarting...", C_GREEN);
@@ -1147,8 +1775,19 @@ void handleSave() {
 }
 
 void handleNotFound() {
+  if (!portalMode) { server.send(404, "text/plain", "Not found"); return; }
   server.sendHeader("Location", String("http://") + WiFi.softAPIP().toString() + "/", true);
   server.send(302, "text/plain", "");
+}
+
+void registerRoutes() {
+  server.on("/", HTTP_GET, handleDashboard);
+  server.on("/settings", HTTP_GET, handleSettings);
+  server.on("/save", HTTP_POST, handleSave);
+  server.on("/calibrate", HTTP_POST, handleCalibrate);
+  server.on("/api/data", HTTP_GET, handleApiData);
+  server.on("/api/history", HTTP_GET, handleApiHistory);
+  server.onNotFound(handleNotFound);
 }
 
 // ════════════════════════════════════════════════════════════════════════════
@@ -1170,8 +1809,10 @@ void buildScanOptions() {
   WiFi.scanDelete();
 }
 
+bool routesRegistered = false;
 void startPortal() {
   portalMode = true;
+  setBacklight(160);
   drawStatus("Setup mode", "Scanning Wi-Fi...", C_GOLD);
   WiFi.disconnect(true);
   WiFi.mode(WIFI_AP_STA);
@@ -1179,13 +1820,10 @@ void startPortal() {
   WiFi.softAP(AP_NAME);
   delay(200);
   dns.start(53, "*", WiFi.softAPIP());
-  server.on("/", HTTP_GET, handleRoot);
-  server.on("/save", HTTP_POST, handleSave);
-  server.onNotFound(handleNotFound);
+  if (!routesRegistered) { registerRoutes(); routesRegistered = true; }
   server.begin();
   drawPortalScreen();
 }
-
 
 // ════════════════════════════════════════════════════════════════════════════
 //  Wi-Fi
@@ -1348,7 +1986,11 @@ void applyItem(JsonObject item, int i, bool alertOnGain) {
   long n = String(item["statistics"]["subscriberCount"] | "-1").toInt();
   if (n < 0) return;
   if (n != c.subs) c.stepChangedAt = timeValid() ? nowT() : 0;
-  if (alertOnGain && c.subs >= 0 && n > c.subs && numAlerts < MAX_CH) alerts[numAlerts++] = { i, n - c.subs, n };
+  if (alertOnGain && c.subs >= 0 && n > c.subs && numAlerts < MAX_CH * 2) {
+    long m = nextMilestone(c.subs);
+    if (n >= m) alerts[numAlerts++] = { A_MILESTONE, i, -1, n - c.subs, m };   // crossed a milestone: party
+    else        alerts[numAlerts++] = { A_GAIN, i, -1, n - c.subs, n };
+  }
   c.subs = n;
   c.err = "";
 }
@@ -1390,6 +2032,13 @@ void fetchAll() {
     if (!found) ch[i].err = "Channel not found";
     recordSample(i);
     computeStats(i);
+  }
+  // race: who's ahead? alert when that changes
+  if (raceSet() && ch[cfgRaceA].subs >= 0 && ch[cfgRaceB].subs >= 0) {
+    int lead = ch[cfgRaceA].subs >= ch[cfgRaceB].subs ? cfgRaceA : cfgRaceB;
+    if (raceLeader >= 0 && lead != raceLeader && ch[cfgRaceA].subs != ch[cfgRaceB].subs && numAlerts < MAX_CH * 2)
+      alerts[numAlerts++] = { A_OVERTAKE, lead, raceLeader, 0, ch[lead].subs };
+    raceLeader = lead;
   }
 }
 
@@ -1464,16 +2113,17 @@ void fetchAvatars() {
 // ════════════════════════════════════════════════════════════════════════════
 //  Setup & loop
 // ════════════════════════════════════════════════════════════════════════════
-void startSettingsServer() {
-  server.on("/", HTTP_GET, handleRoot);
-  server.on("/save", HTTP_POST, handleSave);
-  server.begin();
-}
+enum Mode { M_NORMAL, M_SLEEP, M_PORTRAIT, M_SUMMARY, M_AMBIENT };
+Mode mode = M_NORMAL;
+bool summaryActive = false;
+unsigned long summaryShownAt = 0;
+int lastSummaryDay = -1;
+int portraitRot = 0;
 
 void setup() {
   Serial.begin(115200);
   delay(300);
-  Serial.println("SubCounter v7 starting");
+  Serial.println("SubCounter v8.2 starting");
   setenv("TZ", TZ_UK, 1); tzset();
 
   pinMode(SD_CS, OUTPUT);  digitalWrite(SD_CS, HIGH);
@@ -1487,10 +2137,12 @@ void setup() {
   gfx->setUTF8Print(true);
   gfx->fillScreen(C_BG);
   ledcAttach(LCD_BL, 5000, 8);
-  ledcWrite(LCD_BL, 160);
+  setBacklight(BL_NORMAL);
   touchInit();
+  imuInit();
   fsOk = LittleFS.begin(true);
   Serial.printf("History storage %s\n", fsOk ? "ready" : "unavailable");
+  randomSeed(esp_random());
 
   WiFi.onEvent(onWiFiEvent);
   loadSettings();
@@ -1500,7 +2152,8 @@ void setup() {
 
   configTime(0, 0, "pool.ntp.org", "time.google.com");   // backup: clock is also set from Google's replies
   setenv("TZ", TZ_UK, 1); tzset();
-  startSettingsServer();
+  registerRoutes(); routesRegistered = true;
+  server.begin();
   drawStatus("Loading...", String(numCh) + (numCh == 1 ? " channel" : " channels"), C_WHITE);
   fetchAll();
   lastFetch = millis();
@@ -1509,71 +2162,164 @@ void setup() {
   fetchLatestVideos();
   lastVideoFetch = millis();
   lastInteract = millis();
+  numAlerts = 0;                       // nothing to celebrate on start-up
   drawMain();
   if (ch[page].subs > 0) { shownSubs = max(0L, estimateFor(page) - 30); drawMainNumber(shownSubs); }
+  Serial.print("Dashboard: http://"); Serial.println(WiFi.localIP());
+}
+
+// Redraw whatever the current mode shows
+void drawMode() {
+  switch (mode) {
+    case M_SLEEP: break;
+    case M_PORTRAIT: drawPortraitBoard(); break;
+    case M_SUMMARY: drawSummary(); break;
+    case M_AMBIENT: drawAmbient(); break;
+    default: drawView(); break;
+  }
+}
+
+void enterMode(Mode m) {
+  if (m == mode) return;
+  Mode old = mode;
+  mode = m;
+  if (old == M_PORTRAIT) gfx->setRotation(1);
+  switch (m) {
+    case M_SLEEP:    fadeBacklight(0, 2); gfx->fillScreen(C_BG); break;
+    case M_PORTRAIT: setBacklight(BL_NORMAL); gfx->setRotation(portraitRot); drawPortraitBoard(); break;
+    case M_SUMMARY:  setBacklight(BL_NORMAL); drawSummary(); break;
+    case M_AMBIENT:  drawAmbient(); fadeBacklight(BL_NIGHT, 25); break;
+    default:
+      gfx->fillScreen(C_BG);
+      drawView();
+      if (blNow != BL_NORMAL) fadeBacklight(BL_NORMAL, 2);
+      break;
+  }
+}
+
+// Something the user did: wake from night / summary
+void userActivity() {
+  lastInteract = millis();
+  if (mode == M_SUMMARY) summaryActive = false;
 }
 
 void loop() {
   server.handleClient();
   if (portalMode) { dns.processNextRequest(); delay(2); return; }
 
-  // BOOT: short press = next channel, hold 3 s = setup mode
+  // ── inputs ────────────────────────────────────────────────────────────────
+  imuUpdate();
+  bool shake = evShake; evShake = false;
+  bool tap = evTap; evTap = false;
+  char swipe = pollSwipe();
+  if (touching) lastTouchActivity = millis();
+
+  bool bootShort = false;
   if (digitalRead(BOOT_BTN) == LOW) {
     if (!btnDownAt) btnDownAt = millis();
     if (millis() - btnDownAt > HOLD_FOR_SETUP_MS) { server.stop(); startPortal(); btnDownAt = 0; return; }
   } else if (btnDownAt) {
-    if (millis() - btnDownAt > 40) { changePage(+1); lastInteract = millis(); }
+    if (millis() - btnDownAt > 40) bootShort = true;
     btnDownAt = 0;
   }
 
-  // Swipes
-  switch (pollSwipe()) {
-    case 'L': changePage(+1); lastInteract = millis(); break;
-    case 'R': changePage(-1); lastInteract = millis(); break;
-    case 'U': changeCard(+1); lastInteract = millis(); break;
-    case 'D': changeCard(-1); lastInteract = millis(); break;
+  // ── 9 am summary ──────────────────────────────────────────────────────────
+  if (cfgSummary && timeValid()) {
+    time_t n = nowT(); struct tm lt; localtime_r(&n, &lt);
+    if (lt.tm_hour == 9 && lt.tm_min < 30 && lt.tm_yday != lastSummaryDay) {
+      lastSummaryDay = lt.tm_yday;
+      summaryActive = true; summaryShownAt = millis();
+    }
+  }
+  if (summaryActive && millis() - summaryShownAt > SUMMARY_SHOW_MS) summaryActive = false;
+
+  // ── decide the mode ───────────────────────────────────────────────────────
+  bool anyInput = swipe || tap || shake || bootShort || touching;
+  if (anyInput && (mode == M_AMBIENT || mode == M_SUMMARY)) {
+    bool wasOverlay = true;
+    userActivity();
+    swipe = 0; tap = false; bootShort = false;   // this input just wakes it up
+    (void)wasOverlay;
+  }
+  Mode want = M_NORMAL;
+  if (cfgFaceDown && orient == O_FACEDOWN) want = M_SLEEP;
+  else if (cfgPortrait && (orient == O_PORTRAIT_A || orient == O_PORTRAIT_B)) {
+    want = M_PORTRAIT;
+    int r = (orient == O_PORTRAIT_A) ? 0 : 2;   // tick "flip" in settings if this is upside down
+    if (cfgFlipPortrait) r = 2 - r;
+    if (mode == M_PORTRAIT && r != portraitRot) { portraitRot = r; gfx->setRotation(r); drawPortraitBoard(); }
+    portraitRot = r;
+  }
+  else if (summaryActive) want = M_SUMMARY;
+  else if (isNight() && millis() - lastInteract > NIGHT_IDLE_MS) want = M_AMBIENT;
+  if (want != mode) {
+    if (mode == M_SLEEP || mode == M_PORTRAIT) lastInteract = millis();   // picked up again
+    enterMode(want);
   }
 
-  // Back to the main count after a while untouched
-  if ((card != 0 || board) && millis() - lastInteract > IDLE_RETURN_MS) {
-    card = 0; board = false; drawView(); lastInteract = millis();
+  // ── actions in the normal view ────────────────────────────────────────────
+  if (mode == M_NORMAL) {
+    switch (swipe) {
+      case 'L': changePage(+1); lastInteract = millis(); break;
+      case 'R': changePage(-1); lastInteract = millis(); break;
+      case 'U': changeCard(+1); lastInteract = millis(); break;
+      case 'D': changeCard(-1); lastInteract = millis(); break;
+    }
+    if (bootShort) { changePage(+1); lastInteract = millis(); }
+    if (tap && cfgTap && !board) { changePage(+1); lastInteract = millis(); }
+    if (shake && cfgShake) {
+      lastInteract = millis();
+      if (!board && card == 0) { gfx->fillRect(0, 150, gfx->width() - 14, 22, C_BG); ft(8, 168, "Refreshing...", F_S, C_GOLD); }
+      lastFetch = 0;                                           // fetch counts now
+      if (millis() - lastVideoFetch > 3UL * 60000UL) lastVideoFetch = 0;   // and videos, if not done recently
+    }
+    // back to the main count after a while untouched
+    if ((card != 0 || board) && millis() - lastInteract > IDLE_RETURN_MS) {
+      card = 0; board = false; raceView = false; drawView(); lastInteract = millis();
+    }
+    // auto-switch channels (main count only, pauses 30 s after you touch it)
+    if (cfgAuto && numCh > 1 && card == 0 && !board && millis() - lastInteract > 30000UL) {
+      static unsigned long lastAuto = 0;
+      if (millis() - lastAuto > AUTO_SWITCH_MS) { lastAuto = millis(); changePage(+1); }
+    }
   }
 
-  // Auto-switch channels (main count only, pauses 30 s after a swipe)
-  if (cfgAuto && numCh > 1 && card == 0 && !board && millis() - lastInteract > 30000UL) {
-    static unsigned long lastAuto = 0;
-    if (millis() - lastAuto > AUTO_SWITCH_MS) { lastAuto = millis(); changePage(+1); }
-  }
-
+  // ── network ───────────────────────────────────────────────────────────────
   if (WiFi.status() != WL_CONNECTED) {
     netError = "Wi-Fi lost, reconnecting...";
-    drawFooter();
+    if (mode == M_NORMAL) drawFooter();
     WiFi.reconnect();
     delay(3000);
     return;
   }
 
   bool refreshed = false;
-  if (millis() - lastFetch > REFRESH_MS) {
+  if (lastFetch == 0 || millis() - lastFetch > REFRESH_MS) {
     lastFetch = millis();
     fetchAll();
     fetchAvatars();          // picks up any that failed earlier
     refreshed = true;
   }
-  if (millis() - lastVideoFetch > VIDEO_REFRESH_MS) {
+  if (lastVideoFetch == 0 || millis() - lastVideoFetch > VIDEO_REFRESH_MS) {
     lastVideoFetch = millis();
     fetchLatestVideos();
     refreshed = true;
   }
   if (refreshed) {
-    if (numAlerts) { for (int i = 0; i < numAlerts; i++) showAlert(alerts[i]); numAlerts = 0; }
-    if (card == 0 && !board) { long keep = shownSubs; drawMain(); shownSubs = keep; drawMainNumber(shownSubs); }
-    else drawView();
+    // celebrate only when someone can see it (not face-down, side-on or at night)
+    if (numAlerts && (mode == M_NORMAL || mode == M_SUMMARY)) {
+      setBacklight(BL_NORMAL);
+      for (int i = 0; i < numAlerts; i++) showAlert(alerts[i]);
+      gfx->fillScreen(C_BG);
+    }
+    numAlerts = 0;
+    if (mode == M_NORMAL && card == 0 && !board) { long keep = shownSubs; drawMain(); shownSubs = keep; drawMainNumber(shownSubs); }
+    else drawMode();
   }
 
-  // Count-up / estimate animation on the main card
+  // ── animation / periodic redraws ──────────────────────────────────────────
   static unsigned long lastAnim = 0;
-  if (numCh && card == 0 && !board && ch[page].subs >= 0 && millis() - lastAnim > 30) {
+  if (mode == M_NORMAL && numCh && card == 0 && !board && ch[page].subs >= 0 && millis() - lastAnim > 30) {
     lastAnim = millis();
     long target = estimateFor(page);
     if (shownSubs != target) {
@@ -1582,9 +2328,12 @@ void loop() {
       drawMainNumber(shownSubs);
     }
   }
-
-  static unsigned long lastFooter = 0;
-  if (millis() - lastFooter > 60000UL) { lastFooter = millis(); drawFooter(); }
+  static unsigned long lastSlow = 0;
+  if (millis() - lastSlow > 30000UL) {
+    lastSlow = millis();
+    if (mode == M_AMBIENT) drawAmbient();
+    else if (mode == M_NORMAL) drawFooter();
+  }
 
   delay(5);
 }
