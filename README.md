@@ -4,6 +4,15 @@ A desk gadget built on the **Waveshare ESP32-C6-Touch-LCD-1.47** that shows live
 
 ![Web dashboard](docs/images/dashboard.png)
 
+## What's new
+
+- **v9.4:** redesigned web dashboard: a side column (last 24 hours, weather, race, leaderboard) next to a grid of channel cards, laid out for desktop, tablet and phone
+- **v9.3:** idle clock after a few minutes without use
+- **v9.2:** scrolling Spotify titles and artist names
+- **v9.1:** one-click Spotify sign-in through an https relay page
+
+Full history: [docs/CHANGELOG.md](docs/CHANGELOG.md)
+
 ## Features
 
 **YouTube**
@@ -17,15 +26,20 @@ A desk gadget built on the **Waveshare ESP32-C6-Touch-LCD-1.47** that shows live
 
 **Apps** (long-press the screen for the home menu)
 - **Weather:** clock, current conditions, next 12 hours, tomorrow, and a rain warning (Open-Meteo, no key needed)
-- **Spotify:** album art, scrolling title and artist, progress bar; tap to play or pause, swipe to skip, swipe up or down for volume
+- **Spotify:** album art, scrolling title and artist, progress bar; tap to play or pause, swipe to skip, swipe up or down for volume. One-click sign-in from the settings page (via a small relay page you host on GitHub Pages)
 
 **Motion sensor**
 - Shake to refresh · face-down turns the screen off · stand it in portrait for a tall leaderboard · double-tap the desk for the next channel
 
+**Web dashboard** (`http://<board-ip>/` from any phone or computer on your network)
+- Side column with the last 24 hours' top growers, weather, the race and the leaderboard
+- A card per channel: live (estimated) count, growth chips, milestone progress and predicted date, 7 or 30-day graph, latest video with thumbnail, and the new video tracker on your own channel
+- Adapts to the screen: side column on desktops, two columns on tablets, one on phones
+- Settings at `/settings` and wireless updates at `/update`
+
 **Everyday**
 - **Idle clock:** after 3 minutes without use (adjustable), a large clock with date, weather and your count; pick the board up to go back
 - 9 am daily summary, plus a dim night clock overnight
-- Web dashboard at `http://<board-ip>/`, with settings at `/settings`
 - Several saved Wi-Fi networks (e.g. work and home) with automatic roaming, a network scanner, "Connect now" and a preferred network
 - Works on fussy networks: fixed IP, custom DNS, Wi-Fi 4 compatibility mode, and plain-English connection errors
 - **Wireless firmware updates** from the settings page
