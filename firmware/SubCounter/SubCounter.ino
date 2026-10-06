@@ -26,6 +26,7 @@
 #include <Preferences.h>
 #include <HTTPClient.h>
 #include <WiFiClientSecure.h>
+#include <esp_wifi.h>
 
 // ── Pins (ESP32-C6 version of the board) ────────────────────────────────────
 #define LCD_SCK   1
@@ -61,7 +62,10 @@ Preferences prefs;
 WebServer server(80);
 DNSServer dns;
 
-String cfgSsid, cfgPass, cfgChannel, cfgApiKey;
+String cfgSsid, cfgPass, cfgChannel, cfgApiKey, cfgUser;   // cfgUser = username for work (enterprise) Wi-Fi
+String wifiFailReason = "";          // why the last connection attempt failed
+volatile int lastDiscReason = 0;     // raw reason code from the Wi-Fi driver
+volatile bool staAssociated = false; // joined the access point (even if no IP yet)
 bool portalMode = false;
 String scanOptions;                 // <option> list of nearby networks
 
@@ -239,6 +243,7 @@ void loadSettings() {
   cfgPass    = prefs.getString("pass", "");
   cfgChannel = prefs.getString("channel", "");
   cfgApiKey  = prefs.getString("apikey", "");
+  cfgUser    = prefs.getString("user", "");
   prefs.end();
 }
 
@@ -248,6 +253,7 @@ void saveSettings() {
   prefs.putString("pass", cfgPass);
   prefs.putString("channel", cfgChannel);
   prefs.putString("apikey", cfgApiKey);
+  prefs.putString("user", cfgUser);
   prefs.end();
 }
 
@@ -280,6 +286,10 @@ small{display:block;color:#777;font-size:12px;margin-top:6px}a{color:#4ea1ff}
 void handleRoot() {
   String h = FPSTR(PAGE_HEAD);
   h += "<h1>&#9654; SubCounter setup</h1><p>Enter your details. They're saved on the board only.</p>";
+  if (wifiFailReason.length()) {
+    h += "<div style='background:#3a1210;border:1px solid #e62117;border-radius:10px;padding:12px;margin-bottom:8px;font-size:14px'>"
+         "<b>Last attempt to join " + htmlEscape(cfgSsid) + " failed:</b><br>" + htmlEscape(wifiFailReason) + "</div>";
+  }
   h += "<form method='POST' action='/save'>";
   h += "<label>Wi-Fi network</label>";
   if (scanOptions.length()) {
@@ -289,22 +299,32 @@ void handleRoot() {
   }
   h += "<input id='s' name='ssid' value='" + htmlEscape(cfgSsid) + "' placeholder='Network name' required>";
   h += "<label>Wi-Fi password</label>";
-  h += "<input name='pass' type='password' placeholder='";
+  h += "<input id='pw' name='pass' type='password' autocomplete='off' autocapitalize='off' placeholder='";
   h += cfgPass.length() ? "(unchanged — leave blank to keep)" : "Password";
-  h += "'>";
+  h += "'><small><label style='display:inline;margin:0'><input type='checkbox' style='width:auto' "
+       "onclick=\"document.getElementById('pw').type=this.checked?'text':'password'\"> Show password</label></small>";
+  h += "<label>Username (only for work Wi-Fi that asks for one)</label>";
+  h += "<input name='user' value='" + htmlEscape(cfgUser) + "' autocapitalize='off' placeholder='Leave blank for normal Wi-Fi'>";
   h += "<label>YouTube channel</label>";
   h += "<input name='channel' value='" + htmlEscape(cfgChannel) + "' placeholder='@yourhandle or UC… channel ID' required>";
   h += "<label>YouTube Data API key</label>";
   h += "<input name='apikey' placeholder='";
   h += cfgApiKey.length() ? "(saved — leave blank to keep)" : "AIza…";
   h += "'><small>Free from Google Cloud Console → enable “YouTube Data API v3” → Credentials → Create API key.</small>";
-  h += "<button type='submit'>Save &amp; restart</button></form></div></body></html>";
+  h += "<button type='submit'>Save &amp; restart</button></form>";
+  h += "<small style='margin-top:16px'>Board Wi-Fi MAC address: " + WiFi.macAddress() + "</small></div></body></html>";
   server.send(200, "text/html", h);
 }
 
 void handleSave() {
-  String ssid = server.arg("ssid");   ssid.trim();
+  String ssid = server.arg("ssid");   // not trimmed: network names can contain spaces
   String pass = server.arg("pass");
+  String user = server.arg("user");    user.trim();
+  // Pasted passwords often carry an invisible line break or trailing space — strip them
+  while (pass.length() && (pass.endsWith("\n") || pass.endsWith("\r") || pass.endsWith(" ") || pass.endsWith("\t")))
+    pass.remove(pass.length() - 1);
+  while (pass.length() && (pass[0] == ' ' || pass[0] == '\n' || pass[0] == '\r' || pass[0] == '\t'))
+    pass.remove(0, 1);
   String ch   = server.arg("channel"); ch.trim();
   String key  = server.arg("apikey");  key.trim();
 
@@ -316,6 +336,7 @@ void handleSave() {
   }
   if (ssid != cfgSsid || pass.length()) cfgPass = pass;   // new network → take new password
   cfgSsid = ssid;
+  cfgUser = user;
   cfgChannel = ch;
   if (key.length()) cfgApiKey = key;
   saveSettings();
@@ -342,8 +363,12 @@ void buildScanOptions() {
   for (int i = 0; i < n && i < 20; i++) {
     String s = WiFi.SSID(i);
     if (s.length() == 0 || scanOptions.indexOf("value=\"" + htmlEscape(s) + "\"") >= 0) continue;
+    wifi_auth_mode_t a = WiFi.encryptionType(i);
+    String note = (a == WIFI_AUTH_OPEN) ? ", open" :
+                  (a == WIFI_AUTH_WPA2_ENTERPRISE || a == WIFI_AUTH_WPA3_ENTERPRISE || a == WIFI_AUTH_WPA2_WPA3_ENTERPRISE)
+                  ? ", needs username" : "";
     scanOptions += "<option value=\"" + htmlEscape(s) + "\">" + htmlEscape(s) +
-                   " (" + String(WiFi.RSSI(i)) + " dBm)</option>";
+                   " (" + String(WiFi.RSSI(i)) + " dBm" + note + ")</option>";
   }
   WiFi.scanDelete();
 }
@@ -432,16 +457,93 @@ bool fetchSubscribers() {
 // ════════════════════════════════════════════════════════════════════════════
 //  Normal mode
 // ════════════════════════════════════════════════════════════════════════════
+// Turn the driver's reason code into plain English.
+String reasonText(int r, bool associated) {
+  switch (r) {
+    case WIFI_REASON_4WAY_HANDSHAKE_TIMEOUT:
+    case WIFI_REASON_HANDSHAKE_TIMEOUT:
+    case WIFI_REASON_AUTH_FAIL:
+    case WIFI_REASON_MIC_FAILURE:
+      return "Wrong password (the network rejected it)";
+    case WIFI_REASON_802_1X_AUTH_FAILED:
+      return "Username or password rejected (work/enterprise Wi-Fi)";
+    case WIFI_REASON_NO_AP_FOUND:
+      return "Network not found (out of range or 5 GHz only?)";
+    case WIFI_REASON_NO_AP_FOUND_W_COMPATIBLE_SECURITY:
+    case WIFI_REASON_NO_AP_FOUND_IN_AUTHMODE_THRESHOLD:
+      return "Network found but its security type isn't supported";
+    case WIFI_REASON_ASSOC_FAIL:
+    case WIFI_REASON_ASSOC_TOOMANY:
+    case WIFI_REASON_ASSOC_EXPIRE:
+    case WIFI_REASON_NOT_AUTHED:
+    case WIFI_REASON_NOT_ASSOCED:
+      return "Access point refused the board (MAC filter or client limit?)";
+    case WIFI_REASON_AUTH_EXPIRE:
+    case WIFI_REASON_BEACON_TIMEOUT:
+      return "Signal too weak or access point stopped responding";
+    case 0:
+      return associated ? "Joined Wi-Fi but got no IP address (DHCP / device approval?)"
+                        : "Timed out with no reply from the network";
+  }
+  return String("Wi-Fi error ") + r + " (" + WiFi.disconnectReasonName((wifi_err_reason_t)r) + ")";
+}
+
+void onWiFiEvent(arduino_event_id_t event, arduino_event_info_t info) {
+  if (event == ARDUINO_EVENT_WIFI_STA_DISCONNECTED) lastDiscReason = info.wifi_sta_disconnected.reason;
+  if (event == ARDUINO_EVENT_WIFI_STA_CONNECTED)    staAssociated = true;
+}
+
 bool connectWiFi() {
   drawStatus("Connecting...", cfgSsid, C_WHITE);
   WiFi.mode(WIFI_STA);
-  WiFi.begin(cfgSsid.c_str(), cfgPass.c_str());
+  WiFi.setAutoReconnect(false);   // let us see the real failure reason
+  lastDiscReason = 0;
+  staAssociated = false;
+  wifiFailReason = "";
+
+  if (cfgUser.length()) {   // work / enterprise Wi-Fi (PEAP, the usual type)
+    WiFi.begin(cfgSsid.c_str(), WPA2_AUTH_PEAP, cfgUser.c_str(), cfgUser.c_str(), cfgPass.c_str());
+  } else {
+    WiFi.begin(cfgSsid.c_str(), cfgPass.c_str());
+  }
+
   unsigned long start = millis();
+  int lastSeenReason = 0;
   while (WiFi.status() != WL_CONNECTED && millis() - start < WIFI_TIMEOUT_MS) {
     delay(250);
-    if (digitalRead(BOOT_BTN) == LOW) return false;   // BOOT pressed → go to setup
+    if (lastDiscReason) lastSeenReason = lastDiscReason;
+    // Wrong password won't fix itself — stop early after a couple of seconds
+    if (lastSeenReason && !staAssociated && millis() - start > 6000) break;
+    if (digitalRead(BOOT_BTN) == LOW) { wifiFailReason = "Cancelled with BOOT button"; return false; }
   }
-  return WiFi.status() == WL_CONNECTED;
+  if (WiFi.status() == WL_CONNECTED) { WiFi.setAutoReconnect(true); return true; }
+
+  wifiFailReason = reasonText(lastSeenReason ? lastSeenReason : lastDiscReason, staAssociated);
+  Serial.printf("Wi-Fi failed: reason %d, associated=%d -> %s\n",
+                (int)lastSeenReason, (int)staAssociated, wifiFailReason.c_str());
+  WiFi.disconnect(true);
+  return false;
+}
+
+// Show the failure reason on screen, word-wrapped.
+void drawWifiFailScreen() {
+  gfx->fillScreen(C_BG);
+  centreText("Wi-Fi failed", 10, 3, C_RED);
+  gfx->setTextSize(2);
+  gfx->setTextColor(C_WHITE, C_BG);
+  int y = 48, x = 10;
+  String word, text = wifiFailReason + " ";
+  for (size_t i = 0; i < text.length(); i++) {
+    if (text[i] == ' ') {
+      if (x + (int)word.length() * 12 > gfx->width() - 10) { x = 10; y += 20; }
+      gfx->setCursor(x, y); gfx->print(word); x += (word.length() + 1) * 12; word = "";
+    } else word += text[i];
+  }
+  gfx->setTextSize(1);
+  gfx->setTextColor(C_GREY, C_BG);
+  gfx->setCursor(10, 132); gfx->print("Network: " + cfgSsid);
+  gfx->setCursor(10, 146); gfx->print("Board MAC: " + WiFi.macAddress());
+  gfx->setCursor(10, 160); gfx->print("Opening setup in a few seconds...");
 }
 
 void startSettingsServer() {   // lets you change settings from the board's IP later
@@ -467,6 +569,7 @@ void setup() {
   ledcAttach(LCD_BL, 5000, 8);
   ledcWrite(LCD_BL, 160);
 
+  WiFi.onEvent(onWiFiEvent);
   loadSettings();
 
   if (cfgSsid.length() == 0 || cfgApiKey.length() == 0 || cfgChannel.length() == 0) {
@@ -474,8 +577,8 @@ void setup() {
     return;
   }
   if (!connectWiFi()) {
-    drawStatus("Wi-Fi failed", "Opening setup...", C_RED);
-    delay(1500);
+    drawWifiFailScreen();
+    delay(8000);
     startPortal();
     return;
   }
