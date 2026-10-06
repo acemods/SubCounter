@@ -1,13 +1,14 @@
 /*
- * SubCounter v6 — YouTube subscriber counter for Waveshare ESP32-C6-Touch-LCD-1.47
+ * SubCounter v7 — YouTube subscriber counter for Waveshare ESP32-C6-Touch-LCD-1.47
  *
  *  NAVIGATION
  *    Swipe left / right ... next / previous channel   (BOOT short press = next)
  *    Swipe up ............. more detail for this channel:
  *                             1 Overview (profile picture, views, videos, joined)
  *                             2 Latest video (views, likes, comments, LIVE badge)
- *                             3 Growth (today / 7 days / 30 days + graph)
- *                             4 Next milestone (progress + predicted date)
+ *                             3 Growth (today / 7 days / 30 days)
+ *                             4 7-day graph
+ *                             5 Next milestone (progress + predicted date)
  *    Swipe down ........... back up; from the main count it opens the Leaderboard
  *    Hold BOOT 3 s ........ setup mode
  *    After 2 minutes untouched it returns to the main count.
@@ -18,6 +19,7 @@
  *  Arduino IDE: Board "ESP32C6 Dev Module", USB CDC On Boot "Enabled",
  *    Flash Size "8MB", Partition Scheme "8M with spiffs (3MB APP/1.5MB SPIFFS)".
  *    Libraries: "GFX Library for Arduino" 1.6.x, "ArduinoJson" 7.x, "JPEGDEC" 1.8.x
+ *               "U8g2" (for its fonts)
  */
 
 #include <Arduino_GFX_Library.h>
@@ -34,6 +36,7 @@
 #include <esp_wifi.h>
 #include <esp_mac.h>
 #include <time.h>
+#include <U8g2lib.h>   // readable fonts (U8g2 library)
 #include <sys/time.h>
 
 // ── Pins (ESP32-C6 version of the board) ────────────────────────────────────
@@ -62,7 +65,7 @@
 #define DHCP_EXTRA_MS      15000UL
 #define HOLD_FOR_SETUP_MS  3000UL
 #define SWIPE_MIN_PX       35
-#define NUM_CARDS          5          // 0 main, 1 overview, 2 latest video, 3 growth, 4 milestone
+#define NUM_CARDS          6          // 0 main, 1 overview, 2 latest video, 3 growth, 4 graph, 5 milestone
 #define HIST_MAX_AGE       (31L * 86400L)
 #define TZ_UK              "GMT0BST,M3.5.0/1,M10.5.0/2"
 
@@ -186,6 +189,7 @@ void lcdRegInit() {
 //  Small helpers
 // ════════════════════════════════════════════════════════════════════════════
 void centreText(const String &txt, int y, uint8_t size, uint16_t colour) {
+  gfx->setFont((const GFXfont *)nullptr);
   gfx->setTextSize(size);
   gfx->setTextColor(colour, C_BG);
   int16_t x1, y1; uint16_t w, h;
@@ -195,6 +199,7 @@ void centreText(const String &txt, int y, uint8_t size, uint16_t colour) {
 }
 
 void textAt(int x, int y, const String &t, uint8_t size, uint16_t colour) {
+  gfx->setFont((const GFXfont *)nullptr);
   gfx->setTextSize(size);
   gfx->setTextColor(colour, C_BG);
   gfx->setCursor(x, y);
@@ -240,6 +245,7 @@ uint8_t sizeForText(const String &s, int maxSize, int width) {
 
 // Word-wrapped text; returns the y after the last line. maxLines 0 = unlimited.
 int wrapText(const String &msg, int x0, int y, int xMax, uint8_t ts, uint16_t colour, int maxLines = 0) {
+  gfx->setFont((const GFXfont *)nullptr);
   int cw = 6 * ts, lh = 8 * ts + 3, x = x0, lines = 1;
   gfx->setTextSize(ts);
   gfx->setTextColor(colour, C_BG);
@@ -289,12 +295,16 @@ String urlEncode(const String &s) {
 bool looksLikeId(const String &s) { return s.startsWith("UC") && s.length() == 24; }
 
 // Strip characters the built-in font can't show (emoji etc.)
+// Keep characters the fonts can draw (Latin-1, e.g. é ü ñ); drop emoji etc.
 String asciiOnly(const String &s) {
   String o; o.reserve(s.length());
-  for (size_t i = 0; i < s.length(); i++) {
-    unsigned char c = s[i];
-    if (c >= 32 && c < 127) o += (char)c;
-    else if (c >= 0xC0) { o += ' '; }    // start of a multi-byte character
+  for (size_t i = 0; i < s.length();) {
+    uint8_t c = s[i];
+    int len = c < 0x80 ? 1 : (c >> 5) == 6 ? 2 : (c >> 4) == 14 ? 3 : (c >> 3) == 30 ? 4 : 1;
+    if (len == 1) { if (c >= 32 && c < 127) o += (char)c; }
+    else if (len == 2 && (c == 0xC2 || c == 0xC3) && i + 1 < s.length()) { o += (char)c; o += s[i + 1]; }
+    else o += ' ';
+    i += len;
   }
   o.trim();
   while (o.indexOf("  ") >= 0) o.replace("  ", " ");
@@ -594,83 +604,133 @@ void drawPortalScreen() {
   centreText("192.168.4.1", 126, 2, C_WHITE);
 }
 
+// ── Readable fonts (U8g2) ───────────────────────────────────────────────────
+#define F_S   u8g2_font_helvB14_tf      // smallest text used anywhere
+#define F_M   u8g2_font_helvB18_tf      // normal text
+#define F_N24 u8g2_font_logisoso24_tn   // numbers
+#define F_N32 u8g2_font_logisoso32_tn
+#define F_N42 u8g2_font_logisoso42_tn
+#define RIGHT_EDGE 300                  // keep clear of the card dots
+
+int tw(const String &s, const uint8_t *f) {
+  gfx->setFont(f); gfx->setTextSize(1);
+  int16_t x1, y1; uint16_t w, h;
+  gfx->getTextBounds(s.c_str(), 0, 0, &x1, &y1, &w, &h);
+  return w;
+}
+// draw text with its baseline at y
+void ft(int x, int y, const String &s, const uint8_t *f, uint16_t c) {
+  gfx->setFont(f); gfx->setTextSize(1); gfx->setTextColor(c);
+  gfx->setCursor(x, y); gfx->print(s);
+}
+void ftR(int xr, int y, const String &s, const uint8_t *f, uint16_t c) { ft(xr - tw(s, f), y, s, f, c); }
+void ftC(int y, const String &s, const uint8_t *f, uint16_t c, int w = RIGHT_EDGE + 10) { ft(max(0, (w - tw(s, f)) / 2), y, s, f, c); }
+
+// shorten with "..." until it fits maxW pixels
+String fit(String s, const uint8_t *f, int maxW) {
+  if (tw(s, f) <= maxW) return s;
+  while (s.length() > 1 && tw(s + "...", f) > maxW) {
+    s.remove(s.length() - 1);
+    while (s.length() && ((uint8_t)s[s.length() - 1] & 0xC0) == 0x80) s.remove(s.length() - 1);  // whole UTF-8 chars
+  }
+  s.trim();
+  return s + "...";
+}
+
+// pick the biggest number font that fits
+const uint8_t *numFont(const String &s, int maxW) {
+  if (tw(s, F_N42) <= maxW) return F_N42;
+  if (tw(s, F_N32) <= maxW) return F_N32;
+  return F_N24;
+}
+
+// word-wrap in a font; returns baseline of the line after the last one
+int wrapF(const String &msg, int x0, int y, int xMax, const uint8_t *f, uint16_t col, int maxLines, int lh) {
+  String line, word, text = msg + " ";
+  int lines = 1;
+  for (size_t i = 0; i < text.length(); i++) {
+    if (text[i] != ' ') { word += text[i]; continue; }
+    String trial = line.length() ? line + " " + word : word;
+    if (tw(trial, f) > xMax - x0 && line.length()) {
+      if (lines >= maxLines) { ft(x0, y, fit(line + " " + word, f, xMax - x0), f, col); return y + lh; }
+      ft(x0, y, line, f, col); y += lh; lines++; line = word;
+    } else line = trial;
+    word = "";
+  }
+  if (line.length()) { ft(x0, y, fit(line, f, xMax - x0), f, col); y += lh; }
+  return y;
+}
+
 String nameOf(int i) { String t = ch[i].title.length() ? ch[i].title : ch[i].handle; return asciiOnly(t); }
 
 // Vertical card position dots on the right edge
 void drawCardDots() {
-  int x = gfx->width() - 6, y0 = 86 - (NUM_CARDS - 1) * 6;
+  int x = gfx->width() - 7, y0 = 86 - (NUM_CARDS - 1) * 7;
   for (int k = 0; k < NUM_CARDS; k++)
-    if (k == card) gfx->fillCircle(x, y0 + k * 12, 2, C_WHITE);
-    else gfx->drawCircle(x, y0 + k * 12, 2, C_DKGREY);
+    if (k == card) gfx->fillCircle(x, y0 + k * 14, 3, C_WHITE);
+    else gfx->drawCircle(x, y0 + k * 14, 3, C_DKGREY);
 }
 
-// Header used by the detail cards
+// Header for detail cards: channel name left, card name right (gold)
 void drawDetailHeader(const char *label) {
   gfx->fillScreen(C_BG);
-  String t = nameOf(page);
-  if (t.length() > 22) t = t.substring(0, 21) + ".";
-  textAt(10, 6, t, 2, C_WHITE);
-  textAt(10, 26, label, 1, C_GOLD);
-  gfx->drawFastHLine(10, 37, gfx->width() - 26, C_DKGREY);
+  int lw = tw(label, F_S);
+  ftR(RIGHT_EDGE, 22, label, F_S, C_GOLD);
+  ft(8, 22, fit(nameOf(page), F_M, RIGHT_EDGE - lw - 18), F_M, C_WHITE);
+  gfx->drawFastHLine(8, 31, RIGHT_EDGE - 8, C_DKGREY);
   drawCardDots();
 }
 
 // ── Card 0: main count ──────────────────────────────────────────────────────
 void drawMainHeader() {
-  gfx->fillRect(0, 0, gfx->width() - 12, 54, C_BG);
+  gfx->fillRect(0, 0, gfx->width() - 14, 54, C_BG);
   if (!numCh) return;
-  if (!drawAvatar(page, 10, 5, true)) {
-    gfx->fillRoundRect(12, 12, 40, 28, 8, C_RED);
-    gfx->fillTriangle(26, 18, 26, 34, 40, 26, C_WHITE);
+  if (!drawAvatar(page, 6, 4, true)) {
+    gfx->fillRoundRect(8, 12, 40, 28, 8, C_RED);
+    gfx->fillTriangle(22, 18, 22, 34, 36, 26, C_WHITE);
   }
+  String pos = numCh > 1 ? String(page + 1) + "/" + String(numCh) : String("");
+  int pw = pos.length() ? tw(pos, F_S) + 8 : 0;
+  ft(58, 24, fit(nameOf(page), F_M, RIGHT_EDGE - 58 - pw), F_M, C_WHITE);
+  if (pos.length()) ftR(RIGHT_EDGE, 24, pos, F_S, C_GREY);
   Channel &c = ch[page];
-  String t = nameOf(page);
-  if (t.length() > 20) t = t.substring(0, 19) + ".";
-  textAt(62, 13, t, 2, C_WHITE);
-  String sub = "subscribers";
-  textAt(62, 34, sub, 1, C_GREY);
-  if (c.statsOk && c.gainToday != 0) textAt(62 + 12 * 6, 34, signedNum(c.gainToday) + " today", 1, c.gainToday > 0 ? C_GREEN : C_RED);
-  if (numCh > 1) textRight(gfx->width() - 14, 34, String(page + 1) + "/" + String(numCh), 1, C_GREY);
-  gfx->drawFastHLine(12, 52, gfx->width() - 26, C_DKGREY);
+  if (c.statsOk && c.gainToday != 0) ft(58, 46, signedNum(c.gainToday) + " today", F_S, c.gainToday > 0 ? C_GREEN : C_RED);
+  else ft(58, 46, "subscribers", F_S, C_GREY);
 }
 
 void drawMainNumber(long n) {
-  gfx->fillRect(0, 56, gfx->width() - 12, 78, C_BG);
+  gfx->fillRect(0, 54, gfx->width() - 14, 82, C_BG);
   if (!numCh) return;
   Channel &c = ch[page];
-  if (c.err.length() && c.subs < 0) { wrapText(c.err, 14, 74, gfx->width() - 20, 2, C_RED); return; }
-  if (n < 0) { centreText("...", 78, 5, C_GREY); return; }
+  if (c.err.length() && c.subs < 0) { wrapF(c.err, 10, 82, RIGHT_EDGE, F_M, C_RED, 2, 24); return; }
+  if (n < 0) { ftC(110, "...", F_N42, C_GREY); return; }
   String s = withCommas(n);
-  uint8_t sz = sizeForText(s, 7, gfx->width() - 30);
-  centreText(s, 96 - (sz * 8) / 2, sz, C_WHITE);
-  if (isEstimated(page)) textRight(gfx->width() - 16, 124, "est.", 1, C_GREY);
+  const uint8_t *f = numFont(s, RIGHT_EDGE - 10);
+  ftC(f == F_N42 ? 114 : (f == F_N32 ? 110 : 106), s, f, C_WHITE);
+  if (isEstimated(page)) ftR(RIGHT_EDGE, 134, "est.", F_S, C_GREY);
 }
 
 void drawChannelDots() {
-  gfx->fillRect(0, 136, gfx->width() - 12, 10, C_BG);
+  gfx->fillRect(0, 138, gfx->width() - 14, 10, C_BG);
   if (numCh < 2) return;
-  int gap = 12, x = (gfx->width() - (numCh - 1) * gap) / 2;
+  int gap = 14, x = (RIGHT_EDGE + 10 - (numCh - 1) * gap) / 2;
   for (int i = 0; i < numCh; i++)
-    if (i == page) gfx->fillCircle(x + i * gap, 141, 3, C_WHITE);
-    else gfx->drawCircle(x + i * gap, 141, 3, C_GREY);
+    if (i == page) gfx->fillCircle(x + i * gap, 143, 4, C_WHITE);
+    else gfx->drawCircle(x + i * gap, 143, 3, C_GREY);
 }
 
+// Only shown when something is wrong
 void drawFooter() {
   if (board || card != 0) return;
-  gfx->fillRect(0, 150, gfx->width() - 12, 22, C_BG);
-  gfx->setCursor(12, 158);
-  if (netError.length()) { textAt(12, 158, netError.substring(0, 48), 1, C_RED); return; }
-  if (lastFetchOk) {
-    unsigned long mins = (millis() - lastFetchOk) / 60000UL;
-    textAt(12, 158, mins == 0 ? String("Updated just now") : "Updated " + String(mins) + " min ago", 1, C_GREY);
-  }
-  String ip = WiFi.localIP().toString() + (usedCompatThisBoot ? " (W4)" : "");
-  textRight(gfx->width() - 14, 158, ip, 1, C_GREY);
+  gfx->fillRect(0, 150, gfx->width() - 14, 22, C_BG);
+  if (netError.length()) ft(8, 168, fit(netError, F_S, RIGHT_EDGE - 8), F_S, C_RED);
+  else if (lastFetchOk && millis() - lastFetchOk > 10UL * 60000UL)
+    ft(8, 168, "Not updated for " + String((millis() - lastFetchOk) / 60000UL) + " min", F_S, C_GOLD);
 }
 
 void drawMain() {
   gfx->fillScreen(C_BG);
-  if (!numCh) { centreText("No channels set", 70, 2, C_GREY); return; }
+  if (!numCh) { ftC(90, "No channels set", F_M, C_GREY); return; }
   shownSubs = estimateFor(page);
   drawMainHeader();
   drawMainNumber(shownSubs);
@@ -682,111 +742,113 @@ void drawMain() {
 // ── Card 1: overview ────────────────────────────────────────────────────────
 void drawOverview() {
   Channel &c = ch[page];
-  drawDetailHeader("OVERVIEW");
-  if (!drawAvatar(page, 10, 46, false)) gfx->fillCircle(54, 90, 44, C_DKGREY);
-  int x = 110, xr = gfx->width() - 16, y = 46;
-  struct { const char *k; String v; } rows[] = {
-    { "Subscribers", c.subs >= 0 ? compact(c.subs) : String("-") },
-    { "Total views", compact(c.views) },
-    { "Videos",      c.videos >= 0 ? withCommas(c.videos) : String("-") },
-    { "Avg views",   (c.videos > 0 && c.views >= 0) ? compact(c.views / c.videos) : String("-") },
+  drawDetailHeader("Overview");
+  if (!drawAvatar(page, 6, 42, false)) gfx->fillCircle(50, 86, 44, C_DKGREY);
+  int x = 104, y = 60;
+  struct { String v; const char *k; } rows[] = {
+    { compact(c.views), " views" },
+    { c.videos >= 0 ? withCommas(c.videos) : String("-"), " videos" },
+    { (c.videos > 0 && c.views >= 0) ? compact(c.views / c.videos) : String("-"), " avg" },
   };
   for (auto &r : rows) {
-    textAt(x, y + 4, r.k, 1, C_GREY);
-    textRight(xr, y, r.v, 2, C_WHITE);
-    y += 22;
+    ft(x, y, r.v, F_M, C_WHITE);
+    ft(x + tw(r.v, F_M), y, r.k, F_S, C_GREY);
+    y += 30;
   }
-  String joined = c.joined ? "Joined " + dateStr(c.joined, "%b %Y") : "";
-  if (c.country.length()) joined += (joined.length() ? "  -  " : "") + c.country;
-  textAt(x, 140, joined, 1, C_GREY);
-  if (c.joined && timeValid()) {
-    long yrs = (nowT() - c.joined) / (365L * 86400);
-    textAt(x, 154, yrs >= 1 ? String(yrs) + (yrs == 1 ? " year" : " years") + " on YouTube" : String("New this year"), 1, C_DKGREY);
-  }
+  String joined = c.joined ? "Since " + dateStr(c.joined, "%Y") : "";
+  if (c.country.length()) joined += (joined.length() ? "  " : "") + c.country;
+  ft(x, y, joined, F_S, C_GREY);
 }
 
 // ── Card 2: latest video ────────────────────────────────────────────────────
 void drawLatestVideo() {
   Channel &c = ch[page];
-  drawDetailHeader(c.live ? "LIVE NOW" : "LATEST VIDEO");
-  if (!c.vidId.length()) { centreText(c.uploads.length() ? "Loading..." : "No videos", 80, 2, C_GREY); return; }
-  int y = 44;
+  drawDetailHeader(c.live ? "LIVE" : "Latest video");
+  if (!c.vidId.length()) { ftC(100, c.uploads.length() ? "Loading..." : "No videos", F_M, C_GREY); return; }
+  int y = 56;
   if (c.live) {
-    gfx->fillRoundRect(10, y, 50, 18, 4, C_RED);
-    textAt(17, y + 2, "LIVE", 2, C_WHITE);
-    if (c.liveViewers >= 0) textAt(68, y + 2, withCommas(c.liveViewers) + " watching", 2, C_WHITE);
+    gfx->fillRoundRect(8, 38, 58, 24, 5, C_RED);
+    ft(14, 56, "LIVE", F_M, C_WHITE);
+    if (c.liveViewers >= 0) ft(74, 56, compact(c.liveViewers) + " watching", F_M, C_WHITE);
+    y = 84;
+    y = wrapF(asciiOnly(c.vidTitle), 8, y, RIGHT_EDGE, F_S, C_WHITE, 1, 20);
+  } else {
+    y = wrapF(asciiOnly(c.vidTitle), 8, y, RIGHT_EDGE, F_M, C_WHITE, 2, 24);
+    String meta = ago(c.vidPublished);
+    if (c.vidDuration > 0) meta += (meta.length() ? "  -  " : "") + durationStr(c.vidDuration);
+    ft(8, y - 2, meta, F_S, C_GREY);
     y += 24;
   }
-  y = wrapText(asciiOnly(c.vidTitle), 10, y, gfx->width() - 18, 2, C_WHITE, c.live ? 1 : 2);
-  String meta = ago(c.vidPublished);
-  if (c.vidDuration > 0 && !c.live) meta += (meta.length() ? "  -  " : "") + durationStr(c.vidDuration);
-  textAt(10, y, meta, 1, C_GREY);
-  // stats row
-  int colW = (gfx->width() - 26) / 3, sy = 128;
-  struct { const char *k; String v; uint16_t col; } st[] = {
-    { "views",    compact(c.vidViews), C_WHITE },
-    { "likes",    c.vidLikes >= 0 ? compact(c.vidLikes) : String("hidden"), C_GREEN },
-    { "comments", c.vidComments >= 0 ? compact(c.vidComments) : String("off"), C_BLUE },
-  };
-  for (int k = 0; k < 3; k++) {
-    int cx = 10 + k * colW;
-    textAt(cx, sy, st[k].v, 2, st[k].col);
-    textAt(cx, sy + 20, st[k].k, 1, C_GREY);
-  }
+  // views big, likes/comments under it
+  String v = compact(c.vidViews);
+  ft(8, y + 4, v, F_M, C_WHITE);
+  ft(8 + tw(v, F_M), y + 4, " views", F_S, C_GREY);
+  String lc = (c.vidLikes >= 0 ? compact(c.vidLikes) + " likes" : String("likes hidden")) +
+              "   " + (c.vidComments >= 0 ? compact(c.vidComments) + " comments" : String(""));
+  ft(8, min(y + 28, 168), fit(lc, F_S, RIGHT_EDGE - 8), F_S, C_GREEN);
 }
 
-// ── Card 3: growth ──────────────────────────────────────────────────────────
+// ── Card 3: growth numbers ──────────────────────────────────────────────────
+bool needData(Channel &c) {
+  if (c.statsOk && c.histStart) return false;
+  ftC(84, "Collecting data...", F_M, C_GREY);
+  ftC(112, "Recorded every hour.", F_S, C_GREY);
+  ftC(134, "Check back later today.", F_S, C_GREY);
+  return true;
+}
+
 void drawGrowth() {
   Channel &c = ch[page];
-  drawDetailHeader("GROWTH");
-  if (!c.statsOk || !c.histStart) {
-    centreText("Collecting data...", 70, 2, C_GREY);
-    centreText("The board records the count every hour.", 100, 1, C_DKGREY);
-    centreText("Check back later today.", 114, 1, C_DKGREY);
-    return;
+  drawDetailHeader("Growth");
+  if (needData(c)) return;
+  struct { const char *k; long v; float span; float full; } g[] = {
+    { "Today", c.gainToday, 1, 1 }, { "7 days", c.gain7, c.span7Days, 7 }, { "30 days", c.gain30, c.span30Days, 30 } };
+  int y = 60;
+  for (auto &r : g) {
+    String k = r.k;
+    if (r.full > 1 && r.span > 0 && r.span < r.full - 0.5f) k += " (" + String(r.span, r.span < 10 ? 1 : 0) + "d)";
+    ft(8, y, k, F_M, C_GREY);
+    ftR(RIGHT_EDGE, y, signedNum(r.v), F_M, r.v > 0 ? C_GREEN : (r.v < 0 ? C_RED : C_WHITE));
+    y += 30;
   }
-  int colW = (gfx->width() - 26) / 3;
-  struct { const char *k; long v; float span; } g[] = {
-    { "today", c.gainToday, 1 }, { "7 days", c.gain7, c.span7Days }, { "30 days", c.gain30, c.span30Days } };
-  for (int k = 0; k < 3; k++) {
-    int cx = 10 + k * colW;
-    textAt(cx, 44, signedNum(g[k].v), 2, g[k].v > 0 ? C_GREEN : (g[k].v < 0 ? C_RED : C_WHITE));
-    String lbl = g[k].k;
-    if (k > 0 && g[k].span < (k == 1 ? 6.5f : 29.5f) && g[k].span > 0) lbl += " (" + String(g[k].span, 1) + "d)";
-    textAt(cx, 63, lbl, 1, C_GREY);
-  }
-  // 7-day graph
-  int gx = 10, gy = 78, gw = gfx->width() - 28, gh = 66;
-  gfx->drawRect(gx, gy, gw, gh, C_DKGREY);
+  if (c.ratePerDay != 0) ftC(160, "About " + signedNum(lroundf(c.ratePerDay)) + " a day", F_S, C_WHITE);
+}
+
+// ── Card 4: 7-day graph ─────────────────────────────────────────────────────
+void drawGraph() {
+  Channel &c = ch[page];
+  drawDetailHeader("7 days");
+  if (needData(c)) return;
+  int gx = 8, gy = 38, gw = RIGHT_EDGE - 8, gh = 108;
   File f = LittleFS.open(histPath(page), "r");
   time_t now = nowT(), from = now - 7L * 86400;
-  long mn = LONG_MAX, mx = LONG_MIN;
+  long mn = c.subs, mx = c.subs;
   Sample s;
   if (f) {
     while (f.read((uint8_t *)&s, sizeof(s)) == sizeof(s))
       if ((time_t)s.t >= from) { mn = min(mn, (long)s.s); mx = max(mx, (long)s.s); }
-    mn = min(mn, c.subs); mx = max(mx, c.subs);
-    if (mx == mn) { mx += 1; mn -= 1; }
+  }
+  if (mx == mn) { mx += 1; mn -= 1; }
+  for (int k = 1; k < 7; k++) gfx->drawFastVLine(gx + k * gw / 7, gy, gh, 0x18E3);  // day lines
+  gfx->drawRect(gx, gy, gw, gh, C_DKGREY);
+  if (f) {
     f.seek(0);
     int px = -1, py = -1;
     while (f.read((uint8_t *)&s, sizeof(s)) == sizeof(s)) {
       if ((time_t)s.t < from) continue;
       int x = gx + 1 + (int)((float)(s.t - from) / (7L * 86400) * (gw - 3));
-      int y = gy + gh - 2 - (int)((float)(s.s - mn) / (mx - mn) * (gh - 4));
-      if (px >= 0) gfx->drawLine(px, py, x, y, C_GREEN); else gfx->fillCircle(x, y, 1, C_GREEN);
+      int y = gy + gh - 3 - (int)((float)(s.s - mn) / (mx - mn) * (gh - 6));
+      if (px >= 0) { gfx->drawLine(px, py, x, y, C_GREEN); gfx->drawLine(px, py + 1, x, y + 1, C_GREEN); }
       px = x; py = y;
     }
     f.close();
   }
-  textAt(gx + 3, gy + 3, compact(mx), 1, C_DKGREY);
-  textAt(gx + 3, gy + gh - 11, compact(mn), 1, C_DKGREY);
-  String rate = c.ratePerDay != 0 ? String("~") + signedNum(lroundf(c.ratePerDay)) + "/day" : String("");
-  textAt(10, 150, "Last 7 days", 1, C_GREY);
-  textRight(gfx->width() - 18, 150, rate, 1, C_WHITE);
-  textAt(10, 162, "Tracking since " + dateStr(c.histStart, "%d %b %H:%M"), 1, C_DKGREY);
+  ft(8, 168, compact(mn), F_S, C_GREY);
+  ftR(RIGHT_EDGE, 168, compact(mx), F_S, C_WHITE);
+  ftC(168, "low  -  high", F_S, C_DKGREY);
 }
 
-// ── Card 4: next milestone ──────────────────────────────────────────────────
+// ── Card 5: next milestone ──────────────────────────────────────────────────
 long nextMilestone(long n) {
   long p = 10;
   while (true) {
@@ -801,59 +863,58 @@ long prevMilestone(long next) {
   long lead = next / p;
   if (lead == 1) return p / 2 >= 1 ? p / 2 : 0;
   if (lead == 2) return p;
-  return 2 * p;   // lead 5
+  return 2 * p;
 }
 
 void drawMilestone() {
   Channel &c = ch[page];
-  drawDetailHeader("NEXT MILESTONE");
-  if (c.subs < 0) { centreText("...", 80, 3, C_GREY); return; }
+  drawDetailHeader("Next milestone");
+  if (c.subs < 0) { ftC(100, "...", F_M, C_GREY); return; }
   long cur = estimateFor(page);
   long goal = nextMilestone(cur), prev = prevMilestone(goal);
   String g = withCommas(goal);
-  centreText(g, 46, sizeForText(g, 5, gfx->width() - 30), C_GOLD);
-  // progress bar from previous milestone to next
-  int bx = 14, by = 92, bw = gfx->width() - 34, bh = 14;
-  float frac = (float)(cur - prev) / (float)(goal - prev);
-  frac = constrain(frac, 0.0f, 1.0f);
-  gfx->drawRoundRect(bx, by, bw, bh, 6, C_DKGREY);
-  gfx->fillRoundRect(bx + 2, by + 2, max(6, (int)((bw - 4) * frac)), bh - 4, 4, C_GOLD);
-  textAt(bx, by + 18, compact(prev), 1, C_GREY);
-  textRight(bx + bw, by + 18, compact(goal), 1, C_GREY);
-  centreText(withCommas(goal - cur) + " to go", 124, 2, C_WHITE);
+  ftC(76, g, numFont(g, RIGHT_EDGE - 10) == F_N42 ? F_N32 : F_N24, C_GOLD);
+  int bx = 10, by = 88, bw = RIGHT_EDGE - 20, bh = 16;
+  float frac = constrain((float)(cur - prev) / (float)(goal - prev), 0.0f, 1.0f);
+  gfx->drawRoundRect(bx, by, bw, bh, 7, C_DKGREY);
+  gfx->fillRoundRect(bx + 2, by + 2, max(8, (int)((bw - 4) * frac)), bh - 4, 5, C_GOLD);
+  ftC(132, withCommas(goal - cur) + " to go", F_M, C_WHITE);
   String eta;
   if (c.ratePerDay > 0.01f && timeValid()) {
     float days = (goal - cur) / c.ratePerDay;
     if (days < 1) eta = "Expected today";
-    else if (days > 3650) eta = "Expected in 10+ years";
-    else eta = "Expected around " + dateStr(nowT() + (time_t)(days * 86400), days > 300 ? "%b %Y" : "%d %b");
-  } else eta = c.ratePerDay < 0 ? "Losing subscribers right now" : "Need more data to predict a date";
-  centreText(eta, 150, 1, C_GREY);
-  if (isEstimated(page)) textRight(gfx->width() - 16, 162, "est.", 1, C_DKGREY);
+    else if (days > 3650) eta = "10+ years away";
+    else eta = "Around " + dateStr(nowT() + (time_t)(days * 86400), days > 300 ? "%b %Y" : "%d %b");
+  } else eta = c.ratePerDay < 0 ? "Losing subscribers" : "Date: need more data";
+  ftC(162, eta, F_S, C_GREY);
 }
 
-// ── Leaderboard ─────────────────────────────────────────────────────────────
+// ── Leaderboard (5 rows per page; swipe left/right for more) ────────────────
+int boardPage = 0;
+#define BOARD_ROWS 5
 void drawBoard() {
   gfx->fillScreen(C_BG);
-  textAt(10, 6, "LEADERBOARD", 2, C_GOLD);
-  textRight(gfx->width() - 10, 10, "today", 1, C_GREY);
+  int pages = (numCh + BOARD_ROWS - 1) / BOARD_ROWS;
+  if (boardPage >= pages) boardPage = 0;
+  ft(8, 22, "Leaderboard", F_M, C_GOLD);
+  if (pages > 1) ftR(gfx->width() - 8, 22, String(boardPage + 1) + "/" + String(pages), F_S, C_GREY);
+  gfx->drawFastHLine(8, 31, gfx->width() - 16, C_DKGREY);
   int idx[MAX_CH]; for (int i = 0; i < numCh; i++) idx[i] = i;
   for (int a = 0; a < numCh; a++) for (int b = a + 1; b < numCh; b++)
     if (ch[idx[b]].subs > ch[idx[a]].subs) { int t = idx[a]; idx[a] = idx[b]; idx[b] = t; }
-  int rows = numCh, lh = rows > 7 ? 14 : 18, y = 28;
-  for (int r = 0; r < rows; r++) {
+  int y = 56;
+  for (int r = boardPage * BOARD_ROWS; r < min(numCh, (boardPage + 1) * BOARD_ROWS); r++) {
     int i = idx[r];
-    bool mine = (i == 0);   // first channel in the list = yours
-    if (i == page) gfx->fillRect(6, y - 2, gfx->width() - 12, lh - 2, 0x18E3);
-    uint16_t col = mine ? C_GOLD : C_WHITE;
-    textAt(10, y + 2, String(r + 1) + ".", 1, C_GREY);
-    String n = nameOf(i); if (n.length() > 22) n = n.substring(0, 21) + ".";
-    textAt(30, y + 2, n, 1, col);
-    textRight(gfx->width() - 70, y + 2, ch[i].subs >= 0 ? compact(ch[i].subs) : String("-"), 1, col);
-    if (ch[i].statsOk) textRight(gfx->width() - 10, y + 2, signedNum(ch[i].gainToday), 1, ch[i].gainToday > 0 ? C_GREEN : C_GREY);
-    y += lh;
+    uint16_t col = (i == 0) ? C_GOLD : C_WHITE;   // first channel in your list = yours
+    String num = String(r + 1);
+    String subs = ch[i].subs >= 0 ? compact(ch[i].subs) : String("-");
+    int sw = tw(subs, F_M);
+    ft(8, y, num, F_S, C_GREY);
+    ft(30, y, fit(nameOf(i), F_M, gfx->width() - 8 - sw - 40), F_M, col);
+    ftR(gfx->width() - 8, y, subs, F_M, col);
+    y += 26;
   }
-  textAt(10, 162, "Swipe up to go back", 1, C_DKGREY);
+  if (numCh < BOARD_ROWS) ftC(168, WiFi.localIP().toString(), F_S, C_DKGREY, gfx->width());
 }
 
 void drawView() {
@@ -863,7 +924,8 @@ void drawView() {
     case 1: drawOverview(); break;
     case 2: drawLatestVideo(); break;
     case 3: drawGrowth(); break;
-    case 4: drawMilestone(); break;
+    case 4: drawGraph(); break;
+    case 5: drawMilestone(); break;
     default: drawMain(); break;
   }
 }
@@ -879,6 +941,12 @@ void wipe(int dx, int dy) {
 }
 
 void changePage(int dir) {
+  if (board) {          // on the leaderboard, left/right pages through it
+    int pages = (numCh + BOARD_ROWS - 1) / BOARD_ROWS;
+    if (pages < 2) return;
+    boardPage = (boardPage + dir + pages) % pages;
+    wipe(dir, 0); drawBoard(); return;
+  }
   if (numCh < 2) return;
   page = (page + dir + numCh) % numCh;
   wipe(dir, 0);
@@ -887,7 +955,7 @@ void changePage(int dir) {
 
 void changeCard(int dir) {   // dir +1 = deeper (swipe up)
   if (board) { if (dir > 0) { board = false; card = 0; wipe(0, 1); drawView(); } return; }
-  if (dir < 0 && card == 0) { board = true; wipe(0, -1); drawView(); return; }
+  if (dir < 0 && card == 0) { board = true; boardPage = 0; wipe(0, -1); drawView(); return; }
   int nc = constrain(card + dir, 0, NUM_CARDS - 1);
   if (nc == card) return;
   card = nc;
@@ -898,13 +966,12 @@ void changeCard(int dir) {   // dir +1 = deeper (swipe up)
 void showAlert(const Alert &a) {
   for (int i = 0; i < 4; i++) { gfx->fillScreen(i % 2 ? C_PURPLE : C_GOLD); delay(100); }
   gfx->fillScreen(C_BG);
-  drawAvatar(a.idx, 10, 8, true);
-  textAt(62, 12, "NEW SUBSCRIBERS!", 2, C_GOLD);
-  String name = nameOf(a.idx);
-  textAt(62, 34, name.length() > 40 ? name.substring(0, 39) + "." : name, 1, C_WHITE);
+  drawAvatar(a.idx, 6, 4, true);
+  ft(58, 24, "New subscribers!", F_M, C_GOLD);
+  ft(58, 46, fit(nameOf(a.idx), F_S, gfx->width() - 66), F_S, C_WHITE);
   String d = "+" + withCommas(a.delta);
-  centreText(d, 66, sizeForText(d, 5, gfx->width() - 20), C_GREEN);
-  centreText("now " + withCommas(a.total), 132, 2, C_GREY);
+  ftC(112, d, numFont(d, gfx->width() - 20), C_GREEN, gfx->width());
+  ftC(158, "now " + withCommas(a.total), F_M, C_GREY, gfx->width());
   unsigned long start = millis();
   while (millis() - start < ALERT_MS) { server.handleClient(); delay(20); }
 }
@@ -1406,7 +1473,7 @@ void startSettingsServer() {
 void setup() {
   Serial.begin(115200);
   delay(300);
-  Serial.println("SubCounter v6 starting");
+  Serial.println("SubCounter v7 starting");
   setenv("TZ", TZ_UK, 1); tzset();
 
   pinMode(SD_CS, OUTPUT);  digitalWrite(SD_CS, HIGH);
@@ -1416,6 +1483,8 @@ void setup() {
   gfx->begin();
   lcdRegInit();
   gfx->setRotation(1);
+  gfx->setTextWrap(false);
+  gfx->setUTF8Print(true);
   gfx->fillScreen(C_BG);
   ledcAttach(LCD_BL, 5000, 8);
   ledcWrite(LCD_BL, 160);
