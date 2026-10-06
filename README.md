@@ -23,6 +23,7 @@ A desk gadget built on the **Waveshare ESP32-C6-Touch-LCD-1.47** that shows live
 - Shake to refresh · face-down turns the screen off · stand it in portrait for a tall leaderboard · double-tap the desk for the next channel
 
 **Everyday**
+- **Idle clock:** after 3 minutes without use (adjustable), a large clock with date, weather and your count; pick the board up to go back
 - 9 am daily summary, plus a dim night clock overnight
 - Web dashboard at `http://<board-ip>/`, with settings at `/settings`
 - Several saved Wi-Fi networks (e.g. work and home) with automatic roaming, a network scanner, "Connect now" and a preferred network
@@ -31,7 +32,7 @@ A desk gadget built on the **Waveshare ESP32-C6-Touch-LCD-1.47** that shows live
 
 ## Quick start
 
-1. **Flash the board.** Open <https://espressif.github.io/esptool-js/> in Chrome, connect the board, and flash `builds/latest/SubCounter-v9.2-FULL-new-board-flash-at-0x0.bin` at address **0x0**.
+1. **Flash the board.** Open <https://espressif.github.io/esptool-js/> in Chrome, connect the board, and flash `builds/latest/SubCounter-v9.3-FULL-new-board-flash-at-0x0.bin` at address **0x0**.
 2. **Set it up.** The board shows *SETUP MODE*. Join the Wi-Fi network **SubCounter-Setup** from your phone, and the setup page opens by itself (or go to <http://192.168.4.1>). Pick your Wi-Fi, add your YouTube channels and a YouTube Data API key, then save.
 3. **Use it.** The board shows your subscriber count. Open the board's IP address in a browser for the dashboard.
 

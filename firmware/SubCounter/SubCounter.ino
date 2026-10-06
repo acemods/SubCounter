@@ -1,5 +1,5 @@
 /*
- * SubCounter v9.2 — YouTube subscriber counter for Waveshare ESP32-C6-Touch-LCD-1.47
+ * SubCounter v9.3 — YouTube subscriber counter for Waveshare ESP32-C6-Touch-LCD-1.47
  *
  *  ON THE BOARD
  *    Swipe left / right ... next / previous channel   (BOOT short press = next)
@@ -10,6 +10,7 @@
  *    Stand on its side .... tall leaderboard
  *    Double-tap the desk .. next channel
  *    9 am ................. daily summary;  at night: dim clock mode
+ *    Not used for 3 min ... big clock (time can be changed in settings; pick it up to go back)
  *    Hold BOOT 3 s ........ setup mode
  *
  *  APPS: long-press the screen for the home menu (YouTube, Weather, Spotify)
@@ -164,7 +165,8 @@ String netError = "";
 unsigned long lastFetch = 0, lastVideoFetch = 0, lastFetchOk = 0, lastInteract = 0;
 unsigned long btnDownAt = 0;
 
-enum Mode { M_NORMAL, M_SLEEP, M_PORTRAIT, M_SUMMARY, M_AMBIENT };
+enum Mode { M_NORMAL, M_SLEEP, M_PORTRAIT, M_SUMMARY, M_AMBIENT, M_CLOCK };
+int cfgIdleClock = 3;          // minutes without use before the clock appears (0 = off)
 Mode mode = M_NORMAL;
 float  cfgWxLat = 55.861f, cfgWxLon = -4.250f;   // weather location (default Glasgow)
 String cfgWxName = "Glasgow";
@@ -533,6 +535,7 @@ void loadSettings() {
   cfgSpSecret = prefs.getString("spsec", "");
   cfgSpRefresh = prefs.getString("spref", "");
   cfgSpRedirect = prefs.getString("spredir", "");
+  cfgIdleClock = prefs.getInt("idleclk", 3);
   g0Saved     = prefs.isKey("g0z");
   prefs.end();
   parseChannels();
@@ -576,6 +579,7 @@ void saveSettings() {
   prefs.putString("spsec", cfgSpSecret);
   prefs.putString("spref", cfgSpRefresh);
   prefs.putString("spredir", cfgSpRedirect);
+  prefs.putInt("idleclk", cfgIdleClock);
   prefs.end();
 }
 
@@ -1204,7 +1208,8 @@ unsigned long shakeTimes[6]; int shakeN = 0; unsigned long lastShake = 0;
 // taps
 unsigned long tapBurstStart = 0, tapLast = 0, tapFirst = 0, tapSecond = 0, quietBefore = 0;
 int tapCount = 0;
-bool evShake = false, evTap = false;
+bool evShake = false, evTap = false, evMoved = false;
+unsigned long lastMoveEvent = 0;
 
 float tapThreshold() { return cfgTapSens >= 3 ? 0.06f : (cfgTapSens == 1 ? 0.25f : 0.12f); }
 
@@ -1228,6 +1233,8 @@ void imuUpdate() {
   float hx = x - fX, hy = y - fY, hz = z - fZ;
   float hp = sqrtf(hx * hx + hy * hy + hz * hz);        // sudden movement, in g
   unsigned long now = millis();
+  // picked up / nudged (typing on the desk stays well below this)
+  if (hp > 0.2f && now - lastMoveEvent > 500) { lastMoveEvent = now; evMoved = true; }
 
   // ── shake: 4+ big jolts within a second ──
   if (hp > 0.8f) {
@@ -2274,6 +2281,23 @@ void spCommand(char what) {
   lastSpPoll = millis();
 }
 
+// Idle clock: big and bright, with date, weather and your channel's count
+void drawClock() {
+  gfx->fillScreen(C_BG);
+  if (!timeValid()) { ftC(100, "--:--", F_N42, C_DKGREY, gfx->width()); return; }
+  ftC(76, dateStr(nowT(), "%H:%M"), u8g2_font_logisoso58_tn, C_WHITE, gfx->width());
+  ftC(106, dateStr(nowT(), "%A %d %B"), F_M, C_GREY, gfx->width());
+  int y = 148;
+  String bottom;
+  if (wx.ok) bottom = String(lroundf(wx.temp)) + "\xC2\xB0 " + wxText(wx.code);
+  if (numCh && ch[0].subs >= 0) bottom += (bottom.length() ? "   -   " : "") + compact(estimateFor(0)) + " subs";
+  if (bottom.length()) ftC(y, fit(bottom, F_S, gfx->width() - 16), F_S, C_GREY, gfx->width());
+  if (wx.ok && wx.rainHour >= 0) {
+    char b[40]; snprintf(b, sizeof(b), "Rain around %02d:00", wx.rainHour);
+    ftC(168, b, F_S, C_BLUE, gfx->width());
+  }
+}
+
 // ── Home menu ───────────────────────────────────────────────────────────────
 void drawAppIcon(int a, int cx, int cy) {
   if (a == APP_YT) { gfx->fillRoundRect(cx - 30, cy - 21, 60, 42, 12, C_RED); gfx->fillTriangle(cx - 8, cy - 11, cx - 8, cy + 11, cx + 12, cy, C_WHITE); }
@@ -2615,6 +2639,11 @@ void handleSettings() {
   h += checkbox("est", cfgEst, "Estimated live counts between YouTube's rounded steps (“est.”)");
   h += checkbox("celebrate", cfgCelebrate, "Confetti for milestones (bigger milestones, bigger party)");
   h += checkbox("summary", cfgSummary, "Daily summary on screen at 9 am");
+  h += "<label>Show the clock after this long without use</label><select name='idleclk'>";
+  { const int opts[] = { 0, 1, 2, 3, 5, 10 };
+    for (int o : opts) h += "<option value='" + String(o) + "'" + (cfgIdleClock == o ? " selected" : "") + ">" +
+                            (o == 0 ? String("Never") : String(o) + (o == 1 ? " minute" : " minutes")) + "</option>"; }
+  h += "</select><small>Touch, press BOOT or pick the board up to go back.</small>";
   if (numCh >= 2) {
     h += "<label>Subscriber race</label><div style='display:flex;gap:8px'>" + channelSelect("raceA", cfgRaceA) +
          "<span style='align-self:center'>vs</span>" + channelSelect("raceB", cfgRaceB) + "</div>";
@@ -2792,6 +2821,7 @@ void handleSave() {
   cfgPortrait = server.arg("portrait") == "1";
   cfgFlipPortrait = server.arg("flip") == "1";
   cfgTap = server.arg("tap") == "1";
+  if (server.hasArg("idleclk")) cfgIdleClock = constrain(server.arg("idleclk").toInt(), 0, 60);
   String town = server.arg("wxtown"); town.trim();
   if (town.length() && town != cfgWxName && !portalMode) {
     float la, lo; String label;
@@ -3249,7 +3279,7 @@ int portraitRot = 0;
 void setup() {
   Serial.begin(115200);
   delay(300);
-  Serial.println("SubCounter v9.2 starting");
+  Serial.println("SubCounter v9.3 starting");
   setenv("TZ", TZ_UK, 1); tzset();
 
   pinMode(SD_CS, OUTPUT);  digitalWrite(SD_CS, HIGH);
@@ -3309,6 +3339,7 @@ void drawMode() {
     case M_PORTRAIT: drawPortraitBoard(); break;
     case M_SUMMARY: drawSummary(); break;
     case M_AMBIENT: drawAmbient(); break;
+    case M_CLOCK: drawClock(); break;
     default: drawApp(); break;
   }
 }
@@ -3323,6 +3354,7 @@ void enterMode(Mode m) {
     case M_PORTRAIT: setBacklight(BL_NORMAL); gfx->setRotation(portraitRot); drawPortraitBoard(); break;
     case M_SUMMARY:  setBacklight(BL_NORMAL); drawSummary(); break;
     case M_AMBIENT:  drawAmbient(); fadeBacklight(BL_NIGHT, 25); break;
+    case M_CLOCK:    if (blNow != BL_NORMAL) setBacklight(BL_NORMAL); drawClock(); break;
     default:
       gfx->fillScreen(C_BG);
       drawApp();
@@ -3361,6 +3393,8 @@ void loop() {
   // ── inputs ────────────────────────────────────────────────────────────────
   imuUpdate();
   bool shake = evShake; evShake = false;
+  bool moved = evMoved; evMoved = false;
+  if (moved) lastInteract = millis();                      // picking it up counts as using it
   bool tap = evTap; evTap = false;
   char swipe = pollSwipe();
   if (touching) lastTouchActivity = millis();
@@ -3385,8 +3419,8 @@ void loop() {
   if (summaryActive && millis() - summaryShownAt > SUMMARY_SHOW_MS) summaryActive = false;
 
   // ── decide the mode ───────────────────────────────────────────────────────
-  bool anyInput = swipe || tap || shake || bootShort || touching;
-  if (anyInput && (mode == M_AMBIENT || mode == M_SUMMARY)) {
+  bool anyInput = swipe || tap || shake || bootShort || touching || moved;
+  if (anyInput && (mode == M_AMBIENT || mode == M_SUMMARY || mode == M_CLOCK)) {
     userActivity();
     swipe = 0; tap = false; bootShort = false;   // this input just wakes it up
   }
@@ -3401,6 +3435,8 @@ void loop() {
   }
   else if (summaryActive) want = M_SUMMARY;
   else if (isNight() && millis() - lastInteract > NIGHT_IDLE_MS) want = M_AMBIENT;
+  else if (cfgIdleClock > 0 && millis() - lastInteract > (unsigned long)cfgIdleClock * 60000UL &&
+           !(app == APP_SP && sp.playing) && !menuOpen) want = M_CLOCK;
   if (want != mode) {
     if (mode == M_SLEEP || mode == M_PORTRAIT) lastInteract = millis();   // picked up again
     enterMode(want);
@@ -3525,7 +3561,7 @@ void loop() {
 
   if (refreshed) {
     // celebrate only when someone can see it (not face-down, side-on or at night)
-    if (numAlerts && (mode == M_NORMAL || mode == M_SUMMARY) && !(app == APP_SP && !menuOpen && sp.playing)) {
+    if (numAlerts && (mode == M_NORMAL || mode == M_SUMMARY || mode == M_CLOCK) && !(app == APP_SP && !menuOpen && sp.playing)) {
       setBacklight(BL_NORMAL);
       for (int i = 0; i < numAlerts; i++) showAlert(alerts[i]);
       gfx->fillScreen(C_BG);
@@ -3559,6 +3595,11 @@ void loop() {
     lastSlow = millis();
     if (mode == M_AMBIENT) drawAmbient();
     else if (ytVisible()) drawFooter();
+  }
+  static int lastClockMin = -1;
+  if (mode == M_CLOCK && timeValid()) {
+    time_t n = nowT(); struct tm lt; localtime_r(&n, &lt);
+    if (lt.tm_min != lastClockMin) { lastClockMin = lt.tm_min; drawClock(); }
   }
   if (mode == M_NORMAL && !menuOpen && app == APP_WX && wxCard == 0 && timeValid()) {   // keep the clock ticking
     time_t n = nowT(); struct tm lt; localtime_r(&n, &lt);

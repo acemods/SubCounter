@@ -50,6 +50,10 @@ Alerts are skipped at night, when the board is face-down or on its side, and whi
 
 Each can be switched off in settings, and desk-tap sensitivity can be set to Low, Medium or High.
 
+## Idle clock
+
+After **3 minutes** with no touch, button press or movement (change it, or turn it off, in settings), the board shows a **large clock** with the date, the weather, any rain warning and your channel's count. It goes back to what you were looking at as soon as you touch it, press BOOT or pick it up. It doesn't appear while Spotify is playing, and overnight the dim night clock is used instead. Alerts still pop up over it.
+
 ## Daily summary and night clock
 
 - **9 am:** "Good morning!" with the top 3 growers since yesterday and any new videos. Touch it to dismiss.

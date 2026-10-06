@@ -13,7 +13,7 @@
 2. Open **<https://espressif.github.io/esptool-js/>** in Chrome.
 3. Click **Connect** and pick the board (it shows up as *USB JTAG/serial debug unit*).
 4. Set **Flash Address** to **`0x0`** and choose
-   `builds/latest/SubCounter-v9.2-FULL-new-board-flash-at-0x0.bin`.
+   `builds/latest/SubCounter-v9.3-FULL-new-board-flash-at-0x0.bin`.
 5. Click **Program**. When it finishes, press **RESET** on the board.
 
 > If it won't connect: hold **BOOT**, tap **RESET**, release **BOOT**, then try again.
