@@ -1,5 +1,5 @@
 /*
- * SubCounter v8.2 — YouTube subscriber counter for Waveshare ESP32-C6-Touch-LCD-1.47
+ * SubCounter v8.3 — YouTube subscriber counter for Waveshare ESP32-C6-Touch-LCD-1.47
  *
  *  ON THE BOARD
  *    Swipe left / right ... next / previous channel   (BOOT short press = next)
@@ -129,8 +129,13 @@ Preferences prefs;
 WebServer server(80);
 DNSServer dns;
 
-String cfgSsid, cfgPass, cfgChannels, cfgApiKey, cfgUser;
+String cfgSsid, cfgPass, cfgChannels, cfgApiKey, cfgUser;   // cfgSsid... = the network being tried / in use
 String cfgIp, cfgGw, cfgMask, cfgDns;
+// Saved Wi-Fi networks (e.g. work + home); the board joins whichever is in range
+#define MAX_NETS 5
+struct Net { String ssid, pass, user, ip, gw, mask, dns; bool compat = false; };
+Net nets[MAX_NETS];
+int numNets = 0, curNet = -1;
 bool   cfgCompat = false, cfgAuto = false, cfgEst = true;
 bool   cfgCelebrate = true, cfgSummary = true;
 bool   cfgShake = true, cfgFaceDown = true, cfgPortrait = true, cfgFlipPortrait = false, cfgTap = true;
@@ -449,16 +454,29 @@ void parseChannels() {
 
 void loadSettings() {
   prefs.begin("subcounter", true);
-  cfgSsid     = prefs.getString("ssid", "");
-  cfgPass     = prefs.getString("pass", "");
+  numNets = 0;
+  if (prefs.isKey("nnets")) {
+    numNets = constrain(prefs.getInt("nnets", 0), 0, MAX_NETS);
+    for (int k = 0; k < numNets; k++) {
+      String p = "n" + String(k);
+      nets[k].ssid = prefs.getString((p + "ssid").c_str(), "");
+      nets[k].pass = prefs.getString((p + "pass").c_str(), "");
+      nets[k].user = prefs.getString((p + "user").c_str(), "");
+      nets[k].ip   = prefs.getString((p + "ip").c_str(), "");
+      nets[k].gw   = prefs.getString((p + "gw").c_str(), "");
+      nets[k].mask = prefs.getString((p + "mask").c_str(), "");
+      nets[k].dns  = prefs.getString((p + "dns").c_str(), "");
+      nets[k].compat = prefs.getBool((p + "compat").c_str(), false);
+    }
+  } else if (prefs.getString("ssid", "").length()) {      // upgrade from the single-network versions
+    Net &n = nets[0];
+    n.ssid = prefs.getString("ssid", ""); n.pass = prefs.getString("pass", ""); n.user = prefs.getString("user", "");
+    n.ip = prefs.getString("ip", ""); n.gw = prefs.getString("gw", ""); n.mask = prefs.getString("mask", "");
+    n.dns = prefs.getString("dns", ""); n.compat = prefs.getBool("compat", false);
+    numNets = 1;
+  }
   cfgChannels = prefs.getString("channels", prefs.getString("channel", ""));
   cfgApiKey   = prefs.getString("apikey", "");
-  cfgUser     = prefs.getString("user", "");
-  cfgIp       = prefs.getString("ip", "");
-  cfgGw       = prefs.getString("gw", "");
-  cfgMask     = prefs.getString("mask", "");
-  cfgDns      = prefs.getString("dns", "");
-  cfgCompat   = prefs.getBool("compat", false);
   cfgAuto     = prefs.getBool("auto", false);
   cfgEst      = prefs.getBool("est", true);
   cfgCelebrate = prefs.getBool("celebrate", true);
@@ -483,16 +501,20 @@ void loadSettings() {
 
 void saveSettings() {
   prefs.begin("subcounter", false);
-  prefs.putString("ssid", cfgSsid);
-  prefs.putString("pass", cfgPass);
+  prefs.putInt("nnets", numNets);
+  for (int k = 0; k < numNets; k++) {
+    String p = "n" + String(k);
+    prefs.putString((p + "ssid").c_str(), nets[k].ssid);
+    prefs.putString((p + "pass").c_str(), nets[k].pass);
+    prefs.putString((p + "user").c_str(), nets[k].user);
+    prefs.putString((p + "ip").c_str(), nets[k].ip);
+    prefs.putString((p + "gw").c_str(), nets[k].gw);
+    prefs.putString((p + "mask").c_str(), nets[k].mask);
+    prefs.putString((p + "dns").c_str(), nets[k].dns);
+    prefs.putBool((p + "compat").c_str(), nets[k].compat);
+  }
   prefs.putString("channels", cfgChannels);
   prefs.putString("apikey", cfgApiKey);
-  prefs.putString("user", cfgUser);
-  prefs.putString("ip", cfgIp);
-  prefs.putString("gw", cfgGw);
-  prefs.putString("mask", cfgMask);
-  prefs.putString("dns", cfgDns);
-  prefs.putBool("compat", cfgCompat);
   prefs.putBool("auto", cfgAuto);
   prefs.putBool("est", cfgEst);
   prefs.putBool("celebrate", cfgCelebrate);
@@ -1642,7 +1664,7 @@ void handleSettings() {
   h += "</p>";
   if (wifiFailReason.length()) {
     h += "<div style='background:#3a1210;border:1px solid #e62117;border-radius:10px;padding:12px;margin-bottom:8px;font-size:14px'>"
-         "<b>Last attempt to join " + htmlEscape(cfgSsid) + " failed:</b><br>" + htmlEscape(wifiFailReason) + "</div>";
+         "<b>Couldn't connect to Wi-Fi:</b><br>" + htmlEscape(wifiFailReason) + "</div>";
   }
   h += "<form method='POST' action='/save'>";
   h += "<label>YouTube channels (up to 10, one per line)</label>";
@@ -1679,31 +1701,47 @@ void handleSettings() {
   for (int k = 1; k <= 3; k++) h += "<option value='" + String(k) + "'" + (cfgTapSens == k ? " selected" : "") + ">" + sens[k] + "</option>";
   h += "</select>";
 
-  h += "<h1 style='font-size:17px;margin-top:26px'>Wi-Fi</h1>";
-  h += "<label>Wi-Fi network</label>";
+  // ── Wi-Fi: saved networks + add/edit one ──
+  int edit = server.hasArg("edit") ? server.arg("edit").toInt() : -1;
+  if (edit >= numNets) edit = -1;
+  Net blank; Net &e = edit >= 0 ? nets[edit] : blank;
+  h += "<h1 id='wifi' style='font-size:17px;margin-top:26px'>Wi-Fi networks</h1>";
+  if (numNets) {
+    h += "<small>The board joins whichever saved network is in range (strongest first).</small><div class='st' style='margin:10px 0'>";
+    for (int k = 0; k < numNets; k++) {
+      h += "<div style='display:flex;gap:10px;align-items:center;padding:6px 0;border-top:1px solid #333'><b style='flex:1'>" + htmlEscape(nets[k].ssid) + "</b>";
+      if (k == curNet && !portalMode) h += "<span style='color:#30d158'>connected</span>";
+      if (nets[k].ip.length()) h += "<span>fixed IP</span>";
+      h += "<a href='/settings?edit=" + String(k) + "#wifi'>Edit</a>";
+      h += "<label style='margin:0'><input type='checkbox' name='rm" + String(k) + "' value='1' style='width:auto'> Remove</label></div>";
+    }
+    h += "</div>";
+  }
+  h += "<label>" + String(edit >= 0 ? "Editing: " + htmlEscape(e.ssid) : (numNets ? String("Add another network (e.g. home)") : String("Wi-Fi network"))) + "</label>";
   if (scanOptions.length()) {
     h += "<select onchange=\"document.getElementById('s').value=this.value\">";
     h += "<option value=''>Choose a network…</option>" + scanOptions + "</select><small>Or type it below:</small>";
   }
-  h += "<input id='s' name='ssid' value='" + htmlEscape(cfgSsid) + "' placeholder='Network name' required>";
+  h += "<input id='s' name='ssid' value='" + htmlEscape(e.ssid) + "' placeholder='Network name'" + String(numNets ? "" : " required") + ">";
+  if (numNets && edit < 0) h += "<small>Leave blank if you're not adding a network.</small>";
   h += "<label>Wi-Fi password</label>";
   h += "<input id='pw' name='pass' type='password' autocomplete='off' autocapitalize='off' placeholder='";
-  h += cfgPass.length() ? "(saved — leave blank to keep)" : "Password";
+  h += e.pass.length() ? "(saved — leave blank to keep)" : "Password";
   h += "'><small><label style='display:inline;margin:0'><input type='checkbox' style='width:auto' "
        "onclick=\"document.getElementById('pw').type=this.checked?'text':'password'\"> Show password</label></small>";
   h += "<label>Username (only for work Wi-Fi that asks for one)</label>";
-  h += "<input name='user' value='" + htmlEscape(cfgUser) + "' autocapitalize='off' placeholder='Leave blank for normal Wi-Fi'>";
-  h += "<details style='margin-top:18px'" + String(cfgIp.length() || cfgCompat ? " open" : "") +
-       "><summary style='color:#aaa;font-size:14px'>Advanced network settings</summary>";
-  h += checkbox("compat", cfgCompat, "Compatibility mode (Wi-Fi 4 instead of Wi-Fi 6)");
+  h += "<input name='user' value='" + htmlEscape(e.user) + "' autocapitalize='off' placeholder='Leave blank for normal Wi-Fi'>";
+  h += "<details style='margin-top:18px'" + String(e.ip.length() || e.compat ? " open" : "") +
+       "><summary style='color:#aaa;font-size:14px'>Advanced settings for this network</summary>";
+  h += checkbox("compat", e.compat, "Compatibility mode (Wi-Fi 4 instead of Wi-Fi 6)");
   h += "<label>Fixed IP address (blank = automatic)</label>";
-  h += "<input name='ip' value='" + htmlEscape(cfgIp) + "' placeholder='e.g. 192.168.1.250' inputmode='decimal'>";
+  h += "<input name='ip' value='" + htmlEscape(e.ip) + "' placeholder='e.g. 192.168.1.250' inputmode='decimal'>";
   h += "<label>Gateway (router) address</label>";
-  h += "<input name='gw' value='" + htmlEscape(cfgGw) + "' placeholder='e.g. 192.168.1.1' inputmode='decimal'>";
+  h += "<input name='gw' value='" + htmlEscape(e.gw) + "' placeholder='e.g. 192.168.1.1' inputmode='decimal'>";
   h += "<label>Subnet mask</label>";
-  h += "<input name='mask' value='" + htmlEscape(cfgMask) + "' placeholder='255.255.255.0' inputmode='decimal'>";
+  h += "<input name='mask' value='" + htmlEscape(e.mask) + "' placeholder='255.255.255.0' inputmode='decimal'>";
   h += "<label>DNS server</label>";
-  h += "<input name='dns' value='" + htmlEscape(cfgDns) + "' placeholder='e.g. 8.8.8.8' inputmode='decimal'>";
+  h += "<input name='dns' value='" + htmlEscape(e.dns) + "' placeholder='e.g. 8.8.8.8' inputmode='decimal'>";
   h += "<small>If this one doesn't answer, the board also tries 8.8.8.8.</small>";
   h += "</details>";
   h += "<button type='submit'>Save &amp; restart</button></form>";
@@ -1737,8 +1775,8 @@ void handleSave() {
     pass.remove(pass.length() - 1);
   while (pass.length() && (pass[0] == ' ' || pass[0] == '\n' || pass[0] == '\r' || pass[0] == '\t'))
     pass.remove(0, 1);
-  if (ssid.length() == 0 || chs.length() == 0 || (key.length() == 0 && cfgApiKey.length() == 0)) {
-    sendMessage(400, "Missing details", "Wi-Fi name, at least one channel and the API key are all needed.");
+  if (chs.length() == 0 || (key.length() == 0 && cfgApiKey.length() == 0)) {
+    sendMessage(400, "Missing details", "At least one channel and the API key are needed.");
     return;
   }
   String ip = server.arg("ip"), gw = server.arg("gw"), mask = server.arg("mask"), dnsS = server.arg("dns");
@@ -1749,12 +1787,29 @@ void handleSave() {
     sendMessage(400, "Check the network settings", "A fixed IP needs a valid IP and gateway, e.g. 192.168.1.250 and 192.168.1.1.");
     return;
   }
-  if (ssid != cfgSsid || pass.length()) cfgPass = pass;
-  cfgSsid = ssid; cfgUser = user; cfgChannels = chs;
+  // Wi-Fi: remove ticked networks, then add / update the one in the form
+  Net keep[MAX_NETS]; int nk = 0;
+  for (int k = 0; k < numNets; k++) if (server.arg("rm" + String(k)) != "1") keep[nk++] = nets[k];
+  if (ssid.length()) {
+    int found = -1;
+    for (int k = 0; k < nk; k++) if (keep[k].ssid == ssid) found = k;
+    if (found < 0) {
+      if (nk >= MAX_NETS) { sendMessage(400, "Too many networks", "You can save up to 5. Remove one first."); return; }
+      found = nk++;
+      keep[found] = Net();
+      keep[found].ssid = ssid;
+    }
+    Net &n = keep[found];
+    if (pass.length()) n.pass = pass;
+    n.user = user;
+    n.ip = ip; n.gw = ip.length() ? gw : ""; n.mask = ip.length() ? mask : ""; n.dns = dnsS;
+    n.compat = server.arg("compat") == "1";
+  }
+  if (nk == 0) { sendMessage(400, "No Wi-Fi network", "Add at least one Wi-Fi network."); return; }
+  for (int k = 0; k < nk; k++) nets[k] = keep[k];
+  numNets = nk;
+  cfgChannels = chs;
   if (key.length()) cfgApiKey = key;
-  cfgIp = ip; cfgGw = ip.length() ? gw : ""; cfgMask = ip.length() ? mask : "";
-  cfgDns = dnsS;
-  cfgCompat = server.arg("compat") == "1";
   cfgAuto = server.arg("auto") == "1";
   cfgEst = server.arg("est") == "1";
   cfgCelebrate = server.arg("celebrate") == "1";
@@ -1768,7 +1823,7 @@ void handleSave() {
   if (server.hasArg("raceA")) { cfgRaceA = server.arg("raceA").toInt(); cfgRaceB = server.arg("raceB").toInt(); }
   if (server.hasArg("nightStart")) { cfgNightStart = server.arg("nightStart").toInt(); cfgNightEnd = server.arg("nightEnd").toInt(); }
   saveSettings();
-  sendMessage(200, "Saved &#10003;", "The board is restarting and will join <b>" + htmlEscape(cfgSsid) + "</b>.");
+  sendMessage(200, "Saved &#10003;", "The board is restarting and will join whichever saved network is in range.");
   drawStatus("Saved!", "Restarting...", C_GREEN);
   delay(1500);
   ESP.restart();
@@ -1911,11 +1966,54 @@ bool connectAttempt(bool compat) {
   return false;
 }
 
+void useNet(int k) {
+  Net &n = nets[k];
+  cfgSsid = n.ssid; cfgPass = n.pass; cfgUser = n.user;
+  cfgIp = n.ip; cfgGw = n.gw; cfgMask = n.mask; cfgDns = n.dns; cfgCompat = n.compat;
+}
+
+bool connectOne(int k);
 bool connectWiFi() {
+  drawStatus("Looking for Wi-Fi...", String(numNets) + (numNets == 1 ? " saved network" : " saved networks"), C_WHITE);
+  WiFi.disconnect(true);
+  delay(100);
+  WiFi.mode(WIFI_STA);
+  int n = WiFi.scanNetworks();
+  int order[MAX_NETS]; int rssi[MAX_NETS]; int cnt = 0;
+  for (int k = 0; k < numNets; k++) {
+    int best = -999;
+    for (int i = 0; i < n; i++) if (WiFi.SSID(i) == nets[k].ssid) best = max(best, (int)WiFi.RSSI(i));
+    if (best > -999) { order[cnt] = k; rssi[cnt] = best; cnt++; }
+  }
+  WiFi.scanDelete();
+  for (int a = 0; a < cnt; a++) for (int b = a + 1; b < cnt; b++)
+    if (rssi[b] > rssi[a]) { int t = order[a]; order[a] = order[b]; order[b] = t; t = rssi[a]; rssi[a] = rssi[b]; rssi[b] = t; }
+  String reasons;
+  for (int c = 0; c < cnt; c++) {
+    if (connectOne(order[c])) { curNet = order[c]; return true; }
+    reasons += (reasons.length() ? " | " : "") + nets[order[c]].ssid + ": " + wifiFailReason;
+  }
+  if (cnt == 0) {
+    // nothing seen in the scan (could be a hidden network) - try them all anyway
+    for (int k = 0; k < numNets; k++) {
+      if (connectOne(k)) { curNet = k; return true; }
+      reasons += (reasons.length() ? " | " : "") + nets[k].ssid + ": " + wifiFailReason;
+    }
+    String names;
+    for (int k = 0; k < numNets; k++) names += (names.length() ? ", " : "") + nets[k].ssid;
+    wifiFailReason = "None of your saved networks are in range (" + names + "). Add this one in setup.";
+    return false;
+  }
+  wifiFailReason = reasons;
+  return false;
+}
+
+bool connectOne(int k) {
+  useNet(k);
   bool ok = connectAttempt(cfgCompat);
   if (!ok && staAssociated && !cfgCompat && wifiFailReason.indexOf("no IP") >= 0) {
     ok = connectAttempt(true);
-    if (ok) { cfgCompat = true; prefs.begin("subcounter", false); prefs.putBool("compat", true); prefs.end(); }
+    if (ok) { cfgCompat = true; nets[k].compat = true; saveSettings(); }
     else if (wifiFailReason.indexOf("no IP") >= 0)
       wifiFailReason = "Joined Wi-Fi but got no IP address in both Wi-Fi 6 and compatibility mode. "
                        "Try a fixed IP in Advanced settings, or allow MAC " + boardMac() + " on the router/firewall.";
@@ -2123,7 +2221,7 @@ int portraitRot = 0;
 void setup() {
   Serial.begin(115200);
   delay(300);
-  Serial.println("SubCounter v8.2 starting");
+  Serial.println("SubCounter v8.3 starting");
   setenv("TZ", TZ_UK, 1); tzset();
 
   pinMode(SD_CS, OUTPUT);  digitalWrite(SD_CS, HIGH);
@@ -2147,7 +2245,7 @@ void setup() {
   WiFi.onEvent(onWiFiEvent);
   loadSettings();
 
-  if (cfgSsid.length() == 0 || cfgApiKey.length() == 0 || numCh == 0) { startPortal(); return; }
+  if (numNets == 0 || cfgApiKey.length() == 0 || numCh == 0) { startPortal(); return; }
   if (!connectWiFi()) { drawWifiFailScreen(); delay(8000); startPortal(); return; }
 
   configTime(0, 0, "pool.ntp.org", "time.google.com");   // backup: clock is also set from Google's replies
@@ -2205,7 +2303,22 @@ void userActivity() {
 
 void loop() {
   server.handleClient();
-  if (portalMode) { dns.processNextRequest(); delay(2); return; }
+  if (portalMode) {
+    dns.processNextRequest();
+    // In setup mode because no saved network was found? Every 3 minutes, if nobody is using
+    // the setup page, check again whether one of them has come into range.
+    static unsigned long lastRetry = millis();
+    if (numNets > 0 && cfgApiKey.length() && millis() - lastRetry > 180000UL && WiFi.softAPgetStationNum() == 0) {
+      lastRetry = millis();
+      int n = WiFi.scanNetworks();
+      bool seen = false;
+      for (int i = 0; i < n; i++) for (int k = 0; k < numNets; k++) if (WiFi.SSID(i) == nets[k].ssid) seen = true;
+      WiFi.scanDelete();
+      if (seen) { drawStatus("Network found!", "Restarting...", C_GREEN); delay(1000); ESP.restart(); }
+    }
+    delay(2);
+    return;
+  }
 
   // ── inputs ────────────────────────────────────────────────────────────────
   imuUpdate();
@@ -2285,13 +2398,22 @@ void loop() {
   }
 
   // ── network ───────────────────────────────────────────────────────────────
+  static unsigned long wifiLostAt = 0;
   if (WiFi.status() != WL_CONNECTED) {
+    if (!wifiLostAt) wifiLostAt = millis();
     netError = "Wi-Fi lost, reconnecting...";
     if (mode == M_NORMAL) drawFooter();
+    if (millis() - wifiLostAt > 60000UL && numNets > 0) {
+      // been gone a minute: maybe we've moved (work -> home). Look for any saved network.
+      if (connectWiFi()) { wifiLostAt = 0; netError = ""; lastFetch = 0; drawMode(); }
+      else wifiLostAt = millis();
+      return;
+    }
     WiFi.reconnect();
     delay(3000);
     return;
   }
+  wifiLostAt = 0;
 
   bool refreshed = false;
   if (lastFetch == 0 || millis() - lastFetch > REFRESH_MS) {
