@@ -1,5 +1,5 @@
 /*
- * SubCounter v8.5 — YouTube subscriber counter for Waveshare ESP32-C6-Touch-LCD-1.47
+ * SubCounter v9 — YouTube subscriber counter for Waveshare ESP32-C6-Touch-LCD-1.47
  *
  *  ON THE BOARD
  *    Swipe left / right ... next / previous channel   (BOOT short press = next)
@@ -12,9 +12,14 @@
  *    9 am ................. daily summary;  at night: dim clock mode
  *    Hold BOOT 3 s ........ setup mode
  *
+ *  APPS: long-press the screen for the home menu (YouTube, Weather, Spotify)
+ *    Weather: swipe up/down for Now / Next hours / Tomorrow
+ *    Spotify: tap = play/pause, swipe left/right = next/previous, up/down = volume
+ *
  *  IN A BROWSER
  *    http://<board IP>/          dashboard (all channels, graphs, videos, race)
  *    http://<board IP>/settings  settings
+ *    http://<board IP>/update    wireless firmware update (APP-ONLY .bin)
  *
  *  Arduino IDE: Board "ESP32C6 Dev Module", USB CDC On Boot "Enabled",
  *    Flash Size "8MB", Partition Scheme "8M with spiffs (3MB APP/1.5MB SPIFFS)".
@@ -38,6 +43,7 @@
 #include <time.h>
 #include <sys/time.h>
 #include <U8g2lib.h>   // readable fonts (U8g2 library)
+#include <Update.h>    // wireless firmware updates
 
 // ── Pins (ESP32-C6 version of the board) ────────────────────────────────────
 #define LCD_SCK   1
@@ -118,7 +124,7 @@ bool board = false;        // leaderboard / race showing
 bool raceView = false;     // (when board) showing the race instead of the leaderboard
 long shownSubs = -1;
 
-enum AlertType { A_GAIN, A_MILESTONE, A_OVERTAKE };
+enum AlertType { A_GAIN, A_MILESTONE, A_OVERTAKE, A_VIEWS };
 struct Alert { AlertType type; int idx; int idx2; long delta; long total; };
 Alert alerts[MAX_CH * 2];
 int numAlerts = 0;
@@ -158,7 +164,29 @@ String netError = "";
 unsigned long lastFetch = 0, lastVideoFetch = 0, lastFetchOk = 0, lastInteract = 0;
 unsigned long btnDownAt = 0;
 
+enum Mode { M_NORMAL, M_SLEEP, M_PORTRAIT, M_SUMMARY, M_AMBIENT };
+Mode mode = M_NORMAL;
+float  cfgWxLat = 55.861f, cfgWxLon = -4.250f;   // weather location (default Glasgow)
+String cfgWxName = "Glasgow";
+String cfgSpId, cfgSpSecret, cfgSpRefresh;       // Spotify app + saved login
+
+#define VT_MAX 110
+struct VideoTrack {
+  String vid; time_t pub = 0; bool active = false;
+  int n = 0; uint32_t t[VT_MAX]; uint32_t v[VT_MAX];
+  long typical = -1;               // median lifetime views of your recent uploads
+  long base1h = -1, base24h = -1;  // your usual views after 1 hour / 1 day (from past uploads)
+  long at1h = -1, at24h = -1;      // this video
+  long nextMilestone = 100;
+} vt;
+unsigned long lastVtFetch = 0, lastTypicalFetch = 0;
+
 // Forward declarations (functions used before they're defined)
+void drawMode();
+long vtViews();
+void drawVideoTracker();
+extern const char PAGE_HEAD[];
+int ytGet(const String &endpoint, const String &query, JsonDocument &doc);
 bool raceSet();
 void drawRace();
 void drawBoard();
@@ -497,6 +525,12 @@ void loadSettings() {
   cfgG0x      = prefs.getFloat("g0x", 0);
   cfgG0y      = prefs.getFloat("g0y", 0);
   cfgG0z      = prefs.getFloat("g0z", 1);
+  cfgWxLat    = prefs.getFloat("wxlat", 55.861f);
+  cfgWxLon    = prefs.getFloat("wxlon", -4.250f);
+  cfgWxName   = prefs.getString("wxname", "Glasgow");
+  cfgSpId     = prefs.getString("spid", "");
+  cfgSpSecret = prefs.getString("spsec", "");
+  cfgSpRefresh = prefs.getString("spref", "");
   g0Saved     = prefs.isKey("g0z");
   prefs.end();
   parseChannels();
@@ -533,6 +567,12 @@ void saveSettings() {
   prefs.putInt("raceB", cfgRaceB);
   prefs.putInt("nightS", cfgNightStart);
   prefs.putInt("nightE", cfgNightEnd);
+  prefs.putFloat("wxlat", cfgWxLat);
+  prefs.putFloat("wxlon", cfgWxLon);
+  prefs.putString("wxname", cfgWxName);
+  prefs.putString("spid", cfgSpId);
+  prefs.putString("spsec", cfgSpSecret);
+  prefs.putString("spref", cfgSpRefresh);
   prefs.end();
 }
 
@@ -773,7 +813,8 @@ void drawMainHeader() {
   ft(58, 24, fit(nameOf(page), F_M, RIGHT_EDGE - 58 - pw), F_M, C_WHITE);
   if (pos.length()) ftR(RIGHT_EDGE, 24, pos, F_S, C_GREY);
   Channel &c = ch[page];
-  if (c.statsOk && c.gainToday != 0) ft(58, 46, signedNum(c.gainToday) + " today", F_S, c.gainToday > 0 ? C_GREEN : C_RED);
+  if (page == 0 && vt.active && vtViews() >= 0) ft(58, 46, "New video: " + compact(vtViews()) + " views", F_S, C_GOLD);
+  else if (c.statsOk && c.gainToday != 0) ft(58, 46, signedNum(c.gainToday) + " today", F_S, c.gainToday > 0 ? C_GREEN : C_RED);
   else ft(58, 46, "subscribers", F_S, C_GREY);
 }
 
@@ -1001,7 +1042,7 @@ void drawView() {
   if (board) { if (raceView) drawRace(); else drawBoard(); return; }
   switch (card) {
     case 1: drawOverview(); break;
-    case 2: drawLatestVideo(); break;
+    case 2: if (page == 0 && vt.active) drawVideoTracker(); else drawLatestVideo(); break;
     case 3: drawGrowth(); break;
     case 4: drawGraph(); break;
     case 5: drawMilestone(); break;
@@ -1080,19 +1121,25 @@ bool touchRead(int &x, int &y) {
   return true;
 }
 
-// Returns 'L','R','U','D' for a completed swipe, 0 otherwise.
+// Returns 'L','R','U','D' for a swipe, 'T' for a tap (position in tapX/tapY),
+// 'H' once when a finger is held still for 0.7 s (long-press), 0 otherwise.
+int tapX = 0, tapY = 0;
+bool holdFired = false;
 char pollSwipe() {
   if (!touchOk || millis() - lastTouchPoll < 20) return 0;
   lastTouchPoll = millis();
   int x, y;
   if (touchRead(x, y)) {
-    if (!touching) { touching = true; tStartX = x; tStartY = y; tStartAt = millis(); }
+    if (!touching) { touching = true; holdFired = false; tStartX = x; tStartY = y; tStartAt = millis(); }
     tLastX = x; tLastY = y;
+    if (!holdFired && millis() - tStartAt > 700 && abs(x - tStartX) < 15 && abs(y - tStartY) < 15) { holdFired = true; return 'H'; }
     return 0;
   }
   if (!touching) return 0;
   touching = false;
+  if (holdFired) return 0;
   int dx = tLastX - tStartX, dy = tLastY - tStartY;
+  if (abs(dx) < 15 && abs(dy) < 15 && millis() - tStartAt < 500) { tapX = tLastX; tapY = tLastY; return 'T'; }
   if (millis() - tStartAt > 1500) return 0;
   if (abs(dx) >= abs(dy) && abs(dx) >= SWIPE_MIN_PX) return dx < 0 ? 'L' : 'R';
   if (abs(dy) > abs(dx) && abs(dy) >= SWIPE_MIN_PX * 2 / 3) return dy < 0 ? 'U' : 'D';
@@ -1306,7 +1353,13 @@ void showAlert(const Alert &a) {
   }
   for (int i = 0; i < 4; i++) { gfx->fillScreen(i % 2 ? C_PURPLE : C_GOLD); delay(100); }
   gfx->fillScreen(C_BG);
-  if (a.type == A_OVERTAKE) {
+  if (a.type == A_VIEWS) {
+    ftC(30, "YOUR VIDEO HIT", F_M, C_GOLD, gfx->width());
+    String m = withCommas(a.total);
+    ftC(96, m, numFont(m, gfx->width() - 20), C_WHITE, gfx->width());
+    ftC(126, "views!", F_M, C_GREEN, gfx->width());
+    ftC(160, fit(asciiOnly(ch[0].vidTitle), F_S, gfx->width() - 16), F_S, C_GREY, gfx->width());
+  } else if (a.type == A_OVERTAKE) {
     ftC(30, "OVERTAKE!", F_M, C_GOLD, gfx->width());
     ftC(70, fit(nameOf(a.idx), F_M, gfx->width() - 20), F_M, C_GREEN, gfx->width());
     ftC(98, "just passed", F_S, C_GREY, gfx->width());
@@ -1461,6 +1514,755 @@ void drawPortraitBoard() {
 }
 
 // ════════════════════════════════════════════════════════════════════════════
+//  Wireless updates (upload a new .bin from the settings page)
+// ════════════════════════════════════════════════════════════════════════════
+bool otaOk = false;
+String otaErr = "";
+size_t otaBytes = 0;
+
+const char UPDATE_BODY[] PROGMEM = R"HTML(
+<h1>&#11014; Update firmware</h1>
+<p>Choose the <b>APP-ONLY</b> .bin file (not the FULL one). Your settings and history are kept. Takes about 30 seconds.</p>
+<input type="file" id="f" accept=".bin">
+<button id="go" onclick="up()">Upload &amp; install</button>
+<div class="bar" style="height:12px;border-radius:7px;background:#2a2a2e;overflow:hidden;margin-top:16px;display:none" id="pb"><i id="pi" style="display:block;height:100%;width:0;background:#30d158"></i></div>
+<p id="msg" style="margin-top:12px"></p>
+<p><a href="/settings">&larr; Back to settings</a></p>
+</div><script>
+function up(){const f=document.getElementById('f').files[0],m=document.getElementById('msg');
+if(!f){m.textContent='Pick a .bin file first.';return}
+if(/FULL/i.test(f.name)){m.textContent='That is the FULL image (for brand-new boards). Use the APP-ONLY file here.';return}
+const fd=new FormData();fd.append('firmware',f,f.name);const x=new XMLHttpRequest();
+document.getElementById('pb').style.display='block';document.getElementById('go').disabled=true;
+x.upload.onprogress=e=>{if(e.lengthComputable){const p=e.loaded/e.total*100;document.getElementById('pi').style.width=p+'%';m.textContent='Uploading '+p.toFixed(0)+'%'}};
+x.onload=()=>{m.innerHTML=x.responseText;if(x.status==200){setTimeout(()=>location.href='/',15000)}else document.getElementById('go').disabled=false};
+x.onerror=()=>{m.textContent='Upload failed - check the board is still on Wi-Fi and try again.';document.getElementById('go').disabled=false};
+x.open('POST','/update');x.send(fd)}
+</script></body></html>)HTML";
+
+void handleUpdatePage() {
+  server.send(200, "text/html", String(FPSTR(PAGE_HEAD)) + FPSTR(UPDATE_BODY));
+}
+
+void drawOtaProgress(const String &line2) {
+  gfx->fillRect(0, 96, gfx->width(), 40, C_BG);
+  centreText(line2, 104, 2, C_GREY);
+}
+
+void handleUpdateUpload() {
+  HTTPUpload &up = server.upload();
+  if (up.status == UPLOAD_FILE_START) {
+    otaOk = false; otaErr = ""; otaBytes = 0;
+    setBacklight(BL_NORMAL);
+    if (mode == M_PORTRAIT) gfx->setRotation(1);
+    drawStatus("Updating...", "receiving", C_GOLD);
+    if (!Update.begin(UPDATE_SIZE_UNKNOWN, U_FLASH)) otaErr = String("Can't start: ") + Update.errorString();
+  } else if (up.status == UPLOAD_FILE_WRITE) {
+    if (otaErr.length()) return;
+    if (otaBytes == 0) {
+      // An app image carries the ESP-IDF app description (magic 0xABCD5432) at byte 32;
+      // the FULL image starts with the bootloader instead, which must not go here.
+      bool isApp = up.currentSize > 36 && up.buf[0] == 0xE9 &&
+                   up.buf[32] == 0x32 && up.buf[33] == 0x54 && up.buf[34] == 0xCD && up.buf[35] == 0xAB;
+      if (!isApp) { otaErr = "That isn't an APP-ONLY firmware file."; Update.abort(); return; }
+    }
+    if (Update.write(up.buf, up.currentSize) != up.currentSize) { otaErr = String("Write failed: ") + Update.errorString(); return; }
+    otaBytes += up.currentSize;
+    static size_t lastDrawn = 0;
+    if (otaBytes - lastDrawn > 64 * 1024 || otaBytes < lastDrawn) { lastDrawn = otaBytes; drawOtaProgress(String(otaBytes / 1024) + " KB"); }
+  } else if (up.status == UPLOAD_FILE_END) {
+    if (otaErr.length()) return;
+    if (Update.end(true)) otaOk = true;
+    else otaErr = String("Check failed: ") + Update.errorString();
+  } else if (up.status == UPLOAD_FILE_ABORTED) {
+    Update.abort();
+    otaErr = "Upload was interrupted.";
+  }
+}
+
+void handleUpdateDone() {
+  if (otaOk) {
+    server.send(200, "text/html", "<b style='color:#30d158'>Installed &#10003;</b> The board is restarting &ndash; this page will go back to the dashboard in a few seconds.");
+    drawStatus("Updated!", "Restarting...", C_GREEN);
+    delay(1200);
+    ESP.restart();
+  } else {
+    server.send(400, "text/html", "<b style='color:#ff3b30'>Not installed:</b> " + htmlEscape(otaErr.length() ? otaErr : String("no file received")) +
+                " The board is still running the old version.");
+    drawStatus("Update failed", otaErr.substring(0, 26), C_RED);
+    delay(3000);
+    gfx->fillScreen(C_BG);
+    drawMode();
+  }
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+//  New video tracker — your own channel (the first one in the list)
+// ════════════════════════════════════════════════════════════════════════════
+
+
+long vtViews() { return vt.n ? (long)vt.v[vt.n - 1] : -1; }
+long vtAgeMin() { return (vt.pub && timeValid()) ? (long)((nowT() - vt.pub) / 60) : -1; }
+
+// views per hour over the last ~hour of samples
+long vtRate() {
+  if (vt.n < 2) return -1;
+  int a = vt.n - 1, b = a;
+  while (b > 0 && vt.t[a] - vt.t[b - 1] <= 3600) b--;
+  if (b == a) b = a - 1;
+  long dt = vt.t[a] - vt.t[b];
+  if (dt < 300) return -1;
+  return (long)((vt.v[a] - vt.v[b]) * 3600.0 / dt);
+}
+
+// views at a given age (linear between samples); -1 if we didn't see it
+long vtViewsAt(long ageSec) {
+  for (int i = 1; i < vt.n; i++) {
+    long a0 = vt.t[i - 1] - vt.pub, a1 = vt.t[i] - vt.pub;
+    if (a0 <= ageSec && a1 >= ageSec && a1 > a0)
+      return vt.v[i - 1] + (long)((vt.v[i] - vt.v[i - 1]) * (double)(ageSec - a0) / (a1 - a0));
+  }
+  return -1;
+}
+
+// Past results: up to 8 (views@1h, views@24h) pairs kept in flash
+void vtLoadBaseline() {
+  prefs.begin("vtrack", true);
+  int n = prefs.getInt("n", 0);
+  long s1 = 0, s24 = 0; int c1 = 0, c24 = 0;
+  for (int i = 0; i < min(n, 8); i++) {
+    long a = prefs.getLong(("h1_" + String(i)).c_str(), -1), b = prefs.getLong(("h24_" + String(i)).c_str(), -1);
+    if (a >= 0) { s1 += a; c1++; }
+    if (b >= 0) { s24 += b; c24++; }
+  }
+  prefs.end();
+  vt.base1h = c1 ? s1 / c1 : -1;
+  vt.base24h = c24 ? s24 / c24 : -1;
+}
+
+void vtSaveResult(bool is24h, long views) {
+  prefs.begin("vtrack", false);
+  String last = prefs.getString("lastvid", "");
+  int n = prefs.getInt("n", 0);                 // total videos recorded; the last 8 are kept (slot = index % 8)
+  int slot;
+  if (last == vt.vid && n > 0) slot = (n - 1) % 8;          // same video: add its other figure
+  else {
+    slot = n % 8; n++;
+    prefs.putInt("n", n); prefs.putString("lastvid", vt.vid);
+    prefs.putLong(("h1_" + String(slot)).c_str(), -1); prefs.putLong(("h24_" + String(slot)).c_str(), -1);
+  }
+  prefs.putLong(((is24h ? "h24_" : "h1_") + String(slot)).c_str(), views);
+  prefs.end();
+}
+
+void vtAddSample(time_t t, long views) {
+  if (vt.n && (long)(t - vt.t[vt.n - 1]) < 240) { vt.v[vt.n - 1] = views; return; }   // too soon: update last
+  if (vt.n == VT_MAX) {          // thin out the older half
+    int k = 0;
+    for (int i = 0; i < VT_MAX; i++) if (i >= VT_MAX / 2 || i % 2 == 0) { vt.t[k] = vt.t[i]; vt.v[k] = vt.v[i]; k++; }
+    vt.n = k;
+  }
+  vt.t[vt.n] = t; vt.v[vt.n] = views; vt.n++;
+}
+
+void vtMilestoneStart(long views) {
+  const long steps[] = { 100, 250, 500, 1000, 2500, 5000, 10000, 25000, 50000, 100000, 250000, 500000, 1000000 };
+  vt.nextMilestone = 0;
+  for (long s : steps) if (views < s) { vt.nextMilestone = s; break; }
+}
+
+// Typical lifetime views of your previous ~10 uploads (2 API units, once a day)
+void vtFetchTypical() {
+  if (!numCh || !ch[0].uploads.length()) return;
+  JsonDocument doc;
+  if (ytGet("playlistItems", "part=contentDetails&maxResults=11&fields=items/contentDetails/videoId&playlistId=" + ch[0].uploads, doc) != 200) return;
+  String ids;
+  for (JsonObject it : doc["items"].as<JsonArray>()) {
+    String id = it["contentDetails"]["videoId"] | "";
+    if (id.length() && id != vt.vid) ids += (ids.length() ? "," : "") + id;
+  }
+  if (!ids.length()) return;
+  JsonDocument d2;
+  if (ytGet("videos", "part=statistics&fields=items/statistics/viewCount&id=" + ids, d2) != 200) return;
+  long v[12]; int n = 0;
+  for (JsonObject it : d2["items"].as<JsonArray>()) if (n < 12) v[n++] = atol(it["statistics"]["viewCount"] | "0");
+  if (!n) return;
+  for (int a = 0; a < n; a++) for (int b = a + 1; b < n; b++) if (v[b] < v[a]) { long t = v[a]; v[a] = v[b]; v[b] = t; }
+  vt.typical = v[n / 2];
+}
+
+// Called after fetchLatestVideos(): start tracking when your latest upload is under 2 days old
+void vtCheckNewUpload() {
+  if (!numCh || !timeValid()) return;
+  Channel &c = ch[0];
+  if (!c.vidId.length() || !c.vidPublished || c.live) { vt.active = false; return; }
+  bool fresh = nowT() - c.vidPublished < 48L * 3600;
+  if (c.vidId != vt.vid) {
+    vt = VideoTrack();
+    vt.vid = c.vidId; vt.pub = c.vidPublished;
+    vtLoadBaseline();
+    if (c.vidViews >= 0) { vtAddSample(nowT(), c.vidViews); vtMilestoneStart(c.vidViews); }
+    lastTypicalFetch = 0;
+  }
+  vt.active = fresh;
+}
+
+// Every 5 minutes while active: just this video's numbers (1 API unit)
+void vtPoll() {
+  if (!vt.active) return;
+  JsonDocument doc;
+  if (ytGet("videos", "part=statistics&fields=items/statistics(viewCount,likeCount,commentCount)&id=" + vt.vid, doc) != 200) return;
+  JsonObject st = doc["items"][0]["statistics"];
+  if (st.isNull()) return;
+  long views = atol(st["viewCount"] | "-1");
+  if (views < 0) return;
+  ch[0].vidViews = views;
+  ch[0].vidLikes = String(st["likeCount"] | "-1").toInt();
+  ch[0].vidComments = String(st["commentCount"] | "-1").toInt();
+  time_t now = nowT();
+  vtAddSample(now, views);
+  long age = now - vt.pub;
+  if (vt.at1h < 0 && age >= 3600) { vt.at1h = vtViewsAt(3600); if (vt.at1h < 0 && age < 3 * 3600) vt.at1h = views; if (vt.at1h >= 0) vtSaveResult(false, vt.at1h); }
+  if (vt.at24h < 0 && age >= 86400) { vt.at24h = vtViewsAt(86400); if (vt.at24h < 0 && age < 30 * 3600) vt.at24h = views; if (vt.at24h >= 0) vtSaveResult(true, vt.at24h); }
+  if (vt.nextMilestone && views >= vt.nextMilestone && numAlerts < MAX_CH * 2) {
+    alerts[numAlerts++] = { A_VIEWS, 0, -1, 0, vt.nextMilestone };
+    vtMilestoneStart(views);
+  }
+  if (age >= 48L * 3600) vt.active = false;
+}
+
+String ageStr(long mins) {
+  if (mins < 0) return "";
+  if (mins < 60) return String(mins) + " min";
+  if (mins < 48 * 60) return String(mins / 60) + "h " + String(mins % 60) + "m";
+  return String(mins / 1440) + " days";
+}
+
+// Compare with your usual: "+40% vs your usual" etc.
+String vtCompare() {
+  long age = vtAgeMin();
+  long views = vtViews();
+  if (views < 0) return "";
+  if (age >= 60 && vt.at1h >= 0 && vt.base1h > 0 && age < 24 * 60) {
+    long pct = (vt.at1h - vt.base1h) * 100 / vt.base1h;
+    return String("1st hour ") + (pct >= 0 ? "+" : "") + pct + "% vs usual";
+  }
+  if (age >= 24 * 60 && vt.at24h >= 0 && vt.base24h > 0) {
+    long pct = (vt.at24h - vt.base24h) * 100 / vt.base24h;
+    return String("1st day ") + (pct >= 0 ? "+" : "") + pct + "% vs usual";
+  }
+  if (vt.typical > 0) return String((long)(views * 100 / vt.typical)) + "% of a typical video";
+  return "";
+}
+
+// YouTube card 2 for your own channel while a new upload is being tracked
+void drawVideoTracker() {
+  Channel &c = ch[0];
+  drawDetailHeader("New video");
+  ft(8, 56, fit(asciiOnly(c.vidTitle), F_S, RIGHT_EDGE - 8), F_S, C_WHITE);
+  long views = vtViews();
+  String v = views >= 0 ? withCommas(views) : String("...");
+  const uint8_t *f = numFont(v, 180) == F_N42 ? F_N32 : F_N24;
+  ft(8, 98, v, f, C_WHITE);
+  ft(12 + tw(v, f), 98, "views", F_S, C_GREY);
+  long r = vtRate();
+  ft(8, 124, "in " + ageStr(vtAgeMin()) + (r >= 0 ? "  -  " + compact(r) + "/hour" : String("")), F_S, C_GREY);
+  String cmp = vtCompare();
+  ft(8, 148, fit(cmp, F_S, RIGHT_EDGE - 8), F_S, cmp.indexOf("+") >= 0 ? C_GREEN : (cmp.indexOf("-") >= 0 ? C_RED : C_BLUE));
+  String lc = (c.vidLikes >= 0 ? compact(c.vidLikes) + " likes" : String("")) + (c.vidComments >= 0 ? "   " + compact(c.vidComments) + " comments" : String(""));
+  ft(8, 168, fit(lc, F_S, RIGHT_EDGE - 8), F_S, C_GREEN);
+  // tiny sparkline of views, top right
+  if (vt.n >= 2) {
+    int gx = 196, gy = 64, gw = 100, gh = 40;
+    long mn = vt.v[0], mx = vt.v[vt.n - 1]; if (mx <= mn) mx = mn + 1;
+    uint32_t t0 = vt.t[0], t1 = vt.t[vt.n - 1]; if (t1 <= t0) t1 = t0 + 1;
+    int px = -1, py = -1;
+    for (int i = 0; i < vt.n; i++) {
+      int x = gx + (int)((float)(vt.t[i] - t0) / (t1 - t0) * gw);
+      int y = gy + gh - (int)((float)(vt.v[i] - mn) / (mx - mn) * gh);
+      if (px >= 0) gfx->drawLine(px, py, x, y, C_GREEN);
+      px = x; py = y;
+    }
+  }
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+//  Apps: home menu, Weather, Spotify
+// ════════════════════════════════════════════════════════════════════════════
+enum AppId { APP_YT = 0, APP_WX = 1, APP_SP = 2, NUM_APPS = 3 };
+int app = APP_YT;
+bool menuOpen = false;
+int wxCard = 0;              // 0 now, 1 next hours, 2 tomorrow
+#define WX_CARDS 3
+
+// ── Weather data (Open-Meteo: free, no key) ─────────────────────────────────
+struct Weather {
+  bool ok = false;
+  float temp = 0, feels = 0, wind = 0;
+  int code = 0; bool isDay = true;
+  int hi = 0, lo = 0;
+  int hHour[12]; int hTemp[12]; int hCode[12]; int hRain[12]; int hN = 0;
+  int tHi = 0, tLo = 0, tCode = 0, tRain = 0;
+  String sunrise, sunset, tSunrise, tSunset;
+  int rainHour = -1, rainPct = 0;       // rain warning in the next 3 hours
+} wx;
+unsigned long lastWxFetch = 0;
+
+String wxText(int c) {
+  if (c == 0) return "Clear";
+  if (c <= 2) return "Partly cloudy";
+  if (c == 3) return "Cloudy";
+  if (c == 45 || c == 48) return "Fog";
+  if (c >= 51 && c <= 57) return "Drizzle";
+  if (c >= 61 && c <= 67) return c >= 65 ? "Heavy rain" : "Rain";
+  if (c >= 71 && c <= 77) return "Snow";
+  if (c >= 80 && c <= 82) return "Showers";
+  if (c == 85 || c == 86) return "Snow showers";
+  if (c >= 95) return "Thunderstorm";
+  return "";
+}
+
+void drawCloud(int cx, int cy, int r, uint16_t col) {
+  gfx->fillCircle(cx - r * 6 / 10, cy + r / 6, r * 5 / 10, col);
+  gfx->fillCircle(cx, cy - r / 6, r * 7 / 10, col);
+  gfx->fillCircle(cx + r * 6 / 10, cy + r / 6, r * 5 / 10, col);
+  gfx->fillRoundRect(cx - r * 11 / 10, cy + r / 6, r * 22 / 10, r * 5 / 10, r / 4, col);
+}
+
+void drawSun(int cx, int cy, int r) {
+  gfx->fillCircle(cx, cy, r * 5 / 10, C_GOLD);
+  for (int k = 0; k < 8; k++) {
+    float a = k * PI / 4;
+    gfx->drawLine(cx + cosf(a) * r * 0.65f, cy + sinf(a) * r * 0.65f, cx + cosf(a) * r * 0.9f, cy + sinf(a) * r * 0.9f, C_GOLD);
+  }
+}
+
+void drawMoon(int cx, int cy, int r) {
+  gfx->fillCircle(cx, cy, r * 5 / 10, 0xDEFB);
+  gfx->fillCircle(cx + r * 3 / 10, cy - r * 2 / 10, r * 4 / 10, C_BG);
+}
+
+// A simple weather picture centred at (cx,cy), about 2r wide
+void drawWxIcon(int code, int cx, int cy, int r, bool day) {
+  uint16_t grey = 0xBDF7, dark = 0x7BEF;
+  if (code == 0) { if (day) drawSun(cx, cy, r); else drawMoon(cx, cy, r); return; }
+  if (code <= 2) {
+    if (day) drawSun(cx - r / 3, cy - r / 3, r * 7 / 10); else drawMoon(cx - r / 3, cy - r / 3, r * 7 / 10);
+    drawCloud(cx + r / 6, cy + r / 5, r * 7 / 10, grey); return;
+  }
+  bool heavy = code == 3 || code >= 61;
+  drawCloud(cx, cy - r / 5, r * 8 / 10, heavy ? dark : grey);
+  if (code == 45 || code == 48) { for (int k = 0; k < 3; k++) gfx->drawFastHLine(cx - r * 7 / 10, cy + r / 3 + k * r / 5, r * 14 / 10, grey); return; }
+  bool snow = (code >= 71 && code <= 77) || code == 85 || code == 86;
+  bool rain = (code >= 51 && code <= 67) || (code >= 80 && code <= 82) || code >= 95;
+  if (rain) for (int k = -1; k <= 1; k++) gfx->drawLine(cx + k * r / 3, cy + r * 4 / 10, cx + k * r / 3 - r / 8, cy + r * 8 / 10, C_BLUE);
+  if (snow) for (int k = -1; k <= 1; k++) gfx->fillCircle(cx + k * r / 3, cy + r * 6 / 10, max(1, r / 10), C_WHITE);
+  if (code >= 95) gfx->fillTriangle(cx, cy + r * 2 / 10, cx - r / 4, cy + r * 7 / 10, cx + r / 8, cy + r * 5 / 10, C_GOLD);
+}
+
+void fetchWeather() {
+  if (cfgWxLat == 0 && cfgWxLon == 0) return;
+  String url = "https://api.open-meteo.com/v1/forecast?latitude=" + String(cfgWxLat, 3) + "&longitude=" + String(cfgWxLon, 3) +
+               "&current=temperature_2m,apparent_temperature,weather_code,wind_speed_10m,is_day"
+               "&hourly=temperature_2m,precipitation_probability,weather_code"
+               "&daily=temperature_2m_max,temperature_2m_min,weather_code,precipitation_probability_max,sunrise,sunset"
+               "&timezone=auto&forecast_days=2&wind_speed_unit=mph";
+  WiFiClientSecure client; client.setInsecure();
+  HTTPClient http; http.setTimeout(10000);
+  if (!http.begin(client, url)) return;
+  int code = http.GET();
+  String body = code == 200 ? http.getString() : String("");
+  http.end();
+  if (code != 200) { Serial.printf("Weather HTTP %d\n", code); return; }
+  JsonDocument doc;
+  if (deserializeJson(doc, body)) return;
+  JsonObject cur = doc["current"];
+  wx.temp = cur["temperature_2m"] | 0.0f;
+  wx.feels = cur["apparent_temperature"] | 0.0f;
+  wx.code = cur["weather_code"] | 0;
+  wx.wind = cur["wind_speed_10m"] | 0.0f;
+  wx.isDay = (cur["is_day"] | 1) == 1;
+  String nowHour = String((const char *)(cur["time"] | "")).substring(0, 13);
+  JsonObject d = doc["daily"];
+  wx.hi = lroundf(d["temperature_2m_max"][0] | 0.0f); wx.lo = lroundf(d["temperature_2m_min"][0] | 0.0f);
+  wx.tHi = lroundf(d["temperature_2m_max"][1] | 0.0f); wx.tLo = lroundf(d["temperature_2m_min"][1] | 0.0f);
+  wx.tCode = d["weather_code"][1] | 0; wx.tRain = d["precipitation_probability_max"][1] | 0;
+  wx.sunrise = String((const char *)(d["sunrise"][0] | "")).substring(11, 16);
+  wx.sunset = String((const char *)(d["sunset"][0] | "")).substring(11, 16);
+  wx.tSunrise = String((const char *)(d["sunrise"][1] | "")).substring(11, 16);
+  wx.tSunset = String((const char *)(d["sunset"][1] | "")).substring(11, 16);
+  JsonObject h = doc["hourly"];
+  JsonArray times = h["time"];
+  int start = 0;
+  for (int i = 0; i < (int)times.size(); i++) if (String((const char *)times[i]).substring(0, 13) == nowHour) { start = i; break; }
+  wx.hN = 0; wx.rainHour = -1; wx.rainPct = 0;
+  for (int i = start; i < (int)times.size() && wx.hN < 12; i++) {
+    int k = wx.hN++;
+    wx.hHour[k] = String((const char *)times[i]).substring(11, 13).toInt();
+    wx.hTemp[k] = lroundf(h["temperature_2m"][i] | 0.0f);
+    wx.hCode[k] = h["weather_code"][i] | 0;
+    wx.hRain[k] = h["precipitation_probability"][i] | 0;
+    if (k <= 3 && wx.hRain[k] >= 50 && wx.rainHour < 0) { wx.rainHour = wx.hHour[k]; wx.rainPct = wx.hRain[k]; }
+  }
+  wx.ok = true;
+}
+
+String deg(int t) { return String(t) + "\xC2\xB0"; }   // e.g. 12°
+
+void drawWxDots() {
+  int x = gfx->width() - 7, y0 = 86 - (WX_CARDS - 1) * 7;
+  for (int k = 0; k < WX_CARDS; k++)
+    if (k == wxCard) gfx->fillCircle(x, y0 + k * 14, 3, C_WHITE); else gfx->drawCircle(x, y0 + k * 14, 3, C_DKGREY);
+}
+
+void drawWeather() {
+  gfx->fillScreen(C_BG);
+  if (cfgWxLat == 0 && cfgWxLon == 0) {
+    ftC(80, "Weather", F_M, C_GOLD); ftC(112, "Set your town on the", F_S, C_GREY); ftC(134, "settings page", F_S, C_GREY); return;
+  }
+  if (!wx.ok) { ftC(96, "Loading weather...", F_M, C_GREY); return; }
+  drawWxDots();
+  if (wxCard == 0) {
+    // clock + now
+    if (timeValid()) {
+      ft(10, 58, dateStr(nowT(), "%H:%M"), F_N42, C_WHITE);
+      ft(12, 84, dateStr(nowT(), "%a %d %b"), F_S, C_GREY);
+    }
+    drawWxIcon(wx.code, 232, 40, 30, wx.isDay);
+    ftR(RIGHT_EDGE, 104, deg(lroundf(wx.temp)), F_M, C_WHITE);
+    ft(12, 112, fit(cfgWxName + "  -  " + wxText(wx.code), F_S, 190), F_S, C_WHITE);
+    ft(12, 134, "High " + deg(wx.hi) + "   Low " + deg(wx.lo) + "   Feels " + deg(lroundf(wx.feels)), F_S, C_GREY);
+    if (wx.rainHour >= 0) {
+      gfx->fillRoundRect(6, 144, RIGHT_EDGE - 4, 26, 6, 0x10A2);
+      char b[48]; snprintf(b, sizeof(b), "Rain likely around %02d:00 (%d%%)", wx.rainHour, wx.rainPct);
+      ft(14, 163, b, F_S, C_BLUE);
+    } else ft(12, 162, "Wind " + String(lroundf(wx.wind)) + " mph   Sunset " + wx.sunset, F_S, C_GREY);
+  } else if (wxCard == 1) {
+    ft(8, 22, "Next hours", F_M, C_GOLD);
+    ftR(RIGHT_EDGE, 22, cfgWxName, F_S, C_GREY);
+    gfx->drawFastHLine(8, 31, RIGHT_EDGE - 8, C_DKGREY);
+    int cols = 6, cw = (RIGHT_EDGE - 4) / cols;
+    for (int c = 0; c < cols; c++) {
+      int k = c * 2; if (k >= wx.hN) break;
+      int cx = 6 + c * cw + cw / 2;
+      char hh[4]; snprintf(hh, sizeof(hh), "%02d", wx.hHour[k]);
+      ft(cx - tw(hh, F_S) / 2, 54, hh, F_S, C_GREY);
+      drawWxIcon(wx.hCode[k], cx, 82, 17, wx.hHour[k] >= 7 && wx.hHour[k] < 19);
+      String t = deg(wx.hTemp[k]);
+      ft(cx - tw(t, F_M) / 2, 126, t, F_M, C_WHITE);
+      String r = String(wx.hRain[k]) + "%";
+      ft(cx - tw(r, F_S) / 2, 150, r, F_S, wx.hRain[k] >= 50 ? C_BLUE : C_DKGREY);
+    }
+    ft(8, 170, "rain chance", F_S, C_DKGREY);
+  } else {
+    ft(8, 22, "Tomorrow", F_M, C_GOLD);
+    ftR(RIGHT_EDGE, 22, cfgWxName, F_S, C_GREY);
+    gfx->drawFastHLine(8, 31, RIGHT_EDGE - 8, C_DKGREY);
+    drawWxIcon(wx.tCode, 58, 90, 40, true);
+    ft(120, 66, wxText(wx.tCode), F_M, C_WHITE);
+    ft(120, 96, "High " + deg(wx.tHi) + "  Low " + deg(wx.tLo), F_S, C_WHITE);
+    ft(120, 120, "Rain chance " + String(wx.tRain) + "%", F_S, wx.tRain >= 50 ? C_BLUE : C_GREY);
+    ft(120, 144, "Sunrise " + wx.tSunrise, F_S, C_GREY);
+    ft(120, 166, "Sunset " + wx.tSunset, F_S, C_GREY);
+  }
+}
+
+// Look up a town name -> coordinates (Open-Meteo geocoding)
+bool geocode(const String &name, float &lat, float &lon, String &label) {
+  WiFiClientSecure client; client.setInsecure();
+  HTTPClient http; http.setTimeout(8000);
+  if (!http.begin(client, "https://geocoding-api.open-meteo.com/v1/search?count=1&language=en&name=" + urlEncode(name))) return false;
+  int code = http.GET();
+  String body = code == 200 ? http.getString() : String("");
+  http.end();
+  if (code != 200) return false;
+  JsonDocument doc;
+  if (deserializeJson(doc, body)) return false;
+  JsonObject r = doc["results"][0];
+  if (r.isNull()) return false;
+  lat = r["latitude"] | 0.0f; lon = r["longitude"] | 0.0f;
+  label = String((const char *)(r["name"] | name.c_str()));
+  return true;
+}
+
+// ── Spotify ─────────────────────────────────────────────────────────────────
+#define SP_REDIRECT "http://127.0.0.1:8888/callback"
+struct SpotifyState {
+  String access; unsigned long accessUntil = 0;
+  bool connected = false, playing = false, hasTrack = false;
+  String trackId, title, artist, album, device, artUrl, err;
+  long progress = 0, duration = 0; unsigned long progressAt = 0;
+  int volume = -1;
+  uint8_t *art = nullptr; int artLen = 0;
+} sp;
+unsigned long lastSpPoll = 0;
+
+String b64(const String &s) {
+  static const char *tbl = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+  String o; int i = 0; uint32_t v;
+  while (i + 2 < (int)s.length()) { v = ((uint8_t)s[i] << 16) | ((uint8_t)s[i + 1] << 8) | (uint8_t)s[i + 2];
+    o += tbl[v >> 18]; o += tbl[(v >> 12) & 63]; o += tbl[(v >> 6) & 63]; o += tbl[v & 63]; i += 3; }
+  int rem = s.length() - i;
+  if (rem == 1) { v = (uint8_t)s[i] << 16; o += tbl[v >> 18]; o += tbl[(v >> 12) & 63]; o += "=="; }
+  else if (rem == 2) { v = ((uint8_t)s[i] << 16) | ((uint8_t)s[i + 1] << 8); o += tbl[v >> 18]; o += tbl[(v >> 12) & 63]; o += tbl[(v >> 6) & 63]; o += '='; }
+  return o;
+}
+
+String spAuthUrl() {
+  return "https://accounts.spotify.com/authorize?response_type=code&client_id=" + urlEncode(cfgSpId) +
+         "&scope=" + urlEncode("user-read-playback-state user-modify-playback-state user-read-currently-playing") +
+         "&redirect_uri=" + urlEncode(SP_REDIRECT);
+}
+
+// POST to Spotify's token endpoint; stores the access token (and a new refresh token if given)
+bool spToken(const String &body, String &err) {
+  WiFiClientSecure client; client.setInsecure();
+  HTTPClient http; http.setTimeout(10000);
+  if (!http.begin(client, "https://accounts.spotify.com/api/token")) { err = "Can't reach Spotify"; return false; }
+  http.addHeader("Content-Type", "application/x-www-form-urlencoded");
+  http.addHeader("Authorization", "Basic " + b64(cfgSpId + ":" + cfgSpSecret));
+  int code = http.POST(body);
+  String resp = http.getString();
+  http.end();
+  JsonDocument doc; deserializeJson(doc, resp);
+  if (code != 200) {
+    err = String((const char *)(doc["error_description"] | doc["error"] | "error")) + " (" + code + ")";
+    return false;
+  }
+  sp.access = String((const char *)(doc["access_token"] | ""));
+  sp.accessUntil = millis() + ((long)(doc["expires_in"] | 3600) - 60) * 1000UL;
+  String rt = doc["refresh_token"] | "";
+  if (rt.length() && rt != cfgSpRefresh) {
+    cfgSpRefresh = rt;
+    prefs.begin("subcounter", false); prefs.putString("spref", cfgSpRefresh); prefs.end();
+  }
+  sp.connected = sp.access.length() > 0;
+  return sp.connected;
+}
+
+bool spEnsureToken() {
+  if (!cfgSpRefresh.length() || !cfgSpId.length()) return false;
+  if (sp.access.length() && (long)(sp.accessUntil - millis()) > 0) return true;
+  String err;
+  if (!spToken("grant_type=refresh_token&refresh_token=" + urlEncode(cfgSpRefresh), err)) { sp.err = err; return false; }
+  return true;
+}
+
+// Exchange the code from the pasted address for tokens
+bool spConnectWithCode(String pasted, String &err) {
+  int i = pasted.indexOf("code=");
+  String code = i >= 0 ? pasted.substring(i + 5) : pasted;
+  int amp = code.indexOf('&'); if (amp >= 0) code = code.substring(0, amp);
+  code.trim();
+  if (!code.length()) { err = "No code found in what you pasted"; return false; }
+  cfgSpRefresh = "";
+  return spToken("grant_type=authorization_code&code=" + urlEncode(code) + "&redirect_uri=" + urlEncode(SP_REDIRECT), err);
+}
+
+int spCall(const char *method, const String &path, String *resp = nullptr) {
+  if (!spEnsureToken()) return -1;
+  WiFiClientSecure client; client.setInsecure();
+  HTTPClient http; http.setTimeout(8000);
+  if (!http.begin(client, "https://api.spotify.com/v1" + path)) return -2;
+  http.addHeader("Authorization", "Bearer " + sp.access);
+  int code;
+  if (!strcmp(method, "GET")) code = http.GET();
+  else { http.addHeader("Content-Length", "0"); code = http.sendRequest(method, (uint8_t *)nullptr, 0); }
+  if (resp && code == 200) *resp = http.getString();
+  http.end();
+  if (code == 401) { sp.access = ""; }
+  return code;
+}
+
+void spFetchArt() {
+  if (sp.art) { free(sp.art); sp.art = nullptr; sp.artLen = 0; }
+  if (!sp.artUrl.length()) return;
+  WiFiClientSecure client; client.setInsecure();
+  HTTPClient http; http.setTimeout(8000);
+  if (!http.begin(client, sp.artUrl)) return;
+  if (http.GET() == 200) {
+    int len = http.getSize();
+    int cap = (len > 0 && len < 90000) ? len : 90000;
+    uint8_t *buf = (uint8_t *)malloc(cap);
+    if (buf) {
+      WiFiClient *st = http.getStreamPtr();
+      int got = 0; unsigned long t0 = millis();
+      while (got < cap && millis() - t0 < 8000) {
+        int a = st->available();
+        if (a > 0) got += st->readBytes(buf + got, min(a, cap - got));
+        else if (!st->connected()) break;
+        else delay(3);
+      }
+      bool ok = (len > 0 ? got == len : got > 4) && buf[0] == 0xFF && buf[1] == 0xD8;
+      if (ok) { sp.art = buf; sp.artLen = got; } else free(buf);
+    }
+  }
+  http.end();
+}
+
+// Returns true if the track changed (needs a full redraw)
+bool spPoll() {
+  String body;
+  int code = spCall("GET", "/me/player?market=from_token", &body);
+  if (code == 204 || code == 202) { bool was = sp.hasTrack; sp.hasTrack = false; sp.playing = false; sp.err = ""; return was; }
+  if (code != 200) {
+    if (code == -1) sp.err = cfgSpRefresh.length() ? sp.err : String("Not connected");
+    else sp.err = "Spotify error " + String(code);
+    return false;
+  }
+  JsonDocument filter;
+  filter["is_playing"] = true; filter["progress_ms"] = true;
+  filter["device"]["name"] = true; filter["device"]["volume_percent"] = true;
+  filter["item"]["id"] = true; filter["item"]["name"] = true; filter["item"]["duration_ms"] = true;
+  filter["item"]["artists"][0]["name"] = true; filter["item"]["show"]["name"] = true;
+  filter["item"]["album"]["name"] = true; filter["item"]["album"]["images"][0]["url"] = true; filter["item"]["album"]["images"][0]["width"] = true;
+  filter["item"]["images"][0]["url"] = true; filter["item"]["images"][0]["width"] = true;
+  JsonDocument doc;
+  if (deserializeJson(doc, body, DeserializationOption::Filter(filter))) return false;
+  sp.err = "";
+  sp.playing = doc["is_playing"] | false;
+  sp.progress = doc["progress_ms"] | 0; sp.progressAt = millis();
+  sp.device = String((const char *)(doc["device"]["name"] | ""));
+  sp.volume = doc["device"]["volume_percent"] | -1;
+  JsonObject it = doc["item"];
+  if (it.isNull()) { bool was = sp.hasTrack; sp.hasTrack = false; return was; }
+  String id = it["id"] | "";
+  sp.duration = it["duration_ms"] | 0;
+  bool changed = !sp.hasTrack || id != sp.trackId;
+  sp.hasTrack = true;
+  if (changed) {
+    sp.trackId = id;
+    sp.title = String((const char *)(it["name"] | ""));
+    sp.artist = String((const char *)(it["artists"][0]["name"] | (it["show"]["name"] | "")));
+    sp.album = String((const char *)(it["album"]["name"] | ""));
+    // pick the ~300 px picture (half-size on screen = 150 px)
+    JsonArray imgs = it["album"]["images"].isNull() ? it["images"].as<JsonArray>() : it["album"]["images"].as<JsonArray>();
+    sp.artUrl = "";
+    for (JsonObject im : imgs) { int w = im["width"] | 0; if (w >= 250 && w <= 400) sp.artUrl = String((const char *)(im["url"] | "")); }
+    if (!sp.artUrl.length() && imgs.size()) sp.artUrl = String((const char *)(imgs[imgs.size() > 1 ? 1 : 0]["url"] | ""));
+    spFetchArt();
+  }
+  return changed;
+}
+
+bool drawArt(int x, int y) {
+  if (!sp.art) return false;
+  if (!jpeg.openRAM(sp.art, sp.artLen, jpegDraw)) return false;
+  jpeg.setPixelType(RGB565_LITTLE_ENDIAN);
+  int w = jpeg.getWidth();
+  int opt = w >= 560 ? JPEG_SCALE_QUARTER : (w >= 280 ? JPEG_SCALE_HALF : 0);
+  int sw = w / (opt == JPEG_SCALE_QUARTER ? 4 : (opt == JPEG_SCALE_HALF ? 2 : 1));
+  avCx = x + sw / 2; avCy = y + sw / 2; avR = 10000;            // no round crop
+  jpeg.decode(x, y, opt);
+  jpeg.close();
+  return true;
+}
+
+String mmss(long ms) { char b[12]; long s = ms / 1000; snprintf(b, sizeof(b), "%ld:%02ld", s / 60, s % 60); return String(b); }
+
+void drawSpProgress() {
+  if (!sp.hasTrack) return;
+  long p = sp.progress + (sp.playing ? (long)(millis() - sp.progressAt) : 0);
+  if (sp.duration && p > sp.duration) p = sp.duration;
+  int x = 170, w = RIGHT_EDGE - 170, y = 122;
+  gfx->fillRect(x, y - 2, w + 4, 30, C_BG);
+  gfx->fillRoundRect(x, y, w, 6, 3, C_DKGREY);
+  if (sp.duration) gfx->fillRoundRect(x, y, max(6, (int)(w * (float)p / sp.duration)), 6, 3, 0x1EE9);
+  ft(x, y + 24, mmss(p), F_S, C_GREY);
+  ftR(x + w, y + 24, mmss(sp.duration), F_S, C_GREY);
+}
+
+void drawSpotify() {
+  gfx->fillScreen(C_BG);
+  if (!cfgSpId.length() || !cfgSpRefresh.length()) {
+    gfx->fillCircle(160, 52, 24, 0x1EE9);
+    for (int k = 0; k < 3; k++) gfx->drawFastHLine(148 + k * 2, 44 + k * 8, 24 - k * 4, C_BG);
+    ftC(108, "Spotify", F_M, C_WHITE, gfx->width());
+    ftC(132, "Connect it on the", F_S, C_GREY, gfx->width());
+    ftC(152, "settings page", F_S, C_GREY, gfx->width());
+    return;
+  }
+  if (!sp.hasTrack) {
+    ftC(80, "Nothing playing", F_M, C_GREY, gfx->width());
+    ftC(108, sp.err.length() ? sp.err : String("Start something on Spotify"), F_S, sp.err.length() ? C_RED : C_DKGREY, gfx->width());
+    return;
+  }
+  if (!drawArt(8, 11)) gfx->fillRoundRect(8, 11, 150, 150, 8, C_DKGREY);
+  int x = 170;
+  int y = wrapF(asciiOnly(sp.title), x, 34, RIGHT_EDGE + 10, F_M, C_WHITE, 2, 24);
+  ft(x, y - 2, fit(asciiOnly(sp.artist), F_S, RIGHT_EDGE + 10 - x), F_S, 0x1EE9);
+  // play / pause symbol
+  if (sp.playing) { gfx->fillRect(x, 92, 6, 18, C_WHITE); gfx->fillRect(x + 11, 92, 6, 18, C_WHITE); }
+  else gfx->fillTriangle(x, 92, x, 110, x + 16, 101, C_WHITE);
+  if (sp.device.length()) ft(x + 26, 108, fit(asciiOnly(sp.device), F_S, RIGHT_EDGE + 10 - x - 26), F_S, C_DKGREY);
+  drawSpProgress();
+}
+
+void spToast(const String &t) {
+  gfx->fillRoundRect(60, 66, 200, 40, 8, 0x2104);
+  ftC(93, t, F_M, C_WHITE, gfx->width());
+}
+
+void spCommand(char what) {
+  int code = 0;
+  if (what == 'T') code = spCall("PUT", sp.playing ? "/me/player/pause" : "/me/player/play");
+  else if (what == 'L') code = spCall("POST", "/me/player/next");
+  else if (what == 'R') code = spCall("POST", "/me/player/previous");
+  else if (what == 'U' || what == 'D') {
+    int v = sp.volume < 0 ? 50 : sp.volume;
+    v = constrain(v + (what == 'U' ? 10 : -10), 0, 100);
+    code = spCall("PUT", "/me/player/volume?volume_percent=" + String(v));
+    if (code >= 200 && code < 300) { sp.volume = v; spToast("Volume " + String(v) + "%"); delay(600); }
+  }
+  if (code == 403) { spToast("Needs Spotify Premium"); delay(1500); }
+  else if (code == 404) { spToast("No active device"); delay(1500); }
+  if (what == 'T' && code >= 200 && code < 300) sp.playing = !sp.playing;
+  delay(250);
+  spPoll();
+  drawSpotify();
+  lastSpPoll = millis();
+}
+
+// ── Home menu ───────────────────────────────────────────────────────────────
+void drawAppIcon(int a, int cx, int cy) {
+  if (a == APP_YT) { gfx->fillRoundRect(cx - 30, cy - 21, 60, 42, 12, C_RED); gfx->fillTriangle(cx - 8, cy - 11, cx - 8, cy + 11, cx + 12, cy, C_WHITE); }
+  if (a == APP_WX) { drawWxIcon(2, cx, cy, 30, true); }
+  if (a == APP_SP) {
+    gfx->fillCircle(cx, cy, 26, 0x1EE9);
+    for (int k = 0; k < 3; k++) { gfx->drawFastHLine(cx - 13 + k * 2, cy - 8 + k * 8, 26 - k * 4, C_BG); gfx->drawFastHLine(cx - 13 + k * 2, cy - 7 + k * 8, 26 - k * 4, C_BG); }
+  }
+}
+
+void drawMenu() {
+  gfx->fillScreen(C_BG);
+  const char *names[NUM_APPS] = { "YouTube", "Weather", "Spotify" };
+  int w = gfx->width() / NUM_APPS;
+  for (int a = 0; a < NUM_APPS; a++) {
+    int cx = a * w + w / 2;
+    if (a == app) gfx->drawRoundRect(a * w + 6, 22, w - 12, 128, 12, C_DKGREY);
+    drawAppIcon(a, cx, 70);
+    ft(cx - tw(names[a], F_S) / 2, 130, names[a], F_S, a == app ? C_WHITE : C_GREY);
+  }
+  ftC(168, "Tap an app", F_S, C_DKGREY, gfx->width());
+}
+
+void drawApp() {
+  if (menuOpen) { drawMenu(); return; }
+  if (app == APP_WX) drawWeather();
+  else if (app == APP_SP) drawSpotify();
+  else drawView();
+}
+
+void openApp(int a) {
+  app = a; menuOpen = false;
+  prefs.begin("subcounter", false); prefs.putInt("app", app); prefs.end();
+  if (app == APP_SP) { lastSpPoll = 0; }
+  if (app == APP_WX && !wx.ok) lastWxFetch = 0;
+  gfx->fillScreen(C_BG);
+  drawApp();
+}
+
+// ════════════════════════════════════════════════════════════════════════════
 //  Web: dashboard (/), data API, settings (/settings)
 // ════════════════════════════════════════════════════════════════════════════
 const char PAGE_HEAD[] PROGMEM = R"HTML(<!doctype html><html><head>
@@ -1554,6 +2356,9 @@ card.append(h('div',{style:'margin-top:6px;display:flex;justify-content:space-be
 const tabs=h('div',{class:'tabs'}),gbox=h('div');let cur=graphs[c.i]||7;
 for(const dd of [7,30]){const b=h('button',{text:dd+' days',class:dd==cur?'on':'',onclick:()=>{graphs[c.i]=dd;[...tabs.children].forEach(x=>x.className='');b.className='on';graph(c,dd,gbox)}});tabs.append(b)}
 card.append(tabs,gbox);graph(c,cur,gbox);
+if(c.vt){const t=c.vt,ag=t.ageMin<60?t.ageMin+' min':(t.ageMin/60|0)+'h '+(t.ageMin%60)+'m';const box=h('div',{style:'margin-top:14px;padding:12px;border-radius:12px;background:#1f2a1f'},h('div',{class:'sub',style:'color:var(--gold)',text:'NEW VIDEO TRACKER'}),h('div',{style:'font-size:26px;font-weight:800',text:fmt(t.views)+' views'}),h('div',{class:'sub',text:`in ${ag}`+(t.rate>=0?` · ${cmp(t.rate)}/hour now`:'')}),t.cmp?h('div',{style:'margin-top:4px',class:t.cmp.includes('+')?'pos':t.cmp.includes('-')?'neg':'',text:t.cmp}):null);
+if(t.pts&&t.pts.length>1){const W=600,H=70,p=t.pts,t0=p[0][0],t1=p[p.length-1][0],mn=p[0][1],mx=Math.max(p[p.length-1][1],mn+1);const d=p.map((q,k)=>(k?'L':'M')+((q[0]-t0)/(t1-t0||1)*(W-4)+2).toFixed(1)+' '+(H-4-(q[1]-mn)/(mx-mn)*(H-10)).toFixed(1)).join(' ');const ns='http://www.w3.org/2000/svg',sv=document.createElementNS(ns,'svg');sv.setAttribute('viewBox',`0 0 ${W} ${H}`);sv.setAttribute('preserveAspectRatio','none');sv.setAttribute('class','g');sv.style.height='70px';const ln=document.createElementNS(ns,'path');ln.setAttribute('d',d);ln.setAttribute('fill','none');ln.setAttribute('stroke','#ffc53d');ln.setAttribute('stroke-width','2.5');ln.setAttribute('vector-effect','non-scaling-stroke');sv.append(ln);box.append(sv)}
+card.append(box)}
 if(c.vid){const v=c.vid;card.append(h('a',{class:'vid',href:'https://youtu.be/'+v.id,target:'_blank'},h('img',{src:`https://i.ytimg.com/vi/${v.id}/mqdefault.jpg`,alt:''}),h('div',{style:'min-width:0'},h('div',{class:'t'},v.live?h('span',{class:'live',text:'LIVE'}):null,v.title),h('div',{class:'sub',text:v.live?`${fmt(v.viewers)} watching now`:`${ago(v.pub)} · ${dur(v.dur)}`}),h('div',{class:'sub',text:`${cmp(v.views)} views · ${v.likes>=0?cmp(v.likes)+' likes':'likes hidden'} · ${v.comments>=0?cmp(v.comments)+' comments':'comments off'}`}))))}
 return card}
 function render(){const app=$('#app');app.textContent='';const C=D.channels;
@@ -1562,6 +2367,8 @@ const row=h('div',{class:'row'});
 // summary
 const ok=C.filter(c=>c.statsOk).sort((a,b)=>b.d1-a.d1);const nv=C.filter(c=>c.vid&&Date.now()/1000-c.vid.pub<86400);
 row.append(h('div',{class:'card'},h('h2',{text:'Last 24 hours'}),h('div',{class:'list'},ok.length?ok.slice(0,5).map(c=>h('div',{},h('span',{text:name(c)}),h('b',{class:cls(c.d1),text:sg(c.d1)}))):h('div',{class:'sub',text:'Collecting data – check back in a few hours'})),h('div',{class:'sub',style:'margin-top:8px',text:nv.length?`${nv.length} new video${nv.length>1?'s':''} today`:'No new videos in the last day'})));
+// weather
+if(D.wx){const w=D.wx;row.append(h('div',{class:'card'},h('h2',{text:'Weather · '+w.place}),h('div',{class:'big',text:w.temp+'°'}),h('div',{text:w.text+' · feels '+w.feels+'°'}),h('div',{class:'sub',text:`High ${w.hi}° · Low ${w.lo}° · Wind ${w.wind} mph`}),w.rainHour>=0?h('div',{style:'margin-top:8px;color:var(--blue)',text:`Rain likely around ${String(w.rainHour).padStart(2,'0')}:00 (${w.rainPct}%)`}):null))}
 // race
 if(D.race){const A=C[D.race[0]],B=C[D.race[1]],ea=est(A),eb=est(B),fa=ea+eb?ea/(ea+eb):.5;const lead=ea>=eb?A:B,ch=lead===A?B:A,closing=(ch.rate||0)-(lead.rate||0),gap=Math.abs(ea-eb);
 row.append(h('div',{class:'card race'},h('h2',{text:'Race'}),h('div',{class:'side'},h('span',{},av(A),h('b',{style:'color:var(--red)',text:name(A)})),h('b',{text:fmt(ea)})),h('div',{class:'side'},h('span',{},av(B),h('b',{style:'color:var(--blue)',text:name(B)})),h('b',{text:fmt(eb)})),h('div',{class:'tug'},h('div',{class:'a',style:`width:${fa*100}%`}),h('div',{class:'b',style:`width:${(1-fa)*100}%`})),h('div',{text:`Gap ${fmt(gap)}`}),h('div',{class:'sub',text:closing>0.01?`${name(ch)} is catching up by ${fmt(Math.round(closing))}/day – could pass in about ${Math.max(1,Math.round(gap/closing))} days`:(lead.rate||ch.rate)?`${name(lead)} is pulling away`:'Trend: need more data'})))}
@@ -1589,6 +2396,11 @@ void handleApiData() {
   doc["ip"] = WiFi.localIP().toString();
   if (raceSet()) { JsonArray r = doc["race"].to<JsonArray>(); r.add(cfgRaceA); r.add(cfgRaceB); }
   else doc["race"] = nullptr;
+  if (wx.ok) {
+    JsonObject w = doc["wx"].to<JsonObject>();
+    w["place"] = cfgWxName; w["temp"] = lroundf(wx.temp); w["feels"] = lroundf(wx.feels); w["text"] = wxText(wx.code);
+    w["hi"] = wx.hi; w["lo"] = wx.lo; w["rainHour"] = wx.rainHour; w["rainPct"] = wx.rainPct; w["wind"] = lroundf(wx.wind);
+  }
   JsonArray arr = doc["channels"].to<JsonArray>();
   for (int i = 0; i < numCh; i++) {
     Channel &c = ch[i];
@@ -1603,6 +2415,13 @@ void handleApiData() {
     long e = c.subs >= 0 ? estimateFor(i) : 0;
     long nx = nextMilestone(max(0L, e));
     o["next"] = nx; o["prev"] = prevMilestone(nx);
+    if (i == 0 && vt.active && vt.n) {
+      JsonObject t = o["vt"].to<JsonObject>();
+      t["views"] = vtViews(); t["ageMin"] = vtAgeMin(); t["rate"] = vtRate(); t["typical"] = vt.typical;
+      t["at1h"] = vt.at1h; t["base1h"] = vt.base1h; t["at24h"] = vt.at24h; t["base24h"] = vt.base24h; t["cmp"] = vtCompare();
+      JsonArray pts = t["pts"].to<JsonArray>();
+      for (int k = 0; k < vt.n; k++) { JsonArray pp = pts.add<JsonArray>(); pp.add(vt.t[k]); pp.add(vt.v[k]); }
+    }
     if (c.vidId.length() && c.vidTitle.length()) {
       JsonObject v = o["vid"].to<JsonObject>();
       v["id"] = c.vidId; v["title"] = c.vidTitle; v["pub"] = (long)c.vidPublished; v["dur"] = c.vidDuration;
@@ -1753,6 +2572,20 @@ void handleSettings() {
   h += "<label>Night clock (dims and shows the time)</label><div style='display:flex;gap:8px'>" +
        hourSelect("nightStart", cfgNightStart) + "<span style='align-self:center'>to</span>" + hourSelect("nightEnd", cfgNightEnd) + "</div>";
 
+  h += "<h1 style='font-size:17px;margin-top:26px'>Weather</h1>";
+  h += "<label>Town or city</label><input name='wxtown' value='" + htmlEscape(cfgWxName) + "' placeholder='e.g. Glasgow'>";
+  h += "<small>Long-press the board's screen and pick Weather. Forecasts from Open-Meteo.</small>";
+
+  h += "<h1 id='spotify' style='font-size:17px;margin-top:26px'>Spotify</h1>";
+  if (cfgSpRefresh.length()) h += "<p style='color:#30d158;margin:0 0 6px'>Connected &#10003;</p>";
+  h += "<small>One-time setup (needs Spotify Premium): go to <b>developer.spotify.com/dashboard</b> &rarr; Create app &rarr; "
+       "Redirect URI <b>" SP_REDIRECT "</b> &rarr; tick <b>Web API</b> &rarr; Save. Then copy the Client ID and Client secret here and save.</small>";
+  h += "<label>Client ID</label><input name='spid' value='" + htmlEscape(cfgSpId) + "' autocapitalize='off'>";
+  h += "<label>Client secret</label><input name='spsecret' type='password' autocapitalize='off' placeholder='" +
+       String(cfgSpSecret.length() ? "(saved — leave blank to keep)" : "") + "'>";
+  if (cfgSpId.length() && cfgSpSecret.length() && !portalMode)
+    h += "<small style='margin-top:10px'>Then <a href='#spconnect'>connect your account</a> below the Save button.</small>";
+
   h += "<h1 style='font-size:17px;margin-top:26px'>Motion</h1>";
   if (!imuOk && !portalMode) h += "<small style='color:#e62117'>Motion sensor not detected.</small>";
   h += checkbox("shake", cfgShake, "Shake to refresh");
@@ -1815,6 +2648,17 @@ void handleSettings() {
   h += "</details>";
   h += "<button type='submit'>Save &amp; restart</button></form>";
 
+  if (!portalMode && cfgSpId.length() && cfgSpSecret.length()) {
+    h += "<form id='spconnect' method='POST' action='/spotify/code' style='margin-top:26px'><label>Connect Spotify</label>"
+         "<small>1. <a target='_blank' href='" + htmlEscape(spAuthUrl()) + "'>Open this Spotify link</a> and press Agree.<br>"
+         "2. Your browser then shows a page that won't load (that's expected). Copy the whole address from the address bar "
+         "(it starts with http://127.0.0.1:8888/callback?code=...) and paste it here:</small>"
+         "<input name='url' placeholder='http://127.0.0.1:8888/callback?code=...' autocapitalize='off' required>"
+         "<button type='submit' style='background:#1db954'>Connect Spotify</button></form>";
+    if (cfgSpRefresh.length())
+      h += "<form method='POST' action='/spotify/disconnect'><button type='submit' style='background:#333;margin-top:8px'>Disconnect Spotify</button></form>";
+  }
+  if (!portalMode) h += "<p style='margin-top:22px'><a href='/update'>&#11014; Update firmware wirelessly</a></p>";
   if (!portalMode && imuOk) {
     h += "<form method='POST' action='/calibrate' style='margin-top:22px'>"
          "<label>Motion calibration</label><small>Put the board in the position you normally use it (on its stand or flat), then press:</small>"
@@ -1894,6 +2738,16 @@ void handleSave() {
   cfgPortrait = server.arg("portrait") == "1";
   cfgFlipPortrait = server.arg("flip") == "1";
   cfgTap = server.arg("tap") == "1";
+  String town = server.arg("wxtown"); town.trim();
+  if (town.length() && town != cfgWxName && !portalMode) {
+    float la, lo; String label;
+    if (geocode(town, la, lo, label)) { cfgWxLat = la; cfgWxLon = lo; cfgWxName = label; }
+    else { sendMessage(400, "Town not found", "Couldn't find \"" + htmlEscape(town) + "\". Try a nearby town or add the country, e.g. \"Paisley, UK\"."); return; }
+  } else if (town.length() && portalMode && town != cfgWxName) { cfgWxName = town; cfgWxLat = cfgWxLon = 0; }   // looked up once online
+  String spid = server.arg("spid"); spid.trim();
+  String spsec = server.arg("spsecret"); spsec.trim();
+  if (spid != cfgSpId) { cfgSpId = spid; cfgSpRefresh = ""; }
+  if (spsec.length()) cfgSpSecret = spsec;
   if (server.hasArg("tapsens")) cfgTapSens = constrain(server.arg("tapsens").toInt(), 1, 3);
   if (server.hasArg("raceA")) { cfgRaceA = server.arg("raceA").toInt(); cfgRaceB = server.arg("raceB").toInt(); }
   if (server.hasArg("nightStart")) { cfgNightStart = server.arg("nightStart").toInt(); cfgNightEnd = server.arg("nightEnd").toInt(); }
@@ -1915,6 +2769,21 @@ void handleWifiConnect() {
   pendingSwitch = k;
 }
 
+void handleSpotifyCode() {
+  String err;
+  if (spConnectWithCode(server.arg("url"), err)) {
+    saveSettings();
+    sendMessage(200, "Spotify connected &#10003;", "Long-press the board's screen and choose Spotify.");
+    if (app == APP_SP && !menuOpen) { lastSpPoll = 0; }
+  } else sendMessage(400, "Couldn't connect Spotify", htmlEscape(err) + ". Codes only work once and expire after a few minutes &ndash; open the Spotify link again and paste the new address.");
+}
+
+void handleSpotifyDisconnect() {
+  cfgSpRefresh = ""; sp = SpotifyState();
+  saveSettings();
+  sendMessage(200, "Spotify disconnected", "You can connect it again any time.");
+}
+
 void handleNotFound() {
   if (!portalMode) { server.send(404, "text/plain", "Not found"); return; }
   server.sendHeader("Location", String("http://") + WiFi.softAPIP().toString() + "/", true);
@@ -1930,6 +2799,10 @@ void registerRoutes() {
   server.on("/api/history", HTTP_GET, handleApiHistory);
   server.on("/api/scan", HTTP_GET, handleApiScan);
   server.on("/wifi/connect", HTTP_POST, handleWifiConnect);
+  server.on("/update", HTTP_GET, handleUpdatePage);
+  server.on("/update", HTTP_POST, handleUpdateDone, handleUpdateUpload);
+  server.on("/spotify/code", HTTP_POST, handleSpotifyCode);
+  server.on("/spotify/disconnect", HTTP_POST, handleSpotifyDisconnect);
   server.onNotFound(handleNotFound);
 }
 
@@ -2299,8 +3172,6 @@ void fetchAvatars() {
 // ════════════════════════════════════════════════════════════════════════════
 //  Setup & loop
 // ════════════════════════════════════════════════════════════════════════════
-enum Mode { M_NORMAL, M_SLEEP, M_PORTRAIT, M_SUMMARY, M_AMBIENT };
-Mode mode = M_NORMAL;
 bool summaryActive = false;
 unsigned long summaryShownAt = 0;
 int lastSummaryDay = -1;
@@ -2309,7 +3180,7 @@ int portraitRot = 0;
 void setup() {
   Serial.begin(115200);
   delay(300);
-  Serial.println("SubCounter v8.5 starting");
+  Serial.println("SubCounter v9 starting");
   setenv("TZ", TZ_UK, 1); tzset();
 
   pinMode(SD_CS, OUTPUT);  digitalWrite(SD_CS, HIGH);
@@ -2332,6 +3203,7 @@ void setup() {
 
   WiFi.onEvent(onWiFiEvent);
   loadSettings();
+  prefs.begin("subcounter", true); app = constrain(prefs.getInt("app", APP_YT), 0, NUM_APPS - 1); prefs.end();
 
   if (numNets == 0 || cfgApiKey.length() == 0 || numCh == 0) { startPortal(); return; }
   if (!connectWiFi()) { drawWifiFailScreen(); delay(8000); startPortal(); return; }
@@ -2340,17 +3212,24 @@ void setup() {
   setenv("TZ", TZ_UK, 1); tzset();
   registerRoutes(); routesRegistered = true;
   server.begin();
+  if (cfgWxLat == 0 && cfgWxLon == 0 && cfgWxName.length()) {          // town entered in setup mode
+    float la, lo; String label;
+    if (geocode(cfgWxName, la, lo, label)) { cfgWxLat = la; cfgWxLon = lo; cfgWxName = label; saveSettings(); }
+  }
   drawStatus("Loading...", String(numCh) + (numCh == 1 ? " channel" : " channels"), C_WHITE);
   fetchAll();
   lastFetch = millis();
   drawStatus("Loading...", "pictures & videos", C_WHITE);
   fetchAvatars();
   fetchLatestVideos();
+  vtCheckNewUpload();
   lastVideoFetch = millis();
+  fetchWeather(); lastWxFetch = millis();
   lastInteract = millis();
   numAlerts = 0;                       // nothing to celebrate on start-up
-  drawMain();
-  if (ch[page].subs > 0) { shownSubs = max(0L, estimateFor(page) - 30); drawMainNumber(shownSubs); }
+  gfx->fillScreen(C_BG);
+  drawApp();
+  if (app == APP_YT && ch[page].subs > 0) { shownSubs = max(0L, estimateFor(page) - 30); drawMainNumber(shownSubs); }
   Serial.print("Dashboard: http://"); Serial.println(WiFi.localIP());
 }
 
@@ -2361,7 +3240,7 @@ void drawMode() {
     case M_PORTRAIT: drawPortraitBoard(); break;
     case M_SUMMARY: drawSummary(); break;
     case M_AMBIENT: drawAmbient(); break;
-    default: drawView(); break;
+    default: drawApp(); break;
   }
 }
 
@@ -2377,7 +3256,7 @@ void enterMode(Mode m) {
     case M_AMBIENT:  drawAmbient(); fadeBacklight(BL_NIGHT, 25); break;
     default:
       gfx->fillScreen(C_BG);
-      drawView();
+      drawApp();
       if (blNow != BL_NORMAL) fadeBacklight(BL_NORMAL, 2);
       break;
   }
@@ -2388,6 +3267,8 @@ void userActivity() {
   lastInteract = millis();
   if (mode == M_SUMMARY) summaryActive = false;
 }
+
+bool ytVisible() { return mode == M_NORMAL && !menuOpen && app == APP_YT; }
 
 void loop() {
   server.handleClient();
@@ -2437,10 +3318,8 @@ void loop() {
   // ── decide the mode ───────────────────────────────────────────────────────
   bool anyInput = swipe || tap || shake || bootShort || touching;
   if (anyInput && (mode == M_AMBIENT || mode == M_SUMMARY)) {
-    bool wasOverlay = true;
     userActivity();
     swipe = 0; tap = false; bootShort = false;   // this input just wakes it up
-    (void)wasOverlay;
   }
   Mode want = M_NORMAL;
   if (cfgFaceDown && orient == O_FACEDOWN) want = M_SLEEP;
@@ -2460,28 +3339,54 @@ void loop() {
 
   // ── actions in the normal view ────────────────────────────────────────────
   if (mode == M_NORMAL) {
-    switch (swipe) {
-      case 'L': changePage(+1); lastInteract = millis(); break;
-      case 'R': changePage(-1); lastInteract = millis(); break;
-      case 'U': changeCard(+1); lastInteract = millis(); break;
-      case 'D': changeCard(-1); lastInteract = millis(); break;
+    if (swipe) lastInteract = millis();
+    if (swipe == 'H') {                                     // long-press: home menu (or close it)
+      menuOpen = !menuOpen;
+      gfx->fillScreen(C_BG); drawApp();
+      swipe = 0;
     }
-    if (bootShort) { changePage(+1); lastInteract = millis(); }
-    if (tap && cfgTap && !board) { changePage(+1); lastInteract = millis(); }
-    if (shake && cfgShake) {
-      lastInteract = millis();
-      if (!board && card == 0) { gfx->fillRect(0, 150, gfx->width() - 14, 22, C_BG); ft(8, 168, "Refreshing...", F_S, C_GOLD); }
-      lastFetch = 0;                                           // fetch counts now
-      if (millis() - lastVideoFetch > 3UL * 60000UL) lastVideoFetch = 0;   // and videos, if not done recently
+    if (menuOpen) {
+      if (swipe == 'T') {
+        int a = constrain(tapX * NUM_APPS / gfx->width(), 0, NUM_APPS - 1);
+        openApp(a);
+      } else if (bootShort) openApp(app);
+      if (millis() - lastInteract > 20000UL) openApp(app);  // menu left open: go back
     }
-    // back to the main count after a while untouched
-    if ((card != 0 || board) && millis() - lastInteract > IDLE_RETURN_MS) {
-      card = 0; board = false; raceView = false; drawView(); lastInteract = millis();
+    else if (app == APP_YT) {
+      switch (swipe) {
+        case 'L': changePage(+1); break;
+        case 'R': changePage(-1); break;
+        case 'U': changeCard(+1); break;
+        case 'D': changeCard(-1); break;
+      }
+      if (bootShort) { changePage(+1); lastInteract = millis(); }
+      if (tap && cfgTap && !board) { changePage(+1); lastInteract = millis(); }
+      if (shake && cfgShake) {
+        lastInteract = millis();
+        if (!board && card == 0) { gfx->fillRect(0, 150, gfx->width() - 14, 22, C_BG); ft(8, 168, "Refreshing...", F_S, C_GOLD); }
+        lastFetch = 0;
+        if (millis() - lastVideoFetch > 3UL * 60000UL) lastVideoFetch = 0;
+      }
+      if ((card != 0 || board) && millis() - lastInteract > IDLE_RETURN_MS) {
+        card = 0; board = false; raceView = false; drawView(); lastInteract = millis();
+      }
+      if (cfgAuto && numCh > 1 && card == 0 && !board && millis() - lastInteract > 30000UL) {
+        static unsigned long lastAuto = 0;
+        if (millis() - lastAuto > AUTO_SWITCH_MS) { lastAuto = millis(); changePage(+1); }
+      }
     }
-    // auto-switch channels (main count only, pauses 30 s after you touch it)
-    if (cfgAuto && numCh > 1 && card == 0 && !board && millis() - lastInteract > 30000UL) {
-      static unsigned long lastAuto = 0;
-      if (millis() - lastAuto > AUTO_SWITCH_MS) { lastAuto = millis(); changePage(+1); }
+    else if (app == APP_WX) {
+      int old = wxCard;
+      if (swipe == 'U') wxCard = min(wxCard + 1, WX_CARDS - 1);
+      if (swipe == 'D') wxCard = max(wxCard - 1, 0);
+      if (bootShort) wxCard = (wxCard + 1) % WX_CARDS;
+      if (shake && cfgShake) { lastWxFetch = 0; }
+      if (wxCard != old) { wipe(0, wxCard > old ? 1 : -1); drawWeather(); }
+      if (wxCard != 0 && millis() - lastInteract > IDLE_RETURN_MS) { wxCard = 0; drawWeather(); }
+    }
+    else if (app == APP_SP) {
+      if (cfgSpRefresh.length() && (swipe == 'T' || swipe == 'L' || swipe == 'R' || swipe == 'U' || swipe == 'D')) spCommand(swipe);
+      if (bootShort && cfgSpRefresh.length()) spCommand('T');
     }
   }
 
@@ -2498,10 +3403,10 @@ void loop() {
   if (WiFi.status() != WL_CONNECTED) {
     if (!wifiLostAt) wifiLostAt = millis();
     netError = "Wi-Fi lost, reconnecting...";
-    if (mode == M_NORMAL) drawFooter();
+    if (ytVisible()) drawFooter();
     if (millis() - wifiLostAt > 60000UL && numNets > 0) {
       // been gone a minute: maybe we've moved (work -> home). Look for any saved network.
-      if (connectWiFi()) { wifiLostAt = 0; netError = ""; lastFetch = 0; drawMode(); }
+      if (connectWiFi()) { wifiLostAt = 0; netError = ""; lastFetch = 0; gfx->fillScreen(C_BG); drawMode(); }
       else wifiLostAt = millis();
       return;
     }
@@ -2521,23 +3426,51 @@ void loop() {
   if (lastVideoFetch == 0 || millis() - lastVideoFetch > VIDEO_REFRESH_MS) {
     lastVideoFetch = millis();
     fetchLatestVideos();
+    vtCheckNewUpload();
     refreshed = true;
   }
+  // your new upload: its own numbers every 5 minutes, typical views once a day
+  if (vt.active && (lastVtFetch == 0 || millis() - lastVtFetch > 5UL * 60000UL)) {
+    lastVtFetch = millis();
+    vtPoll();
+    refreshed = true;
+  }
+  if (vt.active && (lastTypicalFetch == 0 || millis() - lastTypicalFetch > 24UL * 3600000UL)) {
+    lastTypicalFetch = millis();
+    vtFetchTypical();
+  }
+  bool wxRefreshed = false;
+  if (lastWxFetch == 0 || millis() - lastWxFetch > 15UL * 60000UL) {
+    lastWxFetch = millis();
+    fetchWeather();
+    wxRefreshed = true;
+  }
+  // Spotify: every 3 s while it's on screen
+  if (mode == M_NORMAL && !menuOpen && app == APP_SP && cfgSpRefresh.length() &&
+      (lastSpPoll == 0 || millis() - lastSpPoll > 3000UL)) {
+    lastSpPoll = millis();
+    bool wasPlaying = sp.playing, had = sp.hasTrack;
+    bool changed = spPoll();
+    if (changed || wasPlaying != sp.playing || had != sp.hasTrack) drawSpotify();
+  }
+
   if (refreshed) {
     // celebrate only when someone can see it (not face-down, side-on or at night)
-    if (numAlerts && (mode == M_NORMAL || mode == M_SUMMARY)) {
+    if (numAlerts && (mode == M_NORMAL || mode == M_SUMMARY) && !(app == APP_SP && !menuOpen && sp.playing)) {
       setBacklight(BL_NORMAL);
       for (int i = 0; i < numAlerts; i++) showAlert(alerts[i]);
       gfx->fillScreen(C_BG);
+      drawMode();
     }
     numAlerts = 0;
-    if (mode == M_NORMAL && card == 0 && !board) { long keep = shownSubs; drawMain(); shownSubs = keep; drawMainNumber(shownSubs); }
-    else drawMode();
+    if (ytVisible() && card == 0 && !board) { long keep = shownSubs; drawMain(); shownSubs = keep; drawMainNumber(shownSubs); }
+    else if (ytVisible() || mode != M_NORMAL) drawMode();
   }
+  if (wxRefreshed && mode == M_NORMAL && !menuOpen && app == APP_WX) drawWeather();
 
   // ── animation / periodic redraws ──────────────────────────────────────────
   static unsigned long lastAnim = 0;
-  if (mode == M_NORMAL && numCh && card == 0 && !board && ch[page].subs >= 0 && millis() - lastAnim > 30) {
+  if (ytVisible() && numCh && card == 0 && !board && ch[page].subs >= 0 && millis() - lastAnim > 30) {
     lastAnim = millis();
     long target = estimateFor(page);
     if (shownSubs != target) {
@@ -2546,11 +3479,20 @@ void loop() {
       drawMainNumber(shownSubs);
     }
   }
+  static unsigned long lastProg = 0;
+  if (mode == M_NORMAL && !menuOpen && app == APP_SP && sp.hasTrack && millis() - lastProg > 1000) {
+    lastProg = millis(); drawSpProgress();
+  }
   static unsigned long lastSlow = 0;
+  static int lastMinute = -1;
   if (millis() - lastSlow > 30000UL) {
     lastSlow = millis();
     if (mode == M_AMBIENT) drawAmbient();
-    else if (mode == M_NORMAL) drawFooter();
+    else if (ytVisible()) drawFooter();
+  }
+  if (mode == M_NORMAL && !menuOpen && app == APP_WX && wxCard == 0 && timeValid()) {   // keep the clock ticking
+    time_t n = nowT(); struct tm lt; localtime_r(&n, &lt);
+    if (lt.tm_min != lastMinute) { lastMinute = lt.tm_min; if (wx.ok) drawWeather(); }
   }
 
   delay(5);
