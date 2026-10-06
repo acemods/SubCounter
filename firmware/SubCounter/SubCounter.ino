@@ -1,5 +1,5 @@
 /*
- * SubCounter v8.4 — YouTube subscriber counter for Waveshare ESP32-C6-Touch-LCD-1.47
+ * SubCounter v8.5 — YouTube subscriber counter for Waveshare ESP32-C6-Touch-LCD-1.47
  *
  *  ON THE BOARD
  *    Swipe left / right ... next / previous channel   (BOOT short press = next)
@@ -136,6 +136,8 @@ String cfgIp, cfgGw, cfgMask, cfgDns;
 struct Net { String ssid, pass, user, ip, gw, mask, dns; bool compat = false; };
 Net nets[MAX_NETS];
 int numNets = 0, curNet = -1;
+int cfgPreferred = -1;          // saved network to try first when it's in range (-1 = strongest wins)
+int pendingSwitch = -1;         // "Connect now" request from the settings page
 bool   cfgCompat = false, cfgAuto = false, cfgEst = true;
 bool   cfgCelebrate = true, cfgSummary = true;
 bool   cfgShake = true, cfgFaceDown = true, cfgPortrait = true, cfgFlipPortrait = false, cfgTap = true;
@@ -455,6 +457,7 @@ void parseChannels() {
 void loadSettings() {
   prefs.begin("subcounter", true);
   numNets = 0;
+  cfgPreferred = prefs.getInt("prefnet", -1);
   if (prefs.isKey("nnets")) {
     numNets = constrain(prefs.getInt("nnets", 0), 0, MAX_NETS);
     for (int k = 0; k < numNets; k++) {
@@ -502,6 +505,7 @@ void loadSettings() {
 void saveSettings() {
   prefs.begin("subcounter", false);
   prefs.putInt("nnets", numNets);
+  prefs.putInt("prefnet", cfgPreferred);
   for (int k = 0; k < numNets; k++) {
     String p = "n" + String(k);
     prefs.putString((p + "ssid").c_str(), nets[k].ssid);
@@ -1767,14 +1771,21 @@ void handleSettings() {
   Net blank; Net &e = edit >= 0 ? nets[edit] : blank;
   h += "<h1 id='wifi' style='font-size:17px;margin-top:26px'>Wi-Fi networks</h1>";
   if (numNets) {
-    h += "<small>The board joins whichever saved network is in range (strongest first).</small><div class='st' style='margin:10px 0'>";
+    h += "<small>The board joins your <b>Preferred</b> network when it's in range, otherwise the strongest saved one. "
+         "<b>Connect now</b> switches straight away.</small><div class='st' style='margin:10px 0'>";
     for (int k = 0; k < numNets; k++) {
       h += "<div style='display:flex;gap:10px;align-items:center;padding:6px 0;border-top:1px solid #333'><b style='flex:1'>" + htmlEscape(nets[k].ssid) + "</b>";
       if (k == curNet && !portalMode) h += "<span style='color:#30d158'>connected</span>";
+      else if (!portalMode) h += "<button type='submit' formaction='/wifi/connect?n=" + String(k) + "' formnovalidate "
+                                 "style='width:auto;margin:0;padding:5px 10px;font-size:13px;background:#2a2a2e'>Connect now</button>";
       if (nets[k].ip.length()) h += "<span>fixed IP</span>";
+      h += "<label style='margin:0'><input type='radio' name='pref' value='" + String(k) + "' style='width:auto'" +
+           String(cfgPreferred == k ? " checked" : "") + "> Preferred</label>";
       h += "<a href='/settings?edit=" + String(k) + "#wifi'>Edit</a>";
       h += "<label style='margin:0'><input type='checkbox' name='rm" + String(k) + "' value='1' style='width:auto'> Remove</label></div>";
     }
+    h += "<label style='margin:4px 0 0'><input type='radio' name='pref' value='-1' style='width:auto'" +
+         String(cfgPreferred < 0 ? " checked" : "") + "> No preference (strongest signal wins)</label>";
     h += "</div>";
   }
   h += "<label>" + String(edit >= 0 ? "Editing: " + htmlEscape(e.ssid) : (numNets ? String("Add another network (e.g. home)") : String("Wi-Fi network"))) + "</label>";
@@ -1850,7 +1861,9 @@ void handleSave() {
   }
   // Wi-Fi: remove ticked networks, then add / update the one in the form
   Net keep[MAX_NETS]; int nk = 0;
-  for (int k = 0; k < numNets; k++) if (server.arg("rm" + String(k)) != "1") keep[nk++] = nets[k];
+  int prefOld = server.hasArg("pref") ? server.arg("pref").toInt() : cfgPreferred;
+  int prefNew = -1;
+  for (int k = 0; k < numNets; k++) if (server.arg("rm" + String(k)) != "1") { if (k == prefOld) prefNew = nk; keep[nk++] = nets[k]; }
   if (ssid.length()) {
     int found = -1;
     for (int k = 0; k < nk; k++) if (keep[k].ssid == ssid) found = k;
@@ -1869,6 +1882,7 @@ void handleSave() {
   if (nk == 0) { sendMessage(400, "No Wi-Fi network", "Add at least one Wi-Fi network."); return; }
   for (int k = 0; k < nk; k++) nets[k] = keep[k];
   numNets = nk;
+  cfgPreferred = prefNew;
   cfgChannels = chs;
   if (key.length()) cfgApiKey = key;
   cfgAuto = server.arg("auto") == "1";
@@ -1890,6 +1904,17 @@ void handleSave() {
   ESP.restart();
 }
 
+// "Connect now": answer the browser first (we're about to leave this network), then switch in loop()
+void handleWifiConnect() {
+  int k = server.arg("n").toInt();
+  if (k < 0 || k >= numNets) { sendMessage(400, "Unknown network", "That network isn't saved."); return; }
+  sendMessage(200, "Switching to " + htmlEscape(nets[k].ssid) + "&hellip;",
+              "The board is leaving this network now, so this page will stop updating. "
+              "Join <b>" + htmlEscape(nets[k].ssid) + "</b> yourself and use the new address shown on the board's leaderboard. "
+              "If it can't connect, it goes back to the best network it can find.");
+  pendingSwitch = k;
+}
+
 void handleNotFound() {
   if (!portalMode) { server.send(404, "text/plain", "Not found"); return; }
   server.sendHeader("Location", String("http://") + WiFi.softAPIP().toString() + "/", true);
@@ -1904,6 +1929,7 @@ void registerRoutes() {
   server.on("/api/data", HTTP_GET, handleApiData);
   server.on("/api/history", HTTP_GET, handleApiHistory);
   server.on("/api/scan", HTTP_GET, handleApiScan);
+  server.on("/wifi/connect", HTTP_POST, handleWifiConnect);
   server.onNotFound(handleNotFound);
 }
 
@@ -2047,6 +2073,7 @@ bool connectWiFi() {
     if (best > -999) { order[cnt] = k; rssi[cnt] = best; cnt++; }
   }
   WiFi.scanDelete();
+  for (int c = 0; c < cnt; c++) if (order[c] == cfgPreferred) rssi[c] += 1000;   // preferred network jumps the queue
   for (int a = 0; a < cnt; a++) for (int b = a + 1; b < cnt; b++)
     if (rssi[b] > rssi[a]) { int t = order[a]; order[a] = order[b]; order[b] = t; t = rssi[a]; rssi[a] = rssi[b]; rssi[b] = t; }
   String reasons;
@@ -2282,7 +2309,7 @@ int portraitRot = 0;
 void setup() {
   Serial.begin(115200);
   delay(300);
-  Serial.println("SubCounter v8.4 starting");
+  Serial.println("SubCounter v8.5 starting");
   setenv("TZ", TZ_UK, 1); tzset();
 
   pinMode(SD_CS, OUTPUT);  digitalWrite(SD_CS, HIGH);
@@ -2459,6 +2486,14 @@ void loop() {
   }
 
   // ── network ───────────────────────────────────────────────────────────────
+  if (pendingSwitch >= 0) {
+    int k = pendingSwitch; pendingSwitch = -1;
+    delay(500);                                   // let the browser get its reply
+    if (connectOne(k)) curNet = k;
+    else if (!connectWiFi()) { drawWifiFailScreen(); delay(5000); }
+    netError = ""; lastFetch = 0;
+    gfx->fillScreen(C_BG); drawMode();
+  }
   static unsigned long wifiLostAt = 0;
   if (WiFi.status() != WL_CONNECTED) {
     if (!wifiLostAt) wifiLostAt = millis();
