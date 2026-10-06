@@ -6,6 +6,7 @@ A desk gadget built on the **Waveshare ESP32-C6-Touch-LCD-1.47** that shows live
 
 ## What's new
 
+- **v9.5:** open the dashboard at `http://subcounter.local`; IP address shown on start-up and on the home menu
 - **v9.4:** redesigned web dashboard: a side column (last 24 hours, weather, race, leaderboard) next to a grid of channel cards, laid out for desktop, tablet and phone
 - **v9.3:** idle clock after a few minutes without use
 - **v9.2:** scrolling Spotify titles and artist names
@@ -31,7 +32,7 @@ Full history: [docs/CHANGELOG.md](docs/CHANGELOG.md)
 **Motion sensor**
 - Shake to refresh · face-down turns the screen off · stand it in portrait for a tall leaderboard · double-tap the desk for the next channel
 
-**Web dashboard** (`http://<board-ip>/` from any phone or computer on your network)
+**Web dashboard** (`http://subcounter.local` or `http://<board-ip>/` from any phone or computer on your network)
 - Side column with the last 24 hours' top growers, weather, the race and the leaderboard
 - A card per channel: live (estimated) count, growth chips, milestone progress and predicted date, 7 or 30-day graph, latest video with thumbnail, and the new video tracker on your own channel
 - Adapts to the screen: side column on desktops, two columns on tablets, one on phones
@@ -46,9 +47,9 @@ Full history: [docs/CHANGELOG.md](docs/CHANGELOG.md)
 
 ## Quick start
 
-1. **Flash the board.** Open <https://espressif.github.io/esptool-js/> in Chrome, connect the board, and flash `builds/latest/SubCounter-v9.4-FULL-new-board-flash-at-0x0.bin` at address **0x0**.
+1. **Flash the board.** Open <https://espressif.github.io/esptool-js/> in Chrome, connect the board, and flash `builds/latest/SubCounter-v9.5-FULL-new-board-flash-at-0x0.bin` at address **0x0**.
 2. **Set it up.** The board shows *SETUP MODE*. Join the Wi-Fi network **SubCounter-Setup** from your phone, and the setup page opens by itself (or go to <http://192.168.4.1>). Pick your Wi-Fi, add your YouTube channels and a YouTube Data API key, then save.
-3. **Use it.** The board shows your subscriber count. Open the board's IP address in a browser for the dashboard.
+3. **Use it.** The board shows its address for a few seconds, then your subscriber count. Open **<http://subcounter.local>** (or the IP address) in a browser for the dashboard.
 
 Full instructions: **[docs/GETTING-STARTED.md](docs/GETTING-STARTED.md)**
 

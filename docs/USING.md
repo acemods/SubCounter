@@ -67,7 +67,7 @@ After **3 minutes** with no touch, button press or movement (change it, or turn 
 
 ## Web dashboard
 
-Open `http://<board-ip>/` on any device on the same network:
+Open **`http://subcounter.local`** (or `http://<board-ip>/`) on any device on the same network. The IP address is shown for a few seconds after the board joins Wi-Fi, and at the bottom of the home menu (long-press):
 
 - a side column with top growers in the last 24 hours, weather, race and leaderboard (above the channels on tablets and phones)
 - a card for every channel: live (estimated) count, growth chips, milestone and ETA, a 7 or 30-day graph, and the latest video with thumbnail

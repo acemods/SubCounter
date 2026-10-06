@@ -2,6 +2,12 @@
 
 All builds are in [`builds/`](../builds). Source snapshots for most versions are in the git history.
 
+## v9.5
+- **`http://subcounter.local`**: open the dashboard without knowing the IP address (iPhone, Mac, Windows 10/11; Android support varies)
+- The board shows its IP address and `subcounter.local` for 5 seconds after joining Wi-Fi
+- The home menu (long-press) shows the IP address at the bottom
+- The board appears as **subcounter** in your router's device list
+
 ## v9.4
 - **Dashboard layout:** on wide screens, Last 24 hours, Weather, Race and Leaderboard sit in a left column with the channel cards in a grid beside them (no more empty space next to the leaderboard). Tablets show the side cards in two columns above the channels; phones stack everything.
 - Tighter leaderboard rows, bigger 7 / 30 day buttons, tidier phone header

@@ -1,5 +1,5 @@
 /*
- * SubCounter v9.4 — YouTube subscriber counter for Waveshare ESP32-C6-Touch-LCD-1.47
+ * SubCounter v9.5 — YouTube subscriber counter for Waveshare ESP32-C6-Touch-LCD-1.47
  *
  *  ON THE BOARD
  *    Swipe left / right ... next / previous channel   (BOOT short press = next)
@@ -45,6 +45,8 @@
 #include <sys/time.h>
 #include <U8g2lib.h>   // readable fonts (U8g2 library)
 #include <Update.h>    // wireless firmware updates
+#include <ESPmDNS.h>   // http://subcounter.local
+#define HOSTNAME "subcounter"
 
 // ── Pins (ESP32-C6 version of the board) ────────────────────────────────────
 #define LCD_SCK   1
@@ -1346,6 +1348,16 @@ void waitShowing(unsigned long ms) {
   while (millis() - start < ms) { server.handleClient(); delay(20); }
 }
 
+// After joining Wi-Fi: show where the dashboard is for a few seconds
+void showAddress() {
+  gfx->fillScreen(C_BG);
+  ftC(40, "Connected to " + WiFi.SSID(), F_S, C_GREEN, gfx->width());
+  ftC(84, WiFi.localIP().toString(), F_M, C_WHITE, gfx->width());
+  ftC(118, "http://" HOSTNAME ".local", F_S, C_GOLD, gfx->width());
+  ftC(160, "Open either in a browser", F_S, C_DKGREY, gfx->width());
+  waitShowing(5000);
+}
+
 void showAlert(const Alert &a) {
   if (a.type == A_MILESTONE) {
     int tier = tierFor(a.total);
@@ -2318,7 +2330,8 @@ void drawMenu() {
     drawAppIcon(a, cx, 70);
     ft(cx - tw(names[a], F_S) / 2, 130, names[a], F_S, a == app ? C_WHITE : C_GREY);
   }
-  ftC(168, "Tap an app", F_S, C_DKGREY, gfx->width());
+  if (WiFi.status() == WL_CONNECTED) ftC(168, WiFi.localIP().toString() + "  Â·  " HOSTNAME ".local", F_S, C_GREY, gfx->width());
+  else ftC(168, "Tap an app", F_S, C_DKGREY, gfx->width());
 }
 
 void drawApp() {
@@ -2985,6 +2998,7 @@ bool connectAttempt(bool compat) {
   drawStatus("Connecting...", cfgSsid + (compat ? " (compat)" : ""), C_WHITE);
   WiFi.disconnect(true);
   delay(100);
+  WiFi.setHostname(HOSTNAME);           // name shown in the router's device list
   WiFi.mode(WIFI_STA);
   WiFi.setAutoReconnect(false);
   esp_wifi_set_protocol(WIFI_IF_STA, compat
@@ -3039,6 +3053,7 @@ bool connectWiFi() {
   drawStatus("Looking for Wi-Fi...", String(numNets) + (numNets == 1 ? " saved network" : " saved networks"), C_WHITE);
   WiFi.disconnect(true);
   delay(100);
+  WiFi.setHostname(HOSTNAME);           // name shown in the router's device list
   WiFi.mode(WIFI_STA);
   int n = WiFi.scanNetworks();
   int order[MAX_NETS]; int rssi[MAX_NETS]; int cnt = 0;
@@ -3282,7 +3297,7 @@ int portraitRot = 0;
 void setup() {
   Serial.begin(115200);
   delay(300);
-  Serial.println("SubCounter v9.4 starting");
+  Serial.println("SubCounter v9.5 starting");
   setenv("TZ", TZ_UK, 1); tzset();
 
   pinMode(SD_CS, OUTPUT);  digitalWrite(SD_CS, HIGH);
@@ -3314,6 +3329,8 @@ void setup() {
   setenv("TZ", TZ_UK, 1); tzset();
   registerRoutes(); routesRegistered = true;
   server.begin();
+  if (MDNS.begin(HOSTNAME)) MDNS.addService("http", "tcp", 80);
+  showAddress();
   if (cfgWxLat == 0 && cfgWxLon == 0 && cfgWxName.length()) {          // town entered in setup mode
     float la, lo; String label;
     if (geocode(cfgWxName, la, lo, label)) { cfgWxLat = la; cfgWxLon = lo; cfgWxName = label; saveSettings(); }
@@ -3332,7 +3349,7 @@ void setup() {
   gfx->fillScreen(C_BG);
   drawApp();
   if (app == APP_YT && ch[page].subs > 0) { shownSubs = max(0L, estimateFor(page) - 30); drawMainNumber(shownSubs); }
-  Serial.print("Dashboard: http://"); Serial.println(WiFi.localIP());
+  Serial.print("Dashboard: http://"); Serial.print(WiFi.localIP()); Serial.println("  or  http://" HOSTNAME ".local");
 }
 
 // Redraw whatever the current mode shows
