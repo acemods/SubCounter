@@ -1,5 +1,5 @@
 /*
- * SubCounter v9 — YouTube subscriber counter for Waveshare ESP32-C6-Touch-LCD-1.47
+ * SubCounter v9.1 — YouTube subscriber counter for Waveshare ESP32-C6-Touch-LCD-1.47
  *
  *  ON THE BOARD
  *    Swipe left / right ... next / previous channel   (BOOT short press = next)
@@ -169,6 +169,7 @@ Mode mode = M_NORMAL;
 float  cfgWxLat = 55.861f, cfgWxLon = -4.250f;   // weather location (default Glasgow)
 String cfgWxName = "Glasgow";
 String cfgSpId, cfgSpSecret, cfgSpRefresh;       // Spotify app + saved login
+String cfgSpRedirect;                            // https address registered with Spotify (e.g. GitHub Pages relay)
 
 #define VT_MAX 110
 struct VideoTrack {
@@ -531,6 +532,7 @@ void loadSettings() {
   cfgSpId     = prefs.getString("spid", "");
   cfgSpSecret = prefs.getString("spsec", "");
   cfgSpRefresh = prefs.getString("spref", "");
+  cfgSpRedirect = prefs.getString("spredir", "");
   g0Saved     = prefs.isKey("g0z");
   prefs.end();
   parseChannels();
@@ -573,6 +575,7 @@ void saveSettings() {
   prefs.putString("spid", cfgSpId);
   prefs.putString("spsec", cfgSpSecret);
   prefs.putString("spref", cfgSpRefresh);
+  prefs.putString("spredir", cfgSpRedirect);
   prefs.end();
 }
 
@@ -1986,7 +1989,6 @@ bool geocode(const String &name, float &lat, float &lon, String &label) {
 }
 
 // ── Spotify ─────────────────────────────────────────────────────────────────
-#define SP_REDIRECT "http://127.0.0.1:8888/callback"
 struct SpotifyState {
   String access; unsigned long accessUntil = 0;
   bool connected = false, playing = false, hasTrack = false;
@@ -2011,7 +2013,8 @@ String b64(const String &s) {
 String spAuthUrl() {
   return "https://accounts.spotify.com/authorize?response_type=code&client_id=" + urlEncode(cfgSpId) +
          "&scope=" + urlEncode("user-read-playback-state user-modify-playback-state user-read-currently-playing") +
-         "&redirect_uri=" + urlEncode(SP_REDIRECT);
+         "&redirect_uri=" + urlEncode(cfgSpRedirect) +
+         "&state=" + urlEncode("http://" + WiFi.localIP().toString());   // tells the relay page where the board is
 }
 
 // POST to Spotify's token endpoint; stores the access token (and a new refresh token if given)
@@ -2056,7 +2059,7 @@ bool spConnectWithCode(String pasted, String &err) {
   code.trim();
   if (!code.length()) { err = "No code found in what you pasted"; return false; }
   cfgSpRefresh = "";
-  return spToken("grant_type=authorization_code&code=" + urlEncode(code) + "&redirect_uri=" + urlEncode(SP_REDIRECT), err);
+  return spToken("grant_type=authorization_code&code=" + urlEncode(code) + "&redirect_uri=" + urlEncode(cfgSpRedirect), err);
 }
 
 int spCall(const char *method, const String &path, String *resp = nullptr) {
@@ -2578,8 +2581,11 @@ void handleSettings() {
 
   h += "<h1 id='spotify' style='font-size:17px;margin-top:26px'>Spotify</h1>";
   if (cfgSpRefresh.length()) h += "<p style='color:#30d158;margin:0 0 6px'>Connected &#10003;</p>";
-  h += "<small>One-time setup (needs Spotify Premium): go to <b>developer.spotify.com/dashboard</b> &rarr; Create app &rarr; "
-       "Redirect URI <b>" SP_REDIRECT "</b> &rarr; tick <b>Web API</b> &rarr; Save. Then copy the Client ID and Client secret here and save.</small>";
+  h += "<small>One-time setup (needs Spotify Premium): put the relay page on GitHub Pages (or any https address you own), then at "
+       "<b>developer.spotify.com/dashboard</b> &rarr; Create app &rarr; add that https address as the Redirect URI &rarr; tick <b>Web API</b> &rarr; Save. "
+       "Copy the Client ID, Client secret and the same Redirect URI here, and save.</small>";
+  h += "<label>Redirect URI (exactly as entered at Spotify)</label><input name='spredir' value='" + htmlEscape(cfgSpRedirect) +
+       "' autocapitalize='off' placeholder='https://yourname.github.io/spotify-callback/'>";
   h += "<label>Client ID</label><input name='spid' value='" + htmlEscape(cfgSpId) + "' autocapitalize='off'>";
   h += "<label>Client secret</label><input name='spsecret' type='password' autocapitalize='off' placeholder='" +
        String(cfgSpSecret.length() ? "(saved — leave blank to keep)" : "") + "'>";
@@ -2648,13 +2654,13 @@ void handleSettings() {
   h += "</details>";
   h += "<button type='submit'>Save &amp; restart</button></form>";
 
-  if (!portalMode && cfgSpId.length() && cfgSpSecret.length()) {
+  if (!portalMode && cfgSpId.length() && cfgSpSecret.length() && cfgSpRedirect.length()) {
     h += "<form id='spconnect' method='POST' action='/spotify/code' style='margin-top:26px'><label>Connect Spotify</label>"
-         "<small>1. <a target='_blank' href='" + htmlEscape(spAuthUrl()) + "'>Open this Spotify link</a> and press Agree.<br>"
-         "2. Your browser then shows a page that won't load (that's expected). Copy the whole address from the address bar "
-         "(it starts with http://127.0.0.1:8888/callback?code=...) and paste it here:</small>"
-         "<input name='url' placeholder='http://127.0.0.1:8888/callback?code=...' autocapitalize='off' required>"
-         "<button type='submit' style='background:#1db954'>Connect Spotify</button></form>";
+         "<a href='" + htmlEscape(spAuthUrl()) + "'><button type='button' style='background:#1db954;margin-top:0'>Connect Spotify</button></a>"
+         "<small>Press Agree on Spotify's page and you'll be brought straight back here. "
+         "(If the relay page shows a code instead, paste that page's full address or the code here:)</small>"
+         "<input name='url' placeholder='code or full address' autocapitalize='off' required>"
+         "<button type='submit' style='background:#333'>Use this code</button></form>";
     if (cfgSpRefresh.length())
       h += "<form method='POST' action='/spotify/disconnect'><button type='submit' style='background:#333;margin-top:8px'>Disconnect Spotify</button></form>";
   }
@@ -2748,6 +2754,8 @@ void handleSave() {
   String spsec = server.arg("spsecret"); spsec.trim();
   if (spid != cfgSpId) { cfgSpId = spid; cfgSpRefresh = ""; }
   if (spsec.length()) cfgSpSecret = spsec;
+  String spredir = server.arg("spredir"); spredir.trim();
+  if (spredir != cfgSpRedirect) { cfgSpRedirect = spredir; cfgSpRefresh = ""; }
   if (server.hasArg("tapsens")) cfgTapSens = constrain(server.arg("tapsens").toInt(), 1, 3);
   if (server.hasArg("raceA")) { cfgRaceA = server.arg("raceA").toInt(); cfgRaceB = server.arg("raceB").toInt(); }
   if (server.hasArg("nightStart")) { cfgNightStart = server.arg("nightStart").toInt(); cfgNightEnd = server.arg("nightEnd").toInt(); }
@@ -2778,6 +2786,18 @@ void handleSpotifyCode() {
   } else sendMessage(400, "Couldn't connect Spotify", htmlEscape(err) + ". Codes only work once and expire after a few minutes &ndash; open the Spotify link again and paste the new address.");
 }
 
+// The relay page sends the browser here with ?code=... after you press Agree on Spotify
+void handleSpotifyCallback() {
+  if (server.hasArg("error")) { sendMessage(400, "Spotify not connected", "Spotify said: " + htmlEscape(server.arg("error"))); return; }
+  String err;
+  if (spConnectWithCode(server.arg("code"), err)) {
+    saveSettings();
+    if (app == APP_SP && !menuOpen) lastSpPoll = 0;
+    server.send(200, "text/html", String(FPSTR(PAGE_HEAD)) + "<h1>Spotify connected &#10003;</h1><p>Long-press the board's screen and choose Spotify.</p>"
+                "<a href='/'>Go to the dashboard</a></div></body></html>");
+  } else sendMessage(400, "Couldn't connect Spotify", htmlEscape(err) + ". Press Connect Spotify on the settings page to try again.");
+}
+
 void handleSpotifyDisconnect() {
   cfgSpRefresh = ""; sp = SpotifyState();
   saveSettings();
@@ -2802,6 +2822,7 @@ void registerRoutes() {
   server.on("/update", HTTP_GET, handleUpdatePage);
   server.on("/update", HTTP_POST, handleUpdateDone, handleUpdateUpload);
   server.on("/spotify/code", HTTP_POST, handleSpotifyCode);
+  server.on("/spotify/callback", HTTP_GET, handleSpotifyCallback);
   server.on("/spotify/disconnect", HTTP_POST, handleSpotifyDisconnect);
   server.onNotFound(handleNotFound);
 }
@@ -3180,7 +3201,7 @@ int portraitRot = 0;
 void setup() {
   Serial.begin(115200);
   delay(300);
-  Serial.println("SubCounter v9 starting");
+  Serial.println("SubCounter v9.1 starting");
   setenv("TZ", TZ_UK, 1); tzset();
 
   pinMode(SD_CS, OUTPUT);  digitalWrite(SD_CS, HIGH);
