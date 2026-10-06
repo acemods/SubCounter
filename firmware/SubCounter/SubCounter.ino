@@ -1,5 +1,5 @@
 /*
- * SubCounter v8.3 — YouTube subscriber counter for Waveshare ESP32-C6-Touch-LCD-1.47
+ * SubCounter v8.4 — YouTube subscriber counter for Waveshare ESP32-C6-Touch-LCD-1.47
  *
  *  ON THE BOARD
  *    Swipe left / right ... next / previous channel   (BOOT short press = next)
@@ -1637,6 +1637,66 @@ void handleApiHistory() {
   server.sendContent("");
 }
 
+const char SCAN_JS[] PROGMEM = R"JS(<style>
+.net{display:flex;align-items:center;gap:10px;width:100%;margin:0;padding:11px 12px;border:1px solid #333;border-radius:10px;background:#111;color:#fff;font-size:15px;font-weight:400;text-align:left;cursor:pointer;margin-top:6px}
+.net:hover{border-color:#e62117}.net b{flex:1;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.net small{margin:0;color:#888}.bars{display:inline-flex;gap:2px;align-items:flex-end;height:14px}.bars i{width:4px;background:#555;border-radius:1px}.bars i.on{background:#30d158}
+</style><script>
+async function scan(){
+  const box=document.getElementById('nets'),btn=document.getElementById('scanBtn');
+  btn.disabled=true;btn.textContent='Scanning… (a few seconds)';box.textContent='';
+  try{
+    const r=await fetch('/api/scan');const list=await r.json();
+    if(!list.length){box.innerHTML='<small>No networks found. Is the hotspot on? (iPhone: keep the Personal Hotspot screen open and turn on Maximise Compatibility)</small>'}
+    list.forEach(n=>{
+      const b=document.createElement('button');b.type='button';b.className='net';
+      const bars=document.createElement('span');bars.className='bars';
+      const lvl=n.rssi>-55?4:n.rssi>-67?3:n.rssi>-78?2:1;
+      for(let k=1;k<=4;k++){const i=document.createElement('i');i.style.height=(k*3+2)+'px';if(k<=lvl)i.className='on';bars.append(i)}
+      const nm=document.createElement('b');nm.textContent=n.ssid;
+      const info=document.createElement('small');
+      info.textContent=(n.saved?'saved · ':'')+(n.ent?'needs username':(n.open?'open':'🔒'));
+      b.append(bars,nm,info);
+      b.onclick=()=>{document.getElementById('s').value=n.ssid;document.querySelectorAll('.net').forEach(x=>x.style.borderColor='');b.style.borderColor='#30d158';
+        const pw=document.getElementById('pw');pw.value='';pw.focus();pw.scrollIntoView({block:'center',behavior:'smooth'})};
+      box.append(b)});
+  }catch(e){box.innerHTML='<small>Scan failed – try again.</small>'}
+  btn.disabled=false;btn.textContent='\u{1F4F6} Scan again';
+}
+</script>)JS";
+
+// Nearby networks for the settings page: [{ssid, rssi, open, ent, saved}, ...] strongest first
+void handleApiScan() {
+  int n = WiFi.scanNetworks();
+  struct Found { String ssid; int rssi; wifi_auth_mode_t auth; } f[25]; int cnt = 0;
+  for (int i = 0; i < n; i++) {
+    String s = WiFi.SSID(i);
+    if (!s.length()) continue;                                  // hidden networks
+    int dup = -1;
+    for (int k = 0; k < cnt; k++) if (f[k].ssid == s) dup = k;
+    if (dup >= 0) { if (WiFi.RSSI(i) > f[dup].rssi) f[dup].rssi = WiFi.RSSI(i); continue; }
+    if (cnt < 25) { f[cnt].ssid = s; f[cnt].rssi = WiFi.RSSI(i); f[cnt].auth = WiFi.encryptionType(i); cnt++; }
+  }
+  WiFi.scanDelete();
+  for (int a = 0; a < cnt; a++) for (int b = a + 1; b < cnt; b++)      // strongest first
+    if (f[b].rssi > f[a].rssi) { Found t = f[a]; f[a] = f[b]; f[b] = t; }
+  JsonDocument doc;
+  JsonArray arr = doc.to<JsonArray>();
+  for (int k = 0; k < cnt; k++) {
+    JsonObject o = arr.add<JsonObject>();
+    o["ssid"] = f[k].ssid;
+    o["rssi"] = f[k].rssi;
+    o["open"] = (f[k].auth == WIFI_AUTH_OPEN);
+    o["ent"] = (f[k].auth == WIFI_AUTH_WPA2_ENTERPRISE || f[k].auth == WIFI_AUTH_WPA3_ENTERPRISE || f[k].auth == WIFI_AUTH_WPA2_WPA3_ENTERPRISE);
+    bool saved = false;
+    for (int j = 0; j < numNets; j++) if (nets[j].ssid == f[k].ssid) saved = true;
+    o["saved"] = saved;
+  }
+  String out;
+  serializeJson(doc, out);
+  server.send(200, "application/json", out);
+}
+
 String checkbox(const char *name, bool on, const char *label) {
   return String("<label><input type='checkbox' name='") + name + "' value='1' style='width:auto'" + (on ? " checked" : "") + "> " + label + "</label>";
 }
@@ -1718,11 +1778,9 @@ void handleSettings() {
     h += "</div>";
   }
   h += "<label>" + String(edit >= 0 ? "Editing: " + htmlEscape(e.ssid) : (numNets ? String("Add another network (e.g. home)") : String("Wi-Fi network"))) + "</label>";
-  if (scanOptions.length()) {
-    h += "<select onchange=\"document.getElementById('s').value=this.value\">";
-    h += "<option value=''>Choose a network…</option>" + scanOptions + "</select><small>Or type it below:</small>";
-  }
-  h += "<input id='s' name='ssid' value='" + htmlEscape(e.ssid) + "' placeholder='Network name'" + String(numNets ? "" : " required") + ">";
+  h += "<button type='button' id='scanBtn' onclick='scan()' style='background:#2a2a2e;margin-top:6px'>&#128246; Scan for networks</button>";
+  h += "<div id='nets' style='margin:8px 0'></div>";
+  h += "<input id='s' name='ssid' value='" + htmlEscape(e.ssid) + "' placeholder='Network name (tap one above, or type it)'" + String(numNets ? "" : " required") + ">";
   if (numNets && edit < 0) h += "<small>Leave blank if you're not adding a network.</small>";
   h += "<label>Wi-Fi password</label>";
   h += "<input id='pw' name='pass' type='password' autocomplete='off' autocapitalize='off' placeholder='";
@@ -1751,7 +1809,10 @@ void handleSettings() {
          "<label>Motion calibration</label><small>Put the board in the position you normally use it (on its stand or flat), then press:</small>"
          "<button type='submit' style='background:#333'>Set this as the normal position</button></form>";
   }
-  h += "<small style='margin-top:16px'>Board Wi-Fi MAC address: " + boardMac() + "</small></div></body></html>";
+  h += "<small style='margin-top:16px'>Board Wi-Fi MAC address: " + boardMac() + "</small></div>";
+  h += FPSTR(SCAN_JS);
+  if (portalMode) h += "<script>scan()</script>";
+  h += "</body></html>";
   server.send(200, "text/html", h);
 }
 
@@ -1842,6 +1903,7 @@ void registerRoutes() {
   server.on("/calibrate", HTTP_POST, handleCalibrate);
   server.on("/api/data", HTTP_GET, handleApiData);
   server.on("/api/history", HTTP_GET, handleApiHistory);
+  server.on("/api/scan", HTTP_GET, handleApiScan);
   server.onNotFound(handleNotFound);
 }
 
@@ -1871,7 +1933,6 @@ void startPortal() {
   drawStatus("Setup mode", "Scanning Wi-Fi...", C_GOLD);
   WiFi.disconnect(true);
   WiFi.mode(WIFI_AP_STA);
-  buildScanOptions();
   WiFi.softAP(AP_NAME);
   delay(200);
   dns.start(53, "*", WiFi.softAPIP());
@@ -2221,7 +2282,7 @@ int portraitRot = 0;
 void setup() {
   Serial.begin(115200);
   delay(300);
-  Serial.println("SubCounter v8.3 starting");
+  Serial.println("SubCounter v8.4 starting");
   setenv("TZ", TZ_UK, 1); tzset();
 
   pinMode(SD_CS, OUTPUT);  digitalWrite(SD_CS, HIGH);
