@@ -2,6 +2,14 @@
 
 All builds are in [`builds/`](../builds). Source snapshots for most versions are in the git history.
 
+## v9.8
+- **Comments card** (swipe up): the 3 newest comments on each channel's latest video, also on the dashboard cards
+- **Records card** (swipe up): best day, best week and (your channel) best video's first-day views, with a **NEW RECORD!** alert when your channel beats one
+- **Monthly recap:** on the 1st, the 9 am summary becomes a recap of last month (your growth, your rank, top grower); the dashboard has a *Monthly* card (last month and this month so far)
+- **Compare chart** on the dashboard: up to 4 channels on one chart (gained or % growth, 7 or 30 days) with hover details
+- **CSV download** of subscriber history, per channel or for everything
+- History now kept for 40 days (was 31) and tidied once a day instead of on every save
+
 ## v9.7
 - **Went-live alert:** red flash with the channel's picture, stream title and viewer count, then the board switches to that channel. Can be turned off in settings.
 - **Milestone countdown:** in the last 10% before a milestone, the main screen shows a gold progress bar and "32 to go to 5K!"; the dashboard card highlights it too

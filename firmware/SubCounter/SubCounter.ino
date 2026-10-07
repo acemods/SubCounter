@@ -1,5 +1,5 @@
 /*
- * SubCounter v9.7 — YouTube subscriber counter for Waveshare ESP32-C6-Touch-LCD-1.47
+ * SubCounter v9.8 — YouTube subscriber counter for Waveshare ESP32-C6-Touch-LCD-1.47
  *
  *  ON THE BOARD
  *    Swipe left / right ... next / previous channel   (BOOT short press = next)
@@ -76,8 +76,9 @@
 #define DHCP_EXTRA_MS      15000UL
 #define HOLD_FOR_SETUP_MS  3000UL
 #define SWIPE_MIN_PX       35
-#define NUM_CARDS          6          // 0 main, 1 overview, 2 latest video, 3 growth, 4 graph, 5 milestone
-#define HIST_MAX_AGE       (31L * 86400L)
+#define NUM_CARDS          8          // 0 main, 1 overview, 2 latest video, 3 comments, 4 growth, 5 records, 6 graph, 7 milestone
+#define COMMENT_REFRESH_MS (30UL * 60UL * 1000UL)   // newest comments: 1 unit per channel
+#define HIST_MAX_AGE       (40L * 86400L)        // a little over a month, for the monthly recap
 #define TZ_UK              "GMT0BST,M3.5.0/1,M10.5.0/2"
 #define BL_NORMAL          160
 #define BL_NIGHT           18
@@ -118,6 +119,14 @@ struct Channel {
   long gainToday = 0, gain24 = 0, gain7 = 0, gain30 = 0;
   float span7Days = 0, span30Days = 0, ratePerDay = 0;
   time_t histStart = 0, lastSampleT = 0; long lastSampleS = -1;
+  // monthly
+  long gainMonth = 0, gainLastMonth = 0; bool lastMonthOk = false;
+  // newest comments on the latest video
+  String cmAuthor[3], cmText[3]; time_t cmT[3] = {0, 0, 0}; long cmLikes[3] = {0, 0, 0};
+  int cmN = 0; bool cmOff = false;
+  // personal bests (saved on the board)
+  int32_t pbDay = 0, pbWeek = 0, pbVid = 0; uint32_t pbDayT = 0, pbWeekT = 0, pbVidT = 0; String pbVidTitle;
+  bool pbLoaded = false;
 };
 Channel ch[MAX_CH];
 int numCh = 0;
@@ -127,7 +136,7 @@ bool board = false;        // leaderboard / race showing
 bool raceView = false;     // (when board) showing the race instead of the leaderboard
 long shownSubs = -1;
 
-enum AlertType { A_GAIN, A_MILESTONE, A_OVERTAKE, A_VIEWS, A_LIVE };
+enum AlertType { A_GAIN, A_MILESTONE, A_OVERTAKE, A_VIEWS, A_LIVE, A_RECORD };
 struct Alert { AlertType type; int idx; int idx2; long delta; long total; };
 Alert alerts[MAX_CH * 2];
 int numAlerts = 0;
@@ -187,7 +196,7 @@ struct VideoTrack {
   long at1h = -1, at24h = -1;      // this video
   long nextMilestone = 100;
 } vt;
-unsigned long lastVtFetch = 0, lastTypicalFetch = 0;
+unsigned long lastVtFetch = 0, lastTypicalFetch = 0, lastCommentFetch = 0;
 
 // Forward declarations (functions used before they're defined)
 void drawMode();
@@ -420,6 +429,16 @@ time_t localMidnight() {
   return mktime(&lt);
 }
 
+// Start of this month (back = 0) or an earlier one (back = 1 is last month), local time
+time_t monthStart(int back) {
+  time_t n = nowT();
+  struct tm lt; localtime_r(&n, &lt);
+  lt.tm_mday = 1; lt.tm_hour = 0; lt.tm_min = 0; lt.tm_sec = 0; lt.tm_isdst = -1;
+  lt.tm_mon -= back;
+  while (lt.tm_mon < 0) { lt.tm_mon += 12; lt.tm_year--; }
+  return mktime(&lt);
+}
+
 String ago(time_t t) {
   if (!timeValid() || !t) return "";
   long d = nowT() - t;
@@ -623,9 +642,13 @@ void computeStats(int i) {
   bool haveToday = false, have7 = false, have30 = false;
   Sample s, beforeMid = {0, -1};
   long baseToday = -1, base7 = -1, base30 = -1, base24 = -1; time_t t7 = 0, t30 = 0, tToday = 0;
+  time_t m0 = monthStart(0), m1 = monthStart(1);
+  long beforeM0 = -1, beforeM1 = -1, firstS = -1; time_t firstT = 0;
   bool first = true;
   while (f.read((uint8_t *)&s, sizeof(s)) == sizeof(s)) {
-    if (first) { c.histStart = s.t; first = false; }
+    if (first) { c.histStart = s.t; first = false; firstS = s.s; firstT = s.t; }
+    if ((time_t)s.t < m0) beforeM0 = s.s;
+    if ((time_t)s.t < m1) beforeM1 = s.s;
     if ((time_t)s.t < mid) beforeMid = s;
     else if (!haveToday) { haveToday = true; baseToday = beforeMid.s >= 0 ? beforeMid.s : s.s; tToday = beforeMid.s >= 0 ? beforeMid.t : s.t; }
     if (!have30 && (time_t)s.t >= now - 30L * 86400) { have30 = true; base30 = s.s; t30 = s.t; }
@@ -636,6 +659,12 @@ void computeStats(int i) {
   if (first) return;
   if (!haveToday) { baseToday = beforeMid.s >= 0 ? beforeMid.s : c.subs; tToday = beforeMid.t; }
   c.gainToday = c.subs - baseToday;
+  // this month so far, and last month (needs history reaching back to its start, give or take 2 days)
+  long baseM0 = beforeM0 >= 0 ? beforeM0 : firstS;
+  c.gainMonth = c.subs - baseM0;
+  long baseM1 = beforeM1 >= 0 ? beforeM1 : ((firstT && firstT <= m1 + 2 * 86400) ? firstS : -1);
+  c.lastMonthOk = baseM1 >= 0 && beforeM0 >= 0;
+  c.gainLastMonth = c.lastMonthOk ? beforeM0 - baseM1 : 0;
   c.gain24 = c.subs - base24;
   c.gain7 = have7 ? c.subs - base7 : 0;
   c.gain30 = have30 ? c.subs - base30 : 0;
@@ -663,8 +692,9 @@ void recordSample(int i) {
   f.close();
   c.lastSampleT = now; c.lastSampleS = c.subs;
   if (!c.histStart) c.histStart = now;
-  // keep files small: drop samples older than 31 days once the file passes ~1000 samples
-  if (size > 1000 * sizeof(Sample)) {
+  // keep files small: drop samples older than HIST_MAX_AGE (checked by age, so it runs about once a day)
+  (void)size;
+  if (c.histStart && now - c.histStart > HIST_MAX_AGE + 86400) {
     File in = LittleFS.open(p, "r");
     File out = LittleFS.open("/tmp.bin", "w");
     Sample r;
@@ -675,7 +705,67 @@ void recordSample(int i) {
     LittleFS.remove(p);
     LittleFS.rename("/tmp.bin", p);
     c.histStart = 0;
+    loadLastSample(i);                 // re-read the new oldest sample
   }
+}
+
+// ── Personal bests: one small file per channel ─────────────────────────────
+struct PBFile { int32_t day; uint32_t dayT; int32_t week; uint32_t weekT; int32_t vid; uint32_t vidT; char title[64]; };
+String pbPath(int i) { return "/pb_" + ch[i].id + ".bin"; }
+void pbLoad(int i) {
+  Channel &c = ch[i];
+  c.pbLoaded = true;
+  if (!fsOk || !c.id.length()) return;
+  File f = LittleFS.open(pbPath(i), "r");
+  PBFile r;
+  if (f && f.read((uint8_t *)&r, sizeof(r)) == sizeof(r)) {
+    c.pbDay = r.day; c.pbDayT = r.dayT; c.pbWeek = r.week; c.pbWeekT = r.weekT; c.pbVid = r.vid; c.pbVidT = r.vidT;
+    r.title[63] = 0; c.pbVidTitle = r.title;
+  }
+  if (f) f.close();
+}
+void pbSave(int i) {
+  Channel &c = ch[i];
+  if (!fsOk || !c.id.length()) return;
+  PBFile r = { c.pbDay, c.pbDayT, c.pbWeek, c.pbWeekT, c.pbVid, c.pbVidT, {0} };
+  strncpy(r.title, c.pbVidTitle.c_str(), 63);
+  File f = LittleFS.open(pbPath(i), "w");
+  if (f) { f.write((uint8_t *)&r, sizeof(r)); f.close(); }
+}
+int pbAlertDay[3] = { -1, -1, -1 };     // one record alert per kind per day
+void pbAlert(int i, int kind, long prev, long now) {
+  if (i != 0 || prev <= 0 || !timeValid()) return;    // only your channel, and only once a record exists
+  time_t n = nowT(); struct tm lt; localtime_r(&n, &lt);
+  if (pbAlertDay[kind] == lt.tm_yday) return;
+  pbAlertDay[kind] = lt.tm_yday;
+  if (numAlerts < MAX_CH * 2) alerts[numAlerts++] = { A_RECORD, i, kind, prev, now };
+}
+// Called after computeStats: best day (since midnight) and best 7 days
+void updateRecords(int i) {
+  Channel &c = ch[i];
+  if (!c.pbLoaded) pbLoad(i);
+  if (!c.statsOk || !timeValid()) return;
+  time_t now = nowT();
+  bool changed = false;
+  bool settled = c.histStart && now - c.histStart > 86400;          // ignore the very first day's partial data
+  if (settled && now - localMidnight() > 600 && c.gainToday > c.pbDay) {
+    pbAlert(i, 0, c.pbDay, c.gainToday);
+    c.pbDay = c.gainToday; c.pbDayT = now; changed = true;
+  }
+  if (c.span7Days >= 6.9f && c.gain7 > c.pbWeek) {
+    pbAlert(i, 1, c.pbWeek, c.gain7);
+    c.pbWeek = c.gain7; c.pbWeekT = now; changed = true;
+  }
+  if (changed) pbSave(i);
+}
+// Your new video's first-24-hour views (from the new video tracker)
+void recordVideo24h(long views, const String &title) {
+  Channel &c = ch[0];
+  if (!c.pbLoaded) pbLoad(0);
+  if (views <= c.pbVid) return;
+  pbAlert(0, 2, c.pbVid, views);
+  c.pbVid = views; c.pbVidT = nowT(); c.pbVidTitle = title.substring(0, 63);
+  pbSave(0);
 }
 
 // Estimated live count between YouTube's rounded steps
@@ -968,6 +1058,61 @@ void drawLatestVideo() {
   ft(8, min(y + 28, 168), fit(lc, F_S, RIGHT_EDGE - 8), F_S, C_GREEN);
 }
 
+// ── Comments card: newest 3 on the latest video ────────────────────────────
+bool needData(Channel &c);
+String shortAgo(time_t t) {
+  if (!timeValid() || !t) return "";
+  long d = max(0L, (long)(nowT() - t));
+  if (d < 3600) return String(max(1L, d / 60)) + "m";
+  if (d < 86400) return String(d / 3600) + "h";
+  return String(d / 86400) + "d";
+}
+void drawComments() {
+  Channel &c = ch[page];
+  drawDetailHeader("Comments");
+  if (!c.vidId.length()) { ftC(100, "No videos", F_M, C_GREY); return; }
+  if (c.cmOff) { ftC(92, "Comments are off", F_M, C_GREY); ftC(118, "on the latest video", F_S, C_GREY); return; }
+  if (!c.cmN) { ftC(92, lastCommentFetch ? "No comments yet" : "Loading...", F_M, C_GREY); ftC(118, "on the latest video", F_S, C_GREY); return; }
+  int y = 52;
+  for (int k = 0; k < c.cmN; k++) {
+    String when = shortAgo(c.cmT[k]);
+    if (c.cmLikes[k] > 0) when += "  " + compact(c.cmLikes[k]) + " likes";
+    int ww = tw(when, F_S);
+    ft(8, y, fit(asciiOnly(c.cmAuthor[k]), F_S, RIGHT_EDGE - ww - 20), F_S, C_GOLD);
+    ftR(RIGHT_EDGE, y, when, F_S, C_DKGREY);
+    ft(8, y + 19, fit(asciiOnly(c.cmText[k]), F_S, RIGHT_EDGE - 8), F_S, C_WHITE);
+    y += 44;
+  }
+}
+
+// ── Records card: personal bests ───────────────────────────────────────────
+void drawRecords() {
+  Channel &c = ch[page];
+  drawDetailHeader("Records");
+  if (!c.pbLoaded) pbLoad(page);
+  if (!c.pbDay && !c.pbWeek && !c.pbVid) {
+    if (!needData(c)) { ftC(92, "No records yet", F_M, C_GREY); ftC(118, "Your best day and week appear here", F_S, C_GREY); }
+    return;
+  }
+  struct { const char *k; long v; uint32_t t; } r[] = {
+    { "Best day", c.pbDay, c.pbDayT }, { "Best week", c.pbWeek, c.pbWeekT }, { "Best video, 1st day", c.pbVid, c.pbVidT } };
+  int y = 60;
+  for (int k = 0; k < 3; k++) {
+    if (k == 2 && (page != 0 || !c.pbVid)) continue;
+    if (!r[k].v) continue;
+    String v = k == 2 ? compact(r[k].v) + " views" : signedNum(r[k].v);
+    ft(8, y, r[k].k, F_S, C_GREY);
+    if (r[k].t) ft(12 + tw(r[k].k, F_S), y, dateStr(r[k].t, "%d %b"), F_S, C_DKGREY);
+    ftR(RIGHT_EDGE, y, v, F_M, C_GOLD);
+    y += 32;
+  }
+  if (c.statsOk && c.pbDay > 0) {
+    long pct = c.gainToday * 100 / c.pbDay;
+    String t = "Today " + signedNum(c.gainToday) + (c.gainToday > 0 ? "  (" + String(pct) + "% of best)" : String(""));
+    ftC(162, t, F_S, c.gainToday >= c.pbDay ? C_GREEN : C_WHITE);
+  }
+}
+
 // ── Card 3: growth numbers ──────────────────────────────────────────────────
 bool needData(Channel &c) {
   if (c.statsOk && c.histStart) return false;
@@ -1106,9 +1251,11 @@ void drawView() {
   switch (card) {
     case 1: drawOverview(); break;
     case 2: if (page == 0 && vt.active) drawVideoTracker(); else drawLatestVideo(); break;
-    case 3: drawGrowth(); break;
-    case 4: drawGraph(); break;
-    case 5: drawMilestone(); break;
+    case 3: drawComments(); break;
+    case 4: drawGrowth(); break;
+    case 5: drawRecords(); break;
+    case 6: drawGraph(); break;
+    case 7: drawMilestone(); break;
     default: drawMain(); break;
   }
 }
@@ -1427,6 +1574,20 @@ void showAlert(const Alert &a) {
     waitShowing(ALERT_MS + 1000UL * tier);
     return;
   }
+  if (a.type == A_RECORD) {
+    for (int i = 0; i < 4; i++) { gfx->fillScreen(i % 2 ? C_BG : C_GREEN); delay(110); }
+    gfx->fillScreen(C_BG);
+    if (cfgCelebrate) sprinkle(60);
+    drawAvatar(a.idx, 6, 4, true);
+    ft(58, 24, "NEW RECORD!", F_M, C_GOLD);
+    const char *what[] = { "Best day ever", "Best week ever", "Best video ever (1st day)" };
+    ft(58, 46, what[constrain(a.idx2, 0, 2)], F_S, C_WHITE);
+    String v = a.idx2 == 2 ? compact(a.total) : signedNum(a.total);
+    ftC(112, v, numFont(v, gfx->width() - 20), C_GREEN, gfx->width());
+    ftC(158, "previous best " + (a.idx2 == 2 ? compact(a.delta) : signedNum(a.delta)), F_S, C_GREY, gfx->width());
+    waitShowing(ALERT_MS + 1000);
+    return;
+  }
   if (a.type == A_LIVE) {
     for (int i = 0; i < 4; i++) { gfx->fillScreen(i % 2 ? C_BG : C_RED); delay(120); }
     gfx->fillScreen(C_BG);
@@ -1514,7 +1675,39 @@ void drawRace() {
 }
 
 // ── Daily summary (9 am) ────────────────────────────────────────────────────
+// 1st of the month: a recap of last month instead of the usual summary
+bool recapDue() {
+  if (!timeValid()) return false;
+  time_t n = nowT(); struct tm lt; localtime_r(&n, &lt);
+  if (lt.tm_mday != 1) return false;
+  for (int i = 0; i < numCh; i++) if (ch[i].lastMonthOk) return true;
+  return false;
+}
+void drawRecap() {
+  gfx->fillScreen(C_BG);
+  time_t m1 = monthStart(1);
+  ft(8, 22, dateStr(m1, "%B") + " recap", F_M, C_GOLD);
+  ftR(gfx->width() - 8, 22, dateStr(m1, "%Y"), F_S, C_GREY);
+  gfx->drawFastHLine(8, 31, gfx->width() - 16, C_DKGREY);
+  int idx[MAX_CH]; int n = 0;
+  for (int i = 0; i < numCh; i++) if (ch[i].lastMonthOk) idx[n++] = i;
+  for (int a = 0; a < n; a++) for (int b = a + 1; b < n; b++)
+    if (ch[idx[b]].gainLastMonth > ch[idx[a]].gainLastMonth) { int t = idx[a]; idx[a] = idx[b]; idx[b] = t; }
+  int rank = -1; for (int r = 0; r < n; r++) if (idx[r] == 0) rank = r;
+  if (rank >= 0) {
+    ft(8, 54, fit(nameOf(0), F_S, gfx->width() - 16), F_S, C_WHITE);
+    String g = signedNum(ch[0].gainLastMonth);
+    ftC(98, g, F_N42, ch[0].gainLastMonth > 0 ? C_GREEN : C_WHITE, gfx->width());
+    ftC(122, "subscribers", F_S, C_GREY, gfx->width());
+    ftC(146, rank == 0 && n > 1 ? String("You grew the most!") : "#" + String(rank + 1) + " of " + String(n) + " for growth",
+        F_M, rank == 0 ? C_GOLD : C_WHITE, gfx->width());
+  }
+  if (n && idx[0] != 0) ftC(168, fit("Top: " + nameOf(idx[0]) + " " + signedNum(ch[idx[0]].gainLastMonth), F_S, gfx->width() - 16), F_S, C_GREY, gfx->width());
+  else if (rank < 0) ftC(100, "Not enough data for you yet", F_S, C_GREY, gfx->width());
+}
+
 void drawSummary() {
+  if (recapDue()) { drawRecap(); return; }
   gfx->fillScreen(C_BG);
   ft(8, 22, "Good morning!", F_M, C_GOLD);
   if (timeValid()) ftR(gfx->width() - 8, 22, dateStr(nowT(), "%a %d %b"), F_S, C_GREY);
@@ -1835,7 +2028,7 @@ void vtPoll() {
   vtAddSample(now, views);
   long age = now - vt.pub;
   if (vt.at1h < 0 && age >= 3600) { vt.at1h = vtViewsAt(3600); if (vt.at1h < 0 && age < 3 * 3600) vt.at1h = views; if (vt.at1h >= 0) vtSaveResult(false, vt.at1h); }
-  if (vt.at24h < 0 && age >= 86400) { vt.at24h = vtViewsAt(86400); if (vt.at24h < 0 && age < 30 * 3600) vt.at24h = views; if (vt.at24h >= 0) vtSaveResult(true, vt.at24h); }
+  if (vt.at24h < 0 && age >= 86400) { vt.at24h = vtViewsAt(86400); if (vt.at24h < 0 && age < 30 * 3600) vt.at24h = views; if (vt.at24h >= 0) { vtSaveResult(true, vt.at24h); recordVideo24h(vt.at24h, ch[0].vidTitle); } }
   if (vt.nextMilestone && views >= vt.nextMilestone && numAlerts < MAX_CH * 2) {
     alerts[numAlerts++] = { A_VIEWS, 0, -1, 0, vt.nextMilestone };
     vtMilestoneStart(views);
@@ -2507,6 +2700,18 @@ th{font-size:11px;font-weight:600;letter-spacing:.05em;text-transform:uppercase;
 td .av{width:28px;height:28px;display:block}td{padding:6px 4px}td.nm2{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:150px}
 .tug{display:flex;height:14px;border-radius:7px;overflow:hidden;margin:10px 0}.tug .a{background:var(--red)}.tug .b{background:var(--blue)}
 .list div{display:flex;justify-content:space-between;padding:5px 0}
+.wide{grid-column:1/-1}
+.ctl{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-bottom:12px}
+.tg{display:inline-flex;align-items:center;gap:6px;border:1px solid var(--line);border-radius:999px;padding:4px 10px;font-size:13px;background:none;color:var(--muted);cursor:pointer}
+.tg.on{color:var(--text);border-color:#4a4a52;background:#222226}.tg i{width:10px;height:10px;border-radius:50%;display:inline-block}
+.seg{display:inline-flex;background:#222226;border-radius:9px;padding:2px}.seg button{border:0;background:none;color:var(--muted);padding:4px 10px;border-radius:7px;font-size:13px;cursor:pointer}.seg button.on{background:#3a3a40;color:var(--text)}
+.cmp{position:relative}.cmp svg{width:100%;height:260px;display:block}
+.tip{position:absolute;pointer-events:none;background:#0d0d0f;border:1px solid var(--line);border-radius:10px;padding:8px 10px;font-size:12px;white-space:nowrap;display:none;z-index:1}
+.tip div{display:flex;gap:8px;align-items:center}.tip i{width:8px;height:8px;border-radius:50%;display:inline-block}
+.small{font-size:12px;color:var(--muted);text-decoration:underline;margin-left:auto}
+.cm{margin-top:14px;padding-top:12px;border-top:1px solid var(--line)}.cm h3{font-size:12px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);margin:0 0 6px}
+.cm .c{padding:6px 0}.cm .c b{font-size:13px}.cm .c p{margin:2px 0 0;font-size:14px;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.pb{display:flex;flex-wrap:wrap;gap:6px 14px;font-size:13px;color:var(--muted);margin-top:10px}.pb b{color:var(--gold)}
 </style></head><body>
 <header><div class="logo"></div><h1>SubCounter</h1><span class="meta" id="meta"></span><a class="btn" href="/settings">Settings</a></header>
 <main id="app"><div class="card">Loading…</div></main>
@@ -2544,12 +2749,56 @@ const f=Math.max(0,Math.min(1,(e-c.prev)/(c.next-c.prev||1)));
 card.append(h('div',{style:'margin-top:6px;display:flex;justify-content:space-between'},h('span',{class:'sub',text:'Next milestone '}),h('b',{text:fmt(c.next)})),h('div',{class:'bar'},h('i',{style:`width:${(f*100).toFixed(1)}%`})),(c.next-e>0&&c.next-e<=Math.max(10,(c.next-c.prev)/10))?h('div',{style:'color:var(--gold);font-weight:700',text:`Almost there: ${fmt(c.next-e)} to go! · ${eta(c)}`}):h('div',{class:'sub',text:`${fmt(c.next-e)} to go · ${eta(c)}`}));
 const tabs=h('div',{class:'tabs'}),gbox=h('div');let cur=graphs[c.i]||7;
 for(const dd of [7,30]){const b=h('button',{text:dd+' days',class:dd==cur?'on':'',onclick:()=>{graphs[c.i]=dd;[...tabs.children].forEach(x=>x.className='');b.className='on';graph(c,dd,gbox)}});tabs.append(b)}
-card.append(tabs,gbox);graph(c,cur,gbox);
+tabs.append(h('a',{class:'small',href:'/api/csv?i='+c.i,text:'Download CSV'}));card.append(tabs,gbox);graph(c,cur,gbox);
 if(c.vt){const t=c.vt,ag=t.ageMin<60?t.ageMin+' min':(t.ageMin/60|0)+'h '+(t.ageMin%60)+'m';const box=h('div',{style:'margin-top:14px;padding:12px;border-radius:12px;background:#1f2a1f'},h('div',{class:'sub',style:'color:var(--gold)',text:'NEW VIDEO TRACKER'}),h('div',{style:'font-size:26px;font-weight:800',text:fmt(t.views)+' views'}),h('div',{class:'sub',text:`in ${ag}`+(t.rate>=0?` · ${cmp(t.rate)}/hour now`:'')}),t.cmp?h('div',{style:'margin-top:4px',class:t.cmp.includes('+')?'pos':t.cmp.includes('-')?'neg':'',text:t.cmp}):null);
 if(t.pts&&t.pts.length>1){const W=600,H=70,p=t.pts,t0=p[0][0],t1=p[p.length-1][0],mn=p[0][1],mx=Math.max(p[p.length-1][1],mn+1);const d=p.map((q,k)=>(k?'L':'M')+((q[0]-t0)/(t1-t0||1)*(W-4)+2).toFixed(1)+' '+(H-4-(q[1]-mn)/(mx-mn)*(H-10)).toFixed(1)).join(' ');const ns='http://www.w3.org/2000/svg',sv=document.createElementNS(ns,'svg');sv.setAttribute('viewBox',`0 0 ${W} ${H}`);sv.setAttribute('preserveAspectRatio','none');sv.setAttribute('class','g');sv.style.height='70px';const ln=document.createElementNS(ns,'path');ln.setAttribute('d',d);ln.setAttribute('fill','none');ln.setAttribute('stroke','#ffc53d');ln.setAttribute('stroke-width','2.5');ln.setAttribute('vector-effect','non-scaling-stroke');sv.append(ln);box.append(sv)}
 card.append(box)}
 if(c.vid){const v=c.vid;card.append(h('a',{class:'vid',href:'https://youtu.be/'+v.id,target:'_blank'},h('img',{src:`https://i.ytimg.com/vi/${v.id}/mqdefault.jpg`,alt:''}),h('div',{style:'min-width:0'},h('div',{class:'t'},v.live?h('span',{class:'live',text:'LIVE'}):null,v.title),h('div',{class:'sub',text:v.live?`${fmt(v.viewers)} watching now`:`${ago(v.pub)} · ${dur(v.dur)}`}),h('div',{class:'sub',text:`${cmp(v.views)} views · ${v.likes>=0?cmp(v.likes)+' likes':'likes hidden'} · ${v.comments>=0?cmp(v.comments)+' comments':'comments off'}`}))))}
+if(c.pb){const b=c.pb,dd=t=>t?new Date(t*1000).toLocaleDateString('en-GB',{day:'numeric',month:'short'}):'';const it=[];
+if(b.day)it.push(h('span',{},'Best day ',h('b',{text:sg(b.day)}),' '+dd(b.dayT)));if(b.week)it.push(h('span',{},'Best week ',h('b',{text:sg(b.week)}),' '+dd(b.weekT)));if(b.vid)it.push(h('span',{title:b.vidTitle||''},'Best video, 1st day ',h('b',{text:cmp(b.vid)+' views'})));
+if(it.length)card.append(h('div',{class:'pb'},h('span',{text:'Records:'}),it))}
+if(c.vid&&(c.cm||c.cmOff)){const box=h('div',{class:'cm'},h('h3',{text:'Latest comments'}));
+if(c.cmOff)box.append(h('div',{class:'sub',text:'Comments are off on this video'}));
+else c.cm.forEach(m=>box.append(h('div',{class:'c'},h('b',{text:m.a}),h('span',{class:'sub',text:'  '+ago(m.ts)+(m.l>0?' · '+cmp(m.l)+' likes':'')}),h('p',{text:m.t}))));card.append(box)}
 return card}
+const COLS=['#3987e5','#d95926','#199e70','#c98500','#d55181','#008300','#9085e9','#e66767'];
+const colFor=i=>i<COLS.length?COLS[i]:'#8d8d95';
+let CMP={sel:null,days:7,mode:'gain'},HC={};
+async function hist(i,days){const k=i+':'+days;if(!HC[k]||Date.now()-HC[k].at>120000){const r=await fetch('/api/history?i='+i+'&days='+days);HC[k]={at:Date.now(),p:await r.json()}}return HC[k].p}
+function compareCard(){const C=D.channels.filter(c=>c.subs>=0);
+if(!CMP.sel){const o=[...C].filter(c=>c.i!=0).sort((a,b)=>(b.d7||0)-(a.d7||0));CMP.sel=[0,...o.slice(0,2).map(c=>c.i)].filter(i=>C.some(c=>c.i==i))}
+const card=h('div',{class:'card wide'}),box=h('div',{class:'cmp'}),ctl=h('div',{class:'ctl'});
+card.append(h('h2',{text:'Compare'}),h('div',{class:'sub',style:'margin:-8px 0 12px',text:'Subscribers gained over the period, so big and small channels fit on one chart. Pick up to 4.'}),ctl,box,h('div',{style:'display:flex;margin-top:8px'},h('a',{class:'small',href:'/api/csv',text:'Download all history (CSV)'})));
+const draw=()=>{ctl.textContent='';
+C.forEach(c=>{const on=CMP.sel.includes(c.i);ctl.append(h('button',{class:'tg'+(on?' on':''),onclick:()=>{if(on)CMP.sel=CMP.sel.filter(x=>x!=c.i);else if(CMP.sel.length<4)CMP.sel.push(c.i);draw()}},h('i',{style:'background:'+(on?colFor(c.i):'transparent')+';border:1px solid '+colFor(c.i)}),name(c)))});
+const seg=(opts,key)=>h('div',{class:'seg'},opts.map(([v,t])=>h('button',{class:CMP[key]==v?'on':'',text:t,onclick:()=>{CMP[key]=v;draw()}})));
+ctl.append(h('span',{style:'flex:1'}),seg([[7,'7 days'],[30,'30 days']],'days'),seg([['gain','Gained'],['pct','% growth']],'mode'));
+plot(box,C)};draw();return card}
+async function plot(box,C){const sel=CMP.sel.slice(),days=CMP.days,mode=CMP.mode;
+const ser=[];for(const i of sel){const c=C.find(x=>x.i==i);if(!c)continue;const p=(await hist(i,days)).slice();p.push([Date.now()/1000|0,c.subs]);if(p.length<2)continue;const b=p[0][1];
+ser.push({c,pts:p.map(([t,v])=>[t,mode=='pct'?(b>0?(v-b)/b*100:0):v-b])})}
+const BW=box.clientWidth||900;box.textContent='';if(!ser.length){box.append(h('div',{class:'sub',style:'padding:40px 0;text-align:center',text:sel.length?'Not enough history yet':'Pick a channel above'}));return}
+const W=Math.max(280,BW),narrow=W<600,H=260,L=narrow?46:56,R=narrow?10:150,T=12,B=28,ns='http://www.w3.org/2000/svg',mk=(t,a)=>{const e=document.createElementNS(ns,t);for(const k in a)e.setAttribute(k,a[k]);return e};
+const now=Date.now()/1000,t0=now-days*86400;let mn=0,mx=0;ser.forEach(s=>s.pts.forEach(([,v])=>{mn=Math.min(mn,v);mx=Math.max(mx,v)}));if(mx==mn)mx=mn+1;
+const st=(()=>{const r=(mx-mn)/4,m=Math.pow(10,Math.floor(Math.log10(r))),f=r/m;return (f<=1?1:f<=2?2:f<=2.5?2.5:f<=5?5:10)*m})();mn=Math.floor(mn/st)*st;mx=Math.ceil(mx/st)*st;const nT=Math.round((mx-mn)/st);
+const X=t=>L+(Math.max(t,t0)-t0)/(now-t0)*(W-L-R),Y=v=>T+(mx-v)/(mx-mn)*(H-T-B);
+const fv=v=>mode=='pct'?(v>=0?'+':'')+v.toFixed(Math.abs(mx)<1?2:1)+'%':(v>=0?'+':'')+cmp(Math.round(v));
+const svg=mk('svg',{viewBox:`0 0 ${W} ${H}`});
+for(let k=0;k<=nT;k++){const v=mn+st*k,y=Y(v);svg.append(mk('line',{x1:L,x2:W-R,y1:y,y2:y,stroke:'#2a2a2e','stroke-width':1}));const tx=mk('text',{x:L-8,y:y+4,'text-anchor':'end','font-size':11,fill:'#8d8d95'});tx.textContent=fv(v);svg.append(tx)}
+[0,.5,1].forEach(f=>{const t=t0+(now-t0)*f,tx=mk('text',{x:L+(W-L-R)*f,y:H-8,'text-anchor':f==0?'start':f==1?'end':'middle','font-size':11,fill:'#8d8d95'});tx.textContent=f==1?'now':new Date(t*1000).toLocaleDateString('en-GB',{day:'numeric',month:'short'});svg.append(tx)});
+const ends=[];ser.forEach(s=>{const d=s.pts.map((p,k)=>(k?'L':'M')+X(p[0]).toFixed(1)+' '+Y(p[1]).toFixed(1)).join(' ');
+svg.append(mk('path',{d,fill:'none',stroke:colFor(s.c.i),'stroke-width':2,'stroke-linejoin':'round','vector-effect':'non-scaling-stroke','stroke-dasharray':s.c.i<COLS.length?'':'5 4'}));
+const last=s.pts[s.pts.length-1];ends.push({s,y:Y(last[1]),v:last[1]})});
+ends.sort((a,b)=>a.y-b.y);for(let k=1;k<ends.length;k++)if(ends[k].y-ends[k-1].y<16)ends[k].y=ends[k-1].y+16;
+ends.forEach(e=>{svg.append(mk('circle',{cx:W-R,cy:Y(e.s.pts[e.s.pts.length-1][1]),r:4,fill:colFor(e.s.c.i),stroke:'#18181b','stroke-width':2}));if(narrow)return;const g=mk('text',{x:W-R+8,y:e.y+4,'font-size':12,fill:'#f2f2f3'});g.textContent=name(e.s.c).slice(0,14)+' '+fv(e.v);svg.append(g)});
+const cross=mk('line',{y1:T,y2:H-B,stroke:'#8d8d95','stroke-width':1,visibility:'hidden'});svg.append(cross);
+const tip=h('div',{class:'tip'});box.append(svg,tip);
+svg.onmousemove=ev=>{const r=svg.getBoundingClientRect(),sx=(ev.clientX-r.left)/r.width*W;if(sx<L||sx>W-R){svg.onmouseleave();return}
+const t=t0+(sx-L)/(W-L-R)*(now-t0);cross.setAttribute('x1',sx);cross.setAttribute('x2',sx);cross.setAttribute('visibility','visible');
+tip.textContent='';tip.append(h('div',{class:'sub',text:new Date(t*1000).toLocaleString('en-GB',{day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'})}));
+ser.forEach(s=>{let v=s.pts[0][1];for(const p of s.pts){if(p[0]>t)break;v=p[1]}tip.append(h('div',{},h('i',{style:'background:'+colFor(s.c.i)}),name(s.c)+' ',h('b',{text:fv(v)})))});
+tip.style.display='block';const px=ev.clientX-r.left;tip.style.left=Math.min(px+12,r.width-tip.offsetWidth-4)+'px';tip.style.top='10px'};
+svg.onmouseleave=()=>{cross.setAttribute('visibility','hidden');tip.style.display='none'}}
 function render(){const app=$('#app');app.textContent='';const C=D.channels;
 $('#meta').textContent=D.err?D.err:(D.updatedAgo>=0?'Updated '+(D.updatedAgo<60?'just now':(D.updatedAgo/60|0)+' min ago'):'');
 const row=h('aside',{class:'side'});
@@ -2564,7 +2813,9 @@ row.append(h('div',{class:'card race'},h('h2',{text:'Race'}),h('div',{class:'rs'
 // leaderboard
 const lb=[...C].filter(c=>c.subs>=0).sort((a,b)=>b.subs-a.subs);
 row.append(h('div',{class:'card'},h('h2',{text:'Leaderboard'}),h('table',{},h('tr',{class:'hd'},h('th',{colspan:'3'}),h('th',{class:'n',text:'Subs'}),h('th',{class:'n',text:'Today',title:'Since midnight'})),lb.map((c,k)=>h('tr',{class:c.i==0?'me':''},h('td',{text:k+1+'.'}),h('td',{},av(c)),h('td',{class:'nm2',text:name(c)}),h('td',{class:'n',text:cmp(c.subs)}),h('td',{class:'n '+cls(c.today),text:c.statsOk?sg(c.today):''}))))));
-const grid=h('section',{class:'grid'});C.forEach(c=>grid.append(channelCard(c)));app.append(h('div',{class:'layout'},row,grid))}
+{const mon=t=>new Date(t*1000).toLocaleDateString('en-GB',{month:'short'});const ms=[...C].filter(c=>c.subs>=0).sort((a,b)=>(b.mo||0)-(a.mo||0));
+if(ms.length&&C.some(c=>c.statsOk))row.append(h('div',{class:'card'},h('h2',{text:'Monthly'}),h('table',{},h('tr',{class:'hd'},h('th',{}),h('th',{class:'n',text:mon(D.m1)}),h('th',{class:'n',text:mon(D.m0)+' so far'})),ms.map(c=>h('tr',{class:c.i==0?'me':''},h('td',{class:'nm2',text:name(c)}),h('td',{class:'n '+(c.lm!=null?cls(c.lm):''),text:c.lm!=null?sg(c.lm):'–'}),h('td',{class:'n '+cls(c.mo),text:c.statsOk?sg(c.mo):'–'}))))))}
+const grid=h('section',{class:'grid'});C.forEach(c=>grid.append(channelCard(c)));if(C.filter(c=>c.subs>=0).length>1)grid.append(compareCard());app.append(h('div',{class:'layout'},row,grid))}
 async function load(){try{const r=await fetch('/api/data');D=await r.json();render()}catch(e){$('#meta').textContent='Board not reachable'}}
 setInterval(()=>{if(!D)return;document.querySelectorAll('[data-est]').forEach(el=>{const c=D.channels[el.dataset.est];el.textContent=fmt(est(c))})},1000);
 load();setInterval(load,60000);
@@ -2582,6 +2833,7 @@ void handleApiData() {
   doc["err"] = netError;
   doc["est"] = cfgEst;
   doc["ip"] = WiFi.localIP().toString();
+  doc["m0"] = (long)monthStart(0); doc["m1"] = (long)monthStart(1);
   if (raceSet()) { JsonArray r = doc["race"].to<JsonArray>(); r.add(cfgRaceA); r.add(cfgRaceB); }
   else doc["race"] = nullptr;
   if (wx.ok) {
@@ -2609,6 +2861,22 @@ void handleApiData() {
       t["at1h"] = vt.at1h; t["base1h"] = vt.base1h; t["at24h"] = vt.at24h; t["base24h"] = vt.base24h; t["cmp"] = vtCompare();
       JsonArray pts = t["pts"].to<JsonArray>();
       for (int k = 0; k < vt.n; k++) { JsonArray pp = pts.add<JsonArray>(); pp.add(vt.t[k]); pp.add(vt.v[k]); }
+    }
+    o["mo"] = c.gainMonth;
+    if (c.lastMonthOk) o["lm"] = c.gainLastMonth;
+    if (!c.pbLoaded) pbLoad(i);
+    if (c.pbDay || c.pbWeek || c.pbVid) {
+      JsonObject b = o["pb"].to<JsonObject>();
+      b["day"] = c.pbDay; b["dayT"] = c.pbDayT; b["week"] = c.pbWeek; b["weekT"] = c.pbWeekT;
+      if (c.pbVid) { b["vid"] = c.pbVid; b["vidT"] = c.pbVidT; b["vidTitle"] = c.pbVidTitle; }
+    }
+    if (c.cmOff) o["cmOff"] = true;
+    if (c.cmN) {
+      JsonArray cm = o["cm"].to<JsonArray>();
+      for (int k = 0; k < c.cmN; k++) {
+        JsonObject x = cm.add<JsonObject>();
+        x["a"] = c.cmAuthor[k]; x["t"] = c.cmText[k]; x["ts"] = (long)c.cmT[k]; x["l"] = c.cmLikes[k];
+      }
     }
     if (c.vidId.length() && c.vidTitle.length()) {
       JsonObject v = o["vid"].to<JsonObject>();
@@ -2645,6 +2913,34 @@ void handleApiHistory() {
     }
   }
   server.sendContent("]");
+  server.sendContent("");
+}
+
+// History as CSV: /api/csv?i=2 for one channel, /api/csv for all of them
+void handleApiCsv() {
+  int only = server.hasArg("i") ? server.arg("i").toInt() : -1;
+  String fname = only >= 0 && only < numCh ? nameOf(only) : String("all-channels");
+  String safe; for (char ch2 : fname) safe += isalnum((unsigned char)ch2) ? ch2 : '-';
+  server.sendHeader("Content-Disposition", "attachment; filename=\"subcounter-" + safe + ".csv\"");
+  server.setContentLength(CONTENT_LENGTH_UNKNOWN);
+  server.send(200, "text/csv", "");
+  server.sendContent("channel,time_utc,subscribers\n");
+  for (int i = 0; i < numCh; i++) {
+    if (only >= 0 && i != only) continue;
+    if (!fsOk || !ch[i].id.length()) continue;
+    File f = LittleFS.open(histPath(i), "r");
+    if (!f) continue;
+    String nm = nameOf(i); nm.replace("\"", "'");
+    String chunk; Sample sm;
+    while (f.read((uint8_t *)&sm, sizeof(sm)) == sizeof(sm)) {
+      char ts[24]; time_t t = sm.t; struct tm g; gmtime_r(&t, &g);
+      strftime(ts, sizeof(ts), "%Y-%m-%dT%H:%M:%SZ", &g);
+      chunk += "\"" + nm + "\"," + ts + "," + String(sm.s) + "\n";
+      if (chunk.length() > 1200) { server.sendContent(chunk); chunk = ""; }
+    }
+    f.close();
+    if (chunk.length()) server.sendContent(chunk);
+  }
   server.sendContent("");
 }
 
@@ -3028,6 +3324,7 @@ void registerRoutes() {
   server.on("/calibrate", HTTP_POST, handleCalibrate);
   server.on("/api/data", HTTP_GET, handleApiData);
   server.on("/api/history", HTTP_GET, handleApiHistory);
+  server.on("/api/csv", HTTP_GET, handleApiCsv);
   server.on("/api/scan", HTTP_GET, handleApiScan);
   server.on("/wifi/connect", HTTP_POST, handleWifiConnect);
   server.on("/update", HTTP_GET, handleUpdatePage);
@@ -3325,6 +3622,7 @@ void fetchAll() {
     if (!found) ch[i].err = "Channel not found";
     recordSample(i);
     computeStats(i);
+    updateRecords(i);
   }
   // race: who's ahead? alert when that changes
   if (raceSet() && ch[cfgRaceA].subs >= 0 && ch[cfgRaceB].subs >= 0) {
@@ -3407,6 +3705,32 @@ void refreshLiveVideos() {
     for (int i = 0; i < numCh; i++) if (ch[i].vidId == (const char *)(it["id"] | "")) applyVideo(ch[i], it);
 }
 
+// Newest 3 comments on each channel's latest video: 1 unit per channel
+void fetchComments() {
+  for (int i = 0; i < numCh; i++) {
+    Channel &c = ch[i];
+    if (!c.vidId.length()) continue;
+    JsonDocument doc;
+    int code = ytGet("commentThreads", "part=snippet&maxResults=3&order=time&textFormat=plainText"
+                     "&fields=items/snippet/topLevelComment/snippet(authorDisplayName,textOriginal,publishedAt,likeCount)"
+                     "&videoId=" + c.vidId, doc);
+    if (code == 403) { c.cmOff = true; c.cmN = 0; continue; }       // comments turned off (or members-only)
+    if (code != 200) continue;
+    c.cmOff = false; c.cmN = 0;
+    for (JsonObject it : doc["items"].as<JsonArray>()) {
+      if (c.cmN >= 3) break;
+      JsonObject sn = it["snippet"]["topLevelComment"]["snippet"];
+      String t = sn["textOriginal"] | ""; t.replace("\n", " "); t.replace("\r", " ");
+      if (t.length() > 200) t = t.substring(0, 200);
+      c.cmAuthor[c.cmN] = sn["authorDisplayName"] | "";
+      c.cmText[c.cmN] = t;
+      c.cmT[c.cmN] = parseIso(sn["publishedAt"] | "");
+      c.cmLikes[c.cmN] = sn["likeCount"] | 0;
+      c.cmN++;
+    }
+  }
+}
+
 // Profile pictures (not API quota — plain image downloads), once per boot
 void fetchAvatars() {
   for (int i = 0; i < numCh; i++) {
@@ -3451,7 +3775,7 @@ int portraitRot = 0;
 void setup() {
   Serial.begin(115200);
   delay(300);
-  Serial.println("SubCounter v9.7 starting");
+  Serial.println("SubCounter v9.8 starting");
   setenv("TZ", TZ_UK, 1); tzset();
 
   pinMode(SD_CS, OUTPUT);  digitalWrite(SD_CS, HIGH);
@@ -3708,6 +4032,10 @@ void loop() {
     fetchLatestVideos();
     vtCheckNewUpload();
     refreshed = true;
+  }
+  if (lastCommentFetch == 0 || millis() - lastCommentFetch > COMMENT_REFRESH_MS) {
+    lastCommentFetch = millis();
+    fetchComments();
   }
   // your new upload: its own numbers every 5 minutes, typical views once a day
   if (vt.active && (lastVtFetch == 0 || millis() - lastVtFetch > 5UL * 60000UL)) {

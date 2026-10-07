@@ -6,6 +6,7 @@ A desk gadget built on the **Waveshare ESP32-C6-Touch-LCD-1.47** that shows live
 
 ## What's new
 
+- **v9.8:** latest comments, personal records with alerts, monthly recap, compare chart and CSV download on the dashboard
 - **v9.7:** went-live alerts, milestone countdown, optional settings PIN, clearer Today / 24-hour labels
 - **v9.6:** YouTube-style red LIVE ring and badge on profile pictures while a channel is streaming
 - **v9.5:** open the dashboard at `http://subcounter.local`; IP address shown on start-up and on the home menu
@@ -20,7 +21,8 @@ Full history: [docs/CHANGELOG.md](docs/CHANGELOG.md)
 
 **YouTube**
 - Track up to 10 channels: swipe left and right between them on the touch screen
-- Swipe up for detail cards: Overview (profile picture, views, videos), Latest video (with a LIVE badge), Growth (today / 7 / 30 days), a 7-day graph and Next milestone (with a predicted date)
+- Swipe up for detail cards: Overview (profile picture, views, videos), Latest video (with a LIVE badge), Comments, Growth (today / 7 / 30 days), Records (best day / week / video), a 7-day graph and Next milestone (with a predicted date)
+- Monthly recap on the 1st of each month
 - Swipe down for the Leaderboard, then the Subscriber race (two channels head to head, with an "OVERTAKE!" alert)
 - Alerts for new subscribers, with confetti for milestones (bigger milestone, bigger party), plus a countdown when you're close
 - **Went-live alerts:** when a channel starts streaming, the board flashes and switches to it
@@ -39,6 +41,7 @@ Full history: [docs/CHANGELOG.md](docs/CHANGELOG.md)
 **Web dashboard** (`http://subcounter.local` or `http://<board-ip>/` from any phone or computer on your network)
 - Side column with the last 24 hours' top growers, weather, the race and the leaderboard
 - A card per channel: live (estimated) count, growth chips, milestone progress and predicted date, 7 or 30-day graph, latest video with thumbnail, and the new video tracker on your own channel
+- Monthly table, a compare chart (up to 4 channels) and CSV download of the history
 - Adapts to the screen: side column on desktops, two columns on tablets, one on phones
 - Settings at `/settings` and wireless updates at `/update`
 
@@ -52,7 +55,7 @@ Full history: [docs/CHANGELOG.md](docs/CHANGELOG.md)
 
 ## Quick start
 
-1. **Flash the board.** Open <https://espressif.github.io/esptool-js/> in Chrome, connect the board, and flash `builds/latest/SubCounter-v9.7-FULL-new-board-flash-at-0x0.bin` at address **0x0**.
+1. **Flash the board.** Open <https://espressif.github.io/esptool-js/> in Chrome, connect the board, and flash `builds/latest/SubCounter-v9.8-FULL-new-board-flash-at-0x0.bin` at address **0x0**.
 2. **Set it up.** The board shows *SETUP MODE*. Join the Wi-Fi network **SubCounter-Setup** from your phone, and the setup page opens by itself (or go to <http://192.168.4.1>). Pick your Wi-Fi, add your YouTube channels and a YouTube Data API key, then save.
 3. **Use it.** The board shows its address for a few seconds, then your subscriber count. Open **<http://subcounter.local>** (or the IP address) in a browser for the dashboard.
 

@@ -20,9 +20,11 @@ Swipe up from the main count:
 
 1. **Overview:** profile picture, total views, video count, average views per video, year joined, country
 2. **Latest video:** title, age, length, views, likes and comments, plus a red **LIVE** badge with viewer count while a stream is on. On *your* channel, for 48 hours after an upload, this becomes the **New video tracker** (views, views per hour, a graph, and a comparison with your usual uploads).
-3. **Growth:** gains today, over 7 days and over 30 days, plus the average per day
-4. **7-day graph**
-5. **Next milestone:** progress bar, how many to go, predicted date
+3. **Comments:** the 3 newest comments on the latest video (checked every 30 minutes)
+4. **Growth:** gains today, over 7 days and over 30 days, plus the average per day
+5. **Records:** best day and best week ever, and for your channel the best video's first-day views. When your channel beats one you get a **NEW RECORD!** alert (once a day at most).
+6. **7-day graph**
+7. **Next milestone:** progress bar, how many to go, predicted date
 
 Swipe down from the main count for the **Leaderboard** (5 per page; swipe left or right for more), and again for the **Race**. Choose the two race channels in settings.
 
@@ -77,6 +79,7 @@ After **3 minutes** with no touch, button press or movement (change it, or turn 
 ## Daily summary and night clock
 
 - **9 am:** "Good morning!" with the top 3 growers since yesterday and any new videos. Touch it to dismiss.
+- **1st of the month, 9 am:** a recap of last month instead: your subscribers gained, your rank among your channels, and the top grower
 - **Night** (default 23:00–07:00, adjustable): after a minute untouched, the screen dims to a large clock with your channel's count. Touch it to wake.
 
 ## Weather app
@@ -92,6 +95,10 @@ Open **`http://subcounter.local`** (or `http://<board-ip>/`) on any device on th
 - a side column with top growers in the last 24 hours, weather, race and leaderboard (above the channels on tablets and phones)
 - a card for every channel: live (estimated) count, growth chips, milestone and ETA, a 7 or 30-day graph, and the latest video with thumbnail
 - the new video tracker on your channel's card
+- latest comments and records on each card
+- a **Monthly** table (last month and this month so far)
+- a **Compare** chart: pick up to 4 channels and see gains (or % growth) over 7 or 30 days on one chart; hover for exact numbers
+- **CSV downloads** of the history (each card, or everything from the Compare card)
 
 Settings are at `/settings`, and wireless updates at `/update`.
 
@@ -102,7 +109,8 @@ Settings are at `/settings`, and wireless updates at `/update`.
 | All channel stats | every 2 min | 1 unit |
 | Latest videos | every 10 min | channels + 1 |
 | Live streams (only while someone is live) | every 2 min | 1 |
+| Latest comments | every 30 min | 1 per channel |
 | Your new video | every 5 min for 48 h | 1 |
 | Your typical views | once a day while tracking | 2 |
 
-With 10 channels this is about 2,500–3,000 units a day, well inside the free 10,000.
+With 10 channels this is about 3,000–3,500 units a day, well inside the free 10,000.
