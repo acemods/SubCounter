@@ -1,5 +1,5 @@
 /*
- * SubCounter v9.6 — YouTube subscriber counter for Waveshare ESP32-C6-Touch-LCD-1.47
+ * SubCounter v9.7 — YouTube subscriber counter for Waveshare ESP32-C6-Touch-LCD-1.47
  *
  *  ON THE BOARD
  *    Swipe left / right ... next / previous channel   (BOOT short press = next)
@@ -127,10 +127,11 @@ bool board = false;        // leaderboard / race showing
 bool raceView = false;     // (when board) showing the race instead of the leaderboard
 long shownSubs = -1;
 
-enum AlertType { A_GAIN, A_MILESTONE, A_OVERTAKE, A_VIEWS };
+enum AlertType { A_GAIN, A_MILESTONE, A_OVERTAKE, A_VIEWS, A_LIVE };
 struct Alert { AlertType type; int idx; int idx2; long delta; long total; };
 Alert alerts[MAX_CH * 2];
 int numAlerts = 0;
+int jumpToCh = -1;
 int raceLeader = -1;
 
 // ── State ───────────────────────────────────────────────────────────────────
@@ -173,6 +174,8 @@ Mode mode = M_NORMAL;
 float  cfgWxLat = 55.861f, cfgWxLon = -4.250f;   // weather location (default Glasgow)
 String cfgWxName = "Glasgow";
 String cfgSpId, cfgSpSecret, cfgSpRefresh;       // Spotify app + saved login
+String cfgPin;                                   // settings PIN (blank = none)
+bool   cfgLiveAlert = true;                      // alert when a channel goes live
 String cfgSpRedirect;                            // https address registered with Spotify (e.g. GitHub Pages relay)
 
 #define VT_MAX 110
@@ -516,6 +519,8 @@ void loadSettings() {
   cfgAuto     = prefs.getBool("auto", false);
   cfgEst      = prefs.getBool("est", true);
   cfgCelebrate = prefs.getBool("celebrate", true);
+  cfgPin = prefs.getString("pin", "");
+  cfgLiveAlert = prefs.getBool("livealert", true);
   cfgSummary  = prefs.getBool("summary", true);
   cfgShake    = prefs.getBool("shake", true);
   cfgFaceDown = prefs.getBool("facedown", true);
@@ -563,6 +568,8 @@ void saveSettings() {
   prefs.putBool("auto", cfgAuto);
   prefs.putBool("est", cfgEst);
   prefs.putBool("celebrate", cfgCelebrate);
+  prefs.putString("pin", cfgPin);
+  prefs.putBool("livealert", cfgLiveAlert);
   prefs.putBool("summary", cfgSummary);
   prefs.putBool("shake", cfgShake);
   prefs.putBool("facedown", cfgFaceDown);
@@ -869,12 +876,35 @@ void drawChannelDots() {
 }
 
 // Only shown when something is wrong
+// Milestone countdown: shown once a channel is in the last 10% of the way to its next milestone
+String countdownText(int i, float &frac) {
+  long e = estimateFor(i);
+  if (e <= 0 || ch[i].subs < 0) return "";
+  long nx = nextMilestone(e), pv = prevMilestone(nx), left = nx - e;
+  if (left <= 0 || left > max(10L, (nx - pv) / 10)) return "";
+  frac = (float)(e - pv) / (float)(nx - pv);
+  return withCommas(left) + " to go to " + compact(nx) + "!";
+}
+
+String footerShown = "-";
 void drawFooter() {
-  if (board || card != 0) return;
-  gfx->fillRect(0, 150, gfx->width() - 14, 22, C_BG);
-  if (netError.length()) ft(8, 168, fit(netError, F_S, RIGHT_EDGE - 8), F_S, C_RED);
+  if (board || card != 0) { footerShown = "-"; return; }
+  String key; uint16_t col = C_GOLD; float frac = -1;
+  if (netError.length()) { key = fit(netError, F_S, RIGHT_EDGE - 8); col = C_RED; }
   else if (lastFetchOk && millis() - lastFetchOk > 10UL * 60000UL)
-    ft(8, 168, "Not updated for " + String((millis() - lastFetchOk) / 60000UL) + " min", F_S, C_GOLD);
+    key = "Not updated for " + String((millis() - lastFetchOk) / 60000UL) + " min";
+  else if (numCh) key = countdownText(page, frac);
+  String sig = key + String((int)(frac * 200));
+  if (sig == footerShown) return;          // unchanged: don't redraw (no flicker)
+  footerShown = sig;
+  gfx->fillRect(0, 150, gfx->width() - 14, 22, C_BG);
+  if (!key.length()) return;
+  if (frac >= 0) {                         // countdown: thin progress bar + text
+    int bw = RIGHT_EDGE - 8;
+    gfx->fillRoundRect(8, 151, bw, 4, 2, C_DKGREY);
+    gfx->fillRoundRect(8, 151, max(4, (int)(bw * frac)), 4, 2, C_GOLD);
+    ftC(170, key, F_S, C_GOLD);
+  } else ft(8, 168, key, F_S, col);
 }
 
 void drawMain() {
@@ -884,6 +914,7 @@ void drawMain() {
   drawMainHeader();
   drawMainNumber(shownSubs);
   drawChannelDots();
+  footerShown = "-";
   drawFooter();
   drawCardDots();
 }
@@ -1396,6 +1427,21 @@ void showAlert(const Alert &a) {
     waitShowing(ALERT_MS + 1000UL * tier);
     return;
   }
+  if (a.type == A_LIVE) {
+    for (int i = 0; i < 4; i++) { gfx->fillScreen(i % 2 ? C_BG : C_RED); delay(120); }
+    gfx->fillScreen(C_BG);
+    Channel &c = ch[a.idx];
+    if (!drawAvatar(a.idx, 6, 42, false)) gfx->fillCircle(50, 86, 44, C_DKGREY);
+    int x = 106, w = gfx->width() - x - 8;
+    livePill(x + 30, 40, true);
+    ft(x, 66, fit(nameOf(a.idx), F_M, w), F_M, C_WHITE);
+    ft(x, 88, "is live now", F_S, C_RED);
+    wrapF(asciiOnly(c.vidTitle), x, 114, x + w, F_S, C_GREY, 2, 20);
+    if (c.liveViewers >= 0) ft(x, 162, compact(c.liveViewers) + " watching", F_S, C_WHITE);
+    waitShowing(ALERT_MS + 2000);
+    jumpToCh = a.idx;                  // switch to the live channel afterwards
+    return;
+  }
   for (int i = 0; i < 4; i++) { gfx->fillScreen(i % 2 ? C_PURPLE : C_GOLD); delay(100); }
   gfx->fillScreen(C_BG);
   if (a.type == A_VIEWS) {
@@ -1534,6 +1580,7 @@ void drawPortraitBoard() {
   gfx->fillScreen(C_BG);
   int W = gfx->width();     // 172
   ft(6, 22, "Leaderboard", F_M, C_GOLD);
+  if (numCh > 0 && min(48, 284 / numCh) >= 44) ftR(W - 6, 22, "today", F_XS, C_GREEN);
   gfx->drawFastHLine(6, 31, W - 12, C_DKGREY);
   int idx[MAX_CH]; for (int i = 0; i < numCh; i++) idx[i] = i;
   for (int a = 0; a < numCh; a++) for (int b = a + 1; b < numCh; b++)
@@ -1591,7 +1638,19 @@ x.onerror=()=>{m.textContent='Upload failed - check the board is still on Wi-Fi 
 x.open('POST','/update');x.send(fd)}
 </script></body></html>)HTML";
 
+// Settings PIN: browsers ask for it (user name "admin"). Not needed in setup
+// mode, which needs a hand on the BOOT button, so a forgotten PIN can be cleared there.
+bool pinOk() { return portalMode || !cfgPin.length() || server.authenticate("admin", cfgPin.c_str()); }
+bool authed() {
+  if (pinOk()) return true;
+  server.requestAuthentication(BASIC_AUTH, "SubCounter settings - user name: admin, password: your PIN",
+                               "<h3>PIN needed</h3>Use the user name <b>admin</b> and your SubCounter PIN. "
+                               "Forgotten it? Hold BOOT for 3 seconds and clear it in setup mode.");
+  return false;
+}
+
 void handleUpdatePage() {
+  if (!authed()) return;
   server.send(200, "text/html", String(FPSTR(PAGE_HEAD)) + FPSTR(UPDATE_BODY));
 }
 
@@ -1604,6 +1663,7 @@ void handleUpdateUpload() {
   HTTPUpload &up = server.upload();
   if (up.status == UPLOAD_FILE_START) {
     otaOk = false; otaErr = ""; otaBytes = 0;
+    if (!pinOk()) { otaErr = "PIN required"; return; }
     setBacklight(BL_NORMAL);
     if (mode == M_PORTRAIT) gfx->setRotation(1);
     drawStatus("Updating...", "receiving", C_GOLD);
@@ -1632,6 +1692,7 @@ void handleUpdateUpload() {
 }
 
 void handleUpdateDone() {
+  if (!authed()) return;
   if (otaOk) {
     server.send(200, "text/html", "<b style='color:#30d158'>Installed &#10003;</b> The board is restarting &ndash; this page will go back to the dashboard in a few seconds.");
     drawStatus("Updated!", "Restarting...", C_GREEN);
@@ -2441,8 +2502,9 @@ svg.g{width:100%;height:120px;display:block;margin-top:12px}
 .tabs{display:flex;gap:6px;margin-top:12px}.tabs button{border:0;border-radius:8px;padding:5px 12px;font-size:13px;background:#222226;color:var(--muted);cursor:pointer}.tabs button.on{background:#3a3a40;color:var(--text)}
 table{width:100%;border-collapse:collapse}td{padding:8px 4px;border-top:1px solid var(--line)}td.n{text-align:right;font-variant-numeric:tabular-nums}
 tr.me td{color:var(--gold)}
+th{font-size:11px;font-weight:600;letter-spacing:.05em;text-transform:uppercase;color:var(--muted);padding:0 4px 6px}th.n{text-align:right}tr.hd+tr td{border-top:0}
 .race .rs{display:flex;justify-content:space-between;align-items:center;margin:8px 0}.race .rs span{display:flex;align-items:center;gap:10px;min-width:0}
-td .av{width:28px;height:28px;display:block}td{padding:6px 4px}td.nm2{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:150px}tr:first-child td{border-top:0}
+td .av{width:28px;height:28px;display:block}td{padding:6px 4px}td.nm2{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:150px}
 .tug{display:flex;height:14px;border-radius:7px;overflow:hidden;margin:10px 0}.tug .a{background:var(--red)}.tug .b{background:var(--blue)}
 .list div{display:flex;justify-content:space-between;padding:5px 0}
 </style></head><body>
@@ -2476,10 +2538,10 @@ card.append(h('a',{class:'top',href:link,target:'_blank'},av(c,true),h('div',{st
 if(c.err&&c.subs<0){card.append(h('p',{text:c.err}));return card}
 const e=est(c);card.append(h('div',{class:'big'},h('span',{'data-est':c.i,text:fmt(e)}),(D.est&&c.step>1&&c.rate>0)?h('span',{class:'est',text:'est.'}):null));
 card.append(h('div',{class:'sub',text:`${cmp(c.views)} views · ${fmt(c.videos)} videos · ${c.videos>0?cmp(Math.round(c.views/c.videos)):'-'} avg`}));
-if(c.statsOk)card.append(h('div',{class:'chips'},[['Today',c.today],['24 h',c.d1],['7 days',c.d7],['30 days',c.d30]].map(([k,v])=>h('div',{class:'chip'},k+' ',h('b',{class:cls(v),text:sg(v)}))),c.rate?h('div',{class:'chip'},'≈ ',h('b',{text:sg(Math.round(c.rate))}),'/day'):null));
+if(c.statsOk)card.append(h('div',{class:'chips'},[['Today',c.today],['Last 24 h',c.d1],['7 days',c.d7],['30 days',c.d30]].map(([k,v])=>h('div',{class:'chip'},k+' ',h('b',{class:cls(v),text:sg(v)}))),c.rate?h('div',{class:'chip'},'≈ ',h('b',{text:sg(Math.round(c.rate))}),'/day'):null));
 else card.append(h('div',{class:'chips'},h('div',{class:'chip',text:'Growth: collecting data'})));
 const f=Math.max(0,Math.min(1,(e-c.prev)/(c.next-c.prev||1)));
-card.append(h('div',{style:'margin-top:6px;display:flex;justify-content:space-between'},h('span',{class:'sub',text:'Next milestone '}),h('b',{text:fmt(c.next)})),h('div',{class:'bar'},h('i',{style:`width:${(f*100).toFixed(1)}%`})),h('div',{class:'sub',text:`${fmt(c.next-e)} to go · ${eta(c)}`}));
+card.append(h('div',{style:'margin-top:6px;display:flex;justify-content:space-between'},h('span',{class:'sub',text:'Next milestone '}),h('b',{text:fmt(c.next)})),h('div',{class:'bar'},h('i',{style:`width:${(f*100).toFixed(1)}%`})),(c.next-e>0&&c.next-e<=Math.max(10,(c.next-c.prev)/10))?h('div',{style:'color:var(--gold);font-weight:700',text:`Almost there: ${fmt(c.next-e)} to go! · ${eta(c)}`}):h('div',{class:'sub',text:`${fmt(c.next-e)} to go · ${eta(c)}`}));
 const tabs=h('div',{class:'tabs'}),gbox=h('div');let cur=graphs[c.i]||7;
 for(const dd of [7,30]){const b=h('button',{text:dd+' days',class:dd==cur?'on':'',onclick:()=>{graphs[c.i]=dd;[...tabs.children].forEach(x=>x.className='');b.className='on';graph(c,dd,gbox)}});tabs.append(b)}
 card.append(tabs,gbox);graph(c,cur,gbox);
@@ -2493,7 +2555,7 @@ $('#meta').textContent=D.err?D.err:(D.updatedAgo>=0?'Updated '+(D.updatedAgo<60?
 const row=h('aside',{class:'side'});
 // summary
 const ok=C.filter(c=>c.statsOk).sort((a,b)=>b.d1-a.d1);const nv=C.filter(c=>c.vid&&Date.now()/1000-c.vid.pub<86400);
-row.append(h('div',{class:'card'},h('h2',{text:'Last 24 hours'}),h('div',{class:'list'},ok.length?ok.slice(0,5).map(c=>h('div',{},h('span',{text:name(c)}),h('b',{class:cls(c.d1),text:sg(c.d1)}))):h('div',{class:'sub',text:'Collecting data – check back in a few hours'})),h('div',{class:'sub',style:'margin-top:8px',text:nv.length?`${nv.length} new video${nv.length>1?'s':''} today`:'No new videos in the last day'})));
+row.append(h('div',{class:'card'},h('h2',{text:'Last 24 hours'}),h('div',{class:'sub',style:'margin:-8px 0 8px',text:'Rolling: gains since this time yesterday'}),h('div',{class:'list'},ok.length?ok.slice(0,5).map(c=>h('div',{},h('span',{text:name(c)}),h('b',{class:cls(c.d1),text:sg(c.d1)}))):h('div',{class:'sub',text:'Collecting data – check back in a few hours'})),h('div',{class:'sub',style:'margin-top:8px',text:nv.length?`${nv.length} new video${nv.length>1?'s':''} today`:'No new videos in the last day'})));
 // weather
 if(D.wx){const w=D.wx;row.append(h('div',{class:'card'},h('h2',{text:'Weather · '+w.place}),h('div',{class:'big',text:w.temp+'°'}),h('div',{text:w.text+' · feels '+w.feels+'°'}),h('div',{class:'sub',text:`High ${w.hi}° · Low ${w.lo}° · Wind ${w.wind} mph`}),w.rainHour>=0?h('div',{style:'margin-top:8px;color:var(--blue)',text:`Rain likely around ${String(w.rainHour).padStart(2,'0')}:00 (${w.rainPct}%)`}):null))}
 // race
@@ -2501,7 +2563,7 @@ if(D.race){const A=C[D.race[0]],B=C[D.race[1]],ea=est(A),eb=est(B),fa=ea+eb?ea/(
 row.append(h('div',{class:'card race'},h('h2',{text:'Race'}),h('div',{class:'rs'},h('span',{},av(A),h('b',{style:'color:var(--red)',text:name(A)})),h('b',{text:fmt(ea)})),h('div',{class:'rs'},h('span',{},av(B),h('b',{style:'color:var(--blue)',text:name(B)})),h('b',{text:fmt(eb)})),h('div',{class:'tug'},h('div',{class:'a',style:`width:${fa*100}%`}),h('div',{class:'b',style:`width:${(1-fa)*100}%`})),h('div',{text:`Gap ${fmt(gap)}`}),h('div',{class:'sub',text:closing>0.01?`${name(ch)} is catching up by ${fmt(Math.round(closing))}/day – could pass in about ${Math.max(1,Math.round(gap/closing))} days`:(lead.rate||ch.rate)?`${name(lead)} is pulling away`:'Trend: need more data'})))}
 // leaderboard
 const lb=[...C].filter(c=>c.subs>=0).sort((a,b)=>b.subs-a.subs);
-row.append(h('div',{class:'card'},h('h2',{text:'Leaderboard'}),h('table',{},lb.map((c,k)=>h('tr',{class:c.i==0?'me':''},h('td',{text:k+1+'.'}),h('td',{},av(c)),h('td',{class:'nm2',text:name(c)}),h('td',{class:'n',text:cmp(c.subs)}),h('td',{class:'n '+cls(c.today),text:c.statsOk?sg(c.today):''}))))));
+row.append(h('div',{class:'card'},h('h2',{text:'Leaderboard'}),h('table',{},h('tr',{class:'hd'},h('th',{colspan:'3'}),h('th',{class:'n',text:'Subs'}),h('th',{class:'n',text:'Today',title:'Since midnight'})),lb.map((c,k)=>h('tr',{class:c.i==0?'me':''},h('td',{text:k+1+'.'}),h('td',{},av(c)),h('td',{class:'nm2',text:name(c)}),h('td',{class:'n',text:cmp(c.subs)}),h('td',{class:'n '+cls(c.today),text:c.statsOk?sg(c.today):''}))))));
 const grid=h('section',{class:'grid'});C.forEach(c=>grid.append(channelCard(c)));app.append(h('div',{class:'layout'},row,grid))}
 async function load(){try{const r=await fetch('/api/data');D=await r.json();render()}catch(e){$('#meta').textContent='Board not reachable'}}
 setInterval(()=>{if(!D)return;document.querySelectorAll('[data-est]').forEach(el=>{const c=D.channels[el.dataset.est];el.textContent=fmt(est(c))})},1000);
@@ -2616,6 +2678,7 @@ async function scan(){
 
 // Nearby networks for the settings page: [{ssid, rssi, open, ent, saved}, ...] strongest first
 void handleApiScan() {
+  if (!authed()) return;
   int n = WiFi.scanNetworks();
   struct Found { String ssid; int rssi; wifi_auth_mode_t auth; } f[25]; int cnt = 0;
   for (int i = 0; i < n; i++) {
@@ -2667,6 +2730,7 @@ String channelSelect(const char *name, int val) {
 }
 
 void handleSettings() {
+  if (!authed()) return;
   String h = FPSTR(PAGE_HEAD);
   h += "<h1>&#9654; SubCounter settings</h1><p>Saved on the board only.";
   if (!portalMode) h += " <a href='/'>&larr; Dashboard</a>";
@@ -2689,6 +2753,7 @@ void handleSettings() {
   h += checkbox("auto", cfgAuto, "Switch channels automatically every 10 seconds");
   h += checkbox("est", cfgEst, "Estimated live counts between YouTube's rounded steps (“est.”)");
   h += checkbox("celebrate", cfgCelebrate, "Confetti for milestones (bigger milestones, bigger party)");
+  h += checkbox("livealert", cfgLiveAlert, "Alert when a channel goes live (and switch to it)");
   h += checkbox("summary", cfgSummary, "Daily summary on screen at 9 am");
   h += "<label>Show the clock after this long without use</label><select name='idleclk'>";
   { const int opts[] = { 0, 1, 2, 3, 5, 10 };
@@ -2792,6 +2857,13 @@ void handleSettings() {
     if (cfgSpRefresh.length())
       h += "<form method='POST' action='/spotify/disconnect'><button type='submit' style='background:#333;margin-top:8px'>Disconnect Spotify</button></form>";
   }
+  h += "<h1 style='font-size:17px;margin-top:26px'>Security</h1>";
+  h += "<label>Settings PIN</label><input name='pin' type='password' inputmode='numeric' autocomplete='new-password' maxlength='12' placeholder='";
+  h += cfgPin.length() ? "(PIN set — leave blank to keep)" : "None — anyone on your Wi-Fi can change settings";
+  h += "'>";
+  if (cfgPin.length()) h += checkbox("nopin", false, "Remove the PIN");
+  h += "<small>Protects these settings and firmware updates. Your browser will ask for it: user name <b>admin</b>, password = PIN. "
+       "The dashboard stays open to view. Forgotten it? Hold BOOT for 3 seconds and change it in setup mode.</small>";
   if (!portalMode) h += "<p style='margin-top:22px'><a href='/update'>&#11014; Update firmware wirelessly</a></p>";
   if (!portalMode && imuOk) {
     h += "<form method='POST' action='/calibrate' style='margin-top:22px'>"
@@ -2811,11 +2883,13 @@ void sendMessage(int code, const String &title, const String &body) {
 }
 
 void handleCalibrate() {
+  if (!authed()) return;
   calibrateMotion();
   sendMessage(200, "Calibrated &#10003;", "This is now the board's normal position.");
 }
 
 void handleSave() {
+  if (!authed()) return;
   String ssid = server.arg("ssid");
   String pass = server.arg("pass");
   String user = server.arg("user");     user.trim();
@@ -2866,6 +2940,10 @@ void handleSave() {
   cfgAuto = server.arg("auto") == "1";
   cfgEst = server.arg("est") == "1";
   cfgCelebrate = server.arg("celebrate") == "1";
+  cfgLiveAlert = server.arg("livealert") == "1";
+  { String pin = server.arg("pin"); pin.trim();
+    if (server.arg("nopin") == "1") cfgPin = "";
+    else if (pin.length()) cfgPin = pin; }
   cfgSummary = server.arg("summary") == "1";
   cfgShake = server.arg("shake") == "1";
   cfgFaceDown = server.arg("facedown") == "1";
@@ -2897,6 +2975,7 @@ void handleSave() {
 
 // "Connect now": answer the browser first (we're about to leave this network), then switch in loop()
 void handleWifiConnect() {
+  if (!authed()) return;
   int k = server.arg("n").toInt();
   if (k < 0 || k >= numNets) { sendMessage(400, "Unknown network", "That network isn't saved."); return; }
   sendMessage(200, "Switching to " + htmlEscape(nets[k].ssid) + "&hellip;",
@@ -2907,6 +2986,7 @@ void handleWifiConnect() {
 }
 
 void handleSpotifyCode() {
+  if (!authed()) return;
   String err;
   if (spConnectWithCode(server.arg("url"), err)) {
     saveSettings();
@@ -2917,6 +2997,7 @@ void handleSpotifyCode() {
 
 // The relay page sends the browser here with ?code=... after you press Agree on Spotify
 void handleSpotifyCallback() {
+  if (!authed()) return;
   if (server.hasArg("error")) { sendMessage(400, "Spotify not connected", "Spotify said: " + htmlEscape(server.arg("error"))); return; }
   String err;
   if (spConnectWithCode(server.arg("code"), err)) {
@@ -2928,6 +3009,7 @@ void handleSpotifyCallback() {
 }
 
 void handleSpotifyDisconnect() {
+  if (!authed()) return;
   cfgSpRefresh = ""; sp = SpotifyState();
   saveSettings();
   sendMessage(200, "Spotify disconnected", "You can connect it again any time.");
@@ -3257,7 +3339,9 @@ void fetchAll() {
 // Looks at the newest 3 so a live stream is still spotted if a Short or a
 // scheduled premiere sits on top of it.
 #define VID_LOOK 3
+bool videosLoaded = false;          // no "went live" alerts for streams already running at start-up
 void applyVideo(Channel &c, JsonObject it) {
+  bool wasLive = c.live;
   c.vidId = it["id"] | "";
   c.vidTitle = it["snippet"]["title"] | "";
   c.vidPublished = parseIso(it["snippet"]["publishedAt"] | "");
@@ -3267,6 +3351,8 @@ void applyVideo(Channel &c, JsonObject it) {
   c.vidLikes = String(it["statistics"]["likeCount"] | "-1").toInt();
   c.vidComments = String(it["statistics"]["commentCount"] | "-1").toInt();
   c.liveViewers = String(it["liveStreamingDetails"]["concurrentViewers"] | "-1").toInt();
+  if (c.live && !wasLive && videosLoaded && cfgLiveAlert && numAlerts < MAX_CH * 2)
+    alerts[numAlerts++] = { A_LIVE, (int)(&c - ch), -1, 0, c.liveViewers };
 }
 const char *VID_FIELDS = "part=snippet,statistics,contentDetails,liveStreamingDetails"
   "&fields=items(id,snippet(title,publishedAt,liveBroadcastContent),statistics(viewCount,likeCount,commentCount),"
@@ -3306,6 +3392,7 @@ void fetchLatestVideos() {
     if (pick.isNull()) continue;
     applyVideo(ch[i], pick);
   }
+  videosLoaded = true;
 }
 
 // While someone is live: refresh just their stream (1 unit) every stats round,
@@ -3364,7 +3451,7 @@ int portraitRot = 0;
 void setup() {
   Serial.begin(115200);
   delay(300);
-  Serial.println("SubCounter v9.6 starting");
+  Serial.println("SubCounter v9.7 starting");
   setenv("TZ", TZ_UK, 1); tzset();
 
   pinMode(SD_CS, OUTPUT);  digitalWrite(SD_CS, HIGH);
@@ -3652,6 +3739,8 @@ void loop() {
     if (numAlerts && (mode == M_NORMAL || mode == M_SUMMARY || mode == M_CLOCK) && !(app == APP_SP && !menuOpen && sp.playing)) {
       setBacklight(BL_NORMAL);
       for (int i = 0; i < numAlerts; i++) showAlert(alerts[i]);
+      if (jumpToCh >= 0 && app == APP_YT && !menuOpen) { page = jumpToCh; card = 0; board = false; }
+      jumpToCh = -1;
       gfx->fillScreen(C_BG);
       drawMode();
     }

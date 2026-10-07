@@ -34,11 +34,27 @@ YouTube rounds public subscriber counts to 3 significant figures (e.g. 3,180 mov
 
 When a channel is streaming, its profile picture gets a red ring and a **LIVE** pill, just like on YouTube, on the board and on the dashboard. The leaderboard shows a LIVE tag next to the name. Streams are picked up within about 10 minutes of starting, and the badge goes within 2 minutes of them ending.
 
+## Milestone countdown
+
+In the last 10% of the way to a milestone (e.g. from 4,700 on the way to 5,000), the main screen shows a gold progress bar and "32 to go to 5K!" under the count. The dashboard card highlights it too.
+
+## Today vs last 24 hours
+
+- **Today** (leaderboard column, "Today" chips) counts from **midnight**, so it resets each night.
+- **Last 24 hours** is **rolling**: everything since this time yesterday.
+
+So at 9 am a channel can show +10 today but +30 in the last 24 hours. All gains move in YouTube's rounded steps, so +0 can mean "gained some, but not enough to tick over".
+
+## Settings PIN
+
+Settings → *Security* → set a PIN. Your browser will then ask for it when you open settings or update the firmware: user name **admin**, password = your PIN. The dashboard stays open for anyone on your network to view. Forgotten it? Hold BOOT for 3 seconds: setup mode doesn't ask for the PIN, so you can clear or change it there.
+
 ## Alerts
 
 - **New subscribers:** the screen flashes with the channel and how many it gained
 - **Milestones:** confetti; it rains for small milestones, and from 100K up it explodes from the middle
 - **Overtake:** when one race channel passes the other
+- **Went live:** a red flash with the channel, stream title and viewers; the board then switches to that channel (turn off in settings)
 - **Your video hit 100 / 250 / 500 / 1K … views**
 
 Alerts are skipped at night, when the board is face-down or on its side, and while Spotify is playing.

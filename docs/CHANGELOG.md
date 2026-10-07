@@ -2,6 +2,12 @@
 
 All builds are in [`builds/`](../builds). Source snapshots for most versions are in the git history.
 
+## v9.7
+- **Went-live alert:** red flash with the channel's picture, stream title and viewer count, then the board switches to that channel. Can be turned off in settings.
+- **Milestone countdown:** in the last 10% before a milestone, the main screen shows a gold progress bar and "32 to go to 5K!"; the dashboard card highlights it too
+- **Settings PIN:** optional PIN for settings, Wi-Fi changes, Spotify and firmware updates (browser asks: user name `admin`, password = PIN). The dashboard stays viewable. Setup mode (hold BOOT 3 s) doesn't need it, so a forgotten PIN can be cleared.
+- **Clearer labels:** dashboard leaderboard has *Subs* / *Today* headings, "Last 24 hours" explains it's rolling, the chip reads "Last 24 h", and the tall leaderboard marks the green numbers as *today*
+
 ## v9.6
 - **LIVE badges:** when a channel is streaming, its profile picture gets YouTube's red ring and LIVE pill, on the board (main screen, overview, alerts) and on the dashboard (cards, race, leaderboard). The leaderboard on the board shows a LIVE tag next to the name.
 - Live streams are spotted even when a Short or scheduled stream was posted after them (checks the newest 3 uploads)
