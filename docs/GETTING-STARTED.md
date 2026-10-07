@@ -13,7 +13,7 @@
 2. Open **<https://espressif.github.io/esptool-js/>** in Chrome.
 3. Click **Connect** and pick the board (it shows up as *USB JTAG/serial debug unit*).
 4. Set **Flash Address** to **`0x0`** and choose
-   `builds/latest/SubCounter-v9.8-FULL-new-board-flash-at-0x0.bin`.
+   `builds/latest/SubCounter-v9.9-FULL-new-board-flash-at-0x0.bin`.
 5. Click **Program**. When it finishes, press **RESET** on the board.
 
 > If it won't connect: hold **BOOT**, tap **RESET**, release **BOOT**, then try again.
@@ -46,6 +46,7 @@ The board joins your Wi-Fi, shows its address for a few seconds, then your subsc
 ## 4. Optional extras
 
 - **Weather:** settings → *Weather* → your town (default Glasgow)
+- **Twitch channels:** see [TWITCH.md](TWITCH.md)
 - **Spotify:** see [SPOTIFY.md](SPOTIFY.md)
 - **Motion calibration:** put the board where it normally sits, then settings → *Set this as the normal position*
 - **More Wi-Fi networks** (home, work, phone hotspot): see [WIFI.md](WIFI.md)

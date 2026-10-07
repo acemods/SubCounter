@@ -2,6 +2,11 @@
 
 All builds are in [`builds/`](../builds). Source snapshots for most versions are in the git history.
 
+## v9.9
+- **Twitch channels:** add `twitch.tv/name` to the channel list. Exact follower counts, live status with viewers, title and game, LIVE ring and went-live alerts, plus history, records, milestones and the monthly recap. Needs a free Twitch app (Client ID + Secret, see [TWITCH.md](TWITCH.md)).
+- YouTube API key only required if you track YouTube channels
+- New library: **PNGdec** (Twitch profile pictures are PNG)
+
 ## v9.8
 - **Comments card** (swipe up): the 3 newest comments on each channel's latest video, also on the dashboard cards
 - **Records card** (swipe up): best day, best week and (your channel) best video's first-day views, with a **NEW RECORD!** alert when your channel beats one

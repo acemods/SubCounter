@@ -34,6 +34,7 @@ SOFTWARE.
 - **GFX Library for Arduino** (moononournation): BSD license
 - **ArduinoJson** (Benoit Blanchon): MIT license
 - **JPEGDEC** (bitbank2): Apache 2.0 license
+- **PNGdec** (bitbank2): Apache 2.0 license (includes zlib, zlib license)
 - **U8g2** (olikraus): fonts used for on-screen text; BSD 2-clause license
 - **Arduino-ESP32** core (Espressif): LGPL 2.1 / Apache 2.0
 

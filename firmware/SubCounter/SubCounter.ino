@@ -1,5 +1,5 @@
 /*
- * SubCounter v9.8 — YouTube subscriber counter for Waveshare ESP32-C6-Touch-LCD-1.47
+ * SubCounter v9.9 — YouTube subscriber counter for Waveshare ESP32-C6-Touch-LCD-1.47
  *
  *  ON THE BOARD
  *    Swipe left / right ... next / previous channel   (BOOT short press = next)
@@ -31,6 +31,7 @@
 #include <Arduino_GFX_Library.h>
 #include <ArduinoJson.h>
 #include <JPEGDEC.h>
+#include <PNGdec.h>      // Twitch profile pictures are usually PNG
 #include <WiFi.h>
 #include <WebServer.h>
 #include <DNSServer.h>
@@ -95,6 +96,7 @@ JPEGDEC jpeg;
 #define C_DKGREY  0x39E7
 #define C_GOLD    0xFEA0
 #define C_PURPLE  0x901F
+#define C_TWITCH  0x923F   // Twitch purple #9146FF
 #define C_GREEN   0x07E0
 #define C_BLUE    0x4D7F
 
@@ -127,6 +129,9 @@ struct Channel {
   // personal bests (saved on the board)
   int32_t pbDay = 0, pbWeek = 0, pbVid = 0; uint32_t pbDayT = 0, pbWeekT = 0, pbVidT = 0; String pbVidTitle;
   bool pbLoaded = false;
+  // Twitch channels ("twitch.tv/name" in the list)
+  bool tw = false; String twLogin, twId, twGame, twThumb;
+  uint16_t *av565 = nullptr;          // decoded 88x88 picture (Twitch)
 };
 Channel ch[MAX_CH];
 int numCh = 0;
@@ -183,7 +188,8 @@ Mode mode = M_NORMAL;
 float  cfgWxLat = 55.861f, cfgWxLon = -4.250f;   // weather location (default Glasgow)
 String cfgWxName = "Glasgow";
 String cfgSpId, cfgSpSecret, cfgSpRefresh;       // Spotify app + saved login
-String cfgPin;                                   // settings PIN (blank = none)
+String cfgPin;
+String cfgTwId, cfgTwSecret;                     // Twitch app (dev.twitch.tv/console)                                   // settings PIN (blank = none)
 bool   cfgLiveAlert = true;                      // alert when a channel goes live
 String cfgSpRedirect;                            // https address registered with Spotify (e.g. GitHub Pages relay)
 
@@ -204,6 +210,9 @@ long vtViews();
 void drawVideoTracker();
 extern const char PAGE_HEAD[];
 int ytGet(const String &endpoint, const String &query, JsonDocument &doc);
+void twitchFetch();
+extern String twError;
+void raceCheck();
 bool raceSet();
 void drawRace();
 void drawBoard();
@@ -496,6 +505,20 @@ void parseChannels() {
     String h = list.substring(start, nl); h.trim();
     start = nl + 1;
     if (!h.length()) continue;
+    String lo = h; lo.toLowerCase();
+    int tp = lo.indexOf("twitch.tv/");
+    if (tp >= 0 || lo.startsWith("twitch:")) {             // Twitch channel
+      String login = tp >= 0 ? lo.substring(tp + 10) : lo.substring(7);
+      login.trim();
+      int e = 0; while (e < (int)login.length() && (isalnum((unsigned char)login[e]) || login[e] == '_')) e++;
+      login = login.substring(0, e);
+      if (!login.length()) continue;
+      ch[numCh] = Channel();
+      ch[numCh].tw = true; ch[numCh].twLogin = login;
+      ch[numCh].handle = login; ch[numCh].id = "tw_" + login;   // id is only used for history file names
+      numCh++;
+      continue;
+    }
     int at = h.indexOf("/@");          if (at >= 0) h = h.substring(at + 1);
     int cp = h.indexOf("/channel/");   if (cp >= 0) h = h.substring(cp + 9);
     int sl = h.indexOf('/');           if (sl > 0) h = h.substring(0, sl);
@@ -539,6 +562,8 @@ void loadSettings() {
   cfgEst      = prefs.getBool("est", true);
   cfgCelebrate = prefs.getBool("celebrate", true);
   cfgPin = prefs.getString("pin", "");
+  cfgTwId = prefs.getString("twid", "");
+  cfgTwSecret = prefs.getString("twsec", "");
   cfgLiveAlert = prefs.getBool("livealert", true);
   cfgSummary  = prefs.getBool("summary", true);
   cfgShake    = prefs.getBool("shake", true);
@@ -588,6 +613,8 @@ void saveSettings() {
   prefs.putBool("est", cfgEst);
   prefs.putBool("celebrate", cfgCelebrate);
   prefs.putString("pin", cfgPin);
+  prefs.putString("twid", cfgTwId);
+  prefs.putString("twsec", cfgTwSecret);
   prefs.putBool("livealert", cfgLiveAlert);
   prefs.putBool("summary", cfgSummary);
   prefs.putBool("shake", cfgShake);
@@ -771,7 +798,7 @@ void recordVideo24h(long views, const String &title) {
 // Estimated live count between YouTube's rounded steps
 long estimateFor(int i) {
   Channel &c = ch[i];
-  if (!cfgEst || c.subs < 0 || !timeValid() || c.ratePerDay <= 0 || !c.stepChangedAt) return c.subs;
+  if (c.tw || !cfgEst || c.subs < 0 || !timeValid() || c.ratePerDay <= 0 || !c.stepChangedAt) return c.subs;   // Twitch counts are exact
   long step = stepFor(c.subs);
   if (step <= 1) return c.subs;
   long add = (long)(c.ratePerDay * (nowT() - c.stepChangedAt) / 86400.0f);
@@ -779,7 +806,7 @@ long estimateFor(int i) {
   if (add < 0) add = 0;
   return c.subs + add;
 }
-bool isEstimated(int i) { return estimateFor(i) != ch[i].subs || (cfgEst && stepFor(ch[i].subs) > 1 && ch[i].ratePerDay > 0); }
+bool isEstimated(int i) { return !ch[i].tw && (estimateFor(i) != ch[i].subs || (cfgEst && stepFor(ch[i].subs) > 1 && ch[i].ratePerDay > 0)); }
 
 // ════════════════════════════════════════════════════════════════════════════
 //  Avatar drawing (JPEG, round-cropped)
@@ -802,6 +829,17 @@ int livePill(int cx, int by, bool big);
 // Draw a channel's picture at (x,y), full 88px or half size 44px
 bool drawAvatar(int i, int x, int y, bool half) {
   Channel &c = ch[i];
+  if (c.av565) {                       // Twitch: pre-decoded 88x88 bitmap, circle-cropped here
+    int w = half ? 44 : 88, st = half ? 2 : 1;
+    avCx = x + w / 2; avCy = y + w / 2; avR = w / 2;
+    static uint16_t line[88];
+    for (int r = 0; r < w; r++) {
+      int dy = r - avR; int hw = (int)sqrtf((float)(avR * avR - dy * dy));
+      int x0 = avR - hw, x1 = min(w - 1, avR + hw);
+      for (int k = x0; k <= x1; k++) line[k - x0] = c.av565[(r * st) * 88 + k * st];
+      gfx->draw16bitRGBBitmap(x + x0, y + r, line, x1 - x0 + 1, 1);
+    }
+  } else {
   if (!c.avatar) return false;
   if (!jpeg.openRAM(c.avatar, c.avatarLen, jpegDraw)) return false;
   jpeg.setPixelType(RGB565_LITTLE_ENDIAN);
@@ -809,6 +847,7 @@ bool drawAvatar(int i, int x, int y, bool half) {
   avCx = x + w / 2; avCy = y + w / 2; avR = w / 2;
   jpeg.decode(x, y, half ? JPEG_SCALE_HALF : 0);
   jpeg.close();
+  }
   if (c.live) {                       // YouTube-style live ring + pill
     for (int k = 1; k <= (half ? 2 : 3); k++) gfx->drawCircle(avCx, avCy, avR + k, C_RED);
     livePill(avCx, avCy + avR + (half ? 5 : 8), !half);
@@ -907,6 +946,7 @@ int wrapF(const String &msg, int x0, int y, int xMax, const uint8_t *f, uint16_t
 }
 
 String nameOf(int i) { String t = ch[i].title.length() ? ch[i].title : ch[i].handle; return asciiOnly(t); }
+const char *noun(int i) { return ch[i].tw ? "followers" : "subscribers"; }
 
 // Vertical card position dots on the right edge
 void drawCardDots() {
@@ -941,7 +981,7 @@ void drawMainHeader() {
   Channel &c = ch[page];
   if (page == 0 && vt.active && vtViews() >= 0) ft(58, 46, "New video: " + compact(vtViews()) + " views", F_S, C_GOLD);
   else if (c.statsOk && c.gainToday != 0) ft(58, 46, signedNum(c.gainToday) + " today", F_S, c.gainToday > 0 ? C_GREEN : C_RED);
-  else ft(58, 46, "subscribers", F_S, C_GREY);
+  else ft(58, 46, noun(page), F_S, c.tw ? C_TWITCH : C_GREY);
 }
 
 void drawMainNumber(long n) {
@@ -1015,6 +1055,14 @@ void drawOverview() {
   drawDetailHeader("Overview");
   if (!drawAvatar(page, 6, 42, false)) gfx->fillCircle(50, 86, 44, C_DKGREY);
   int x = 104, y = 60;
+  if (c.tw) {
+    ft(x, y, "Twitch", F_M, C_TWITCH); y += 30;
+    String f = c.subs >= 0 ? compact(c.subs) : String("-");
+    ft(x, y, f, F_M, C_WHITE); ft(x + tw(f, F_M), y, " followers", F_S, C_GREY); y += 30;
+    ft(x, y, c.live ? "Live now" : "Offline", F_M, c.live ? C_RED : C_GREY); y += 30;
+    if (c.joined) ft(x, y, "Since " + dateStr(c.joined, "%Y"), F_S, C_GREY);
+    return;
+  }
   struct { String v; const char *k; } rows[] = {
     { compact(c.views), " views" },
     { c.videos >= 0 ? withCommas(c.videos) : String("-"), " videos" },
@@ -1033,7 +1081,17 @@ void drawOverview() {
 // ── Card 2: latest video ────────────────────────────────────────────────────
 void drawLatestVideo() {
   Channel &c = ch[page];
-  drawDetailHeader(c.live ? "LIVE" : "Latest video");
+  drawDetailHeader(c.live ? "LIVE" : (c.tw ? "Stream" : "Latest video"));
+  if (c.tw) {
+    if (!c.live) { ftC(92, "Not live right now", F_M, C_GREY); ftC(120, "twitch.tv/" + c.twLogin, F_S, C_TWITCH); return; }
+    gfx->fillRoundRect(8, 38, 58, 24, 5, C_RED);
+    ft(14, 56, "LIVE", F_M, C_WHITE);
+    if (c.liveViewers >= 0) ft(74, 56, compact(c.liveViewers) + " watching", F_M, C_WHITE);
+    int y = wrapF(asciiOnly(c.vidTitle), 8, 88, RIGHT_EDGE, F_S, C_WHITE, 2, 20);
+    if (c.twGame.length()) ft(8, y + 2, fit(asciiOnly(c.twGame), F_S, RIGHT_EDGE - 8), F_S, C_TWITCH);
+    if (c.vidPublished) ft(8, 166, "Started " + ago(c.vidPublished), F_S, C_GREY);
+    return;
+  }
   if (!c.vidId.length()) { ftC(100, c.uploads.length() ? "Loading..." : "No videos", F_M, C_GREY); return; }
   int y = 56;
   if (c.live) {
@@ -1070,6 +1128,7 @@ String shortAgo(time_t t) {
 void drawComments() {
   Channel &c = ch[page];
   drawDetailHeader("Comments");
+  if (c.tw) { ftC(92, "Not available", F_M, C_GREY); ftC(118, "for Twitch channels", F_S, C_GREY); return; }
   if (!c.vidId.length()) { ftC(100, "No videos", F_M, C_GREY); return; }
   if (c.cmOff) { ftC(92, "Comments are off", F_M, C_GREY); ftC(118, "on the latest video", F_S, C_GREY); return; }
   if (!c.cmN) { ftC(92, lastCommentFetch ? "No comments yet" : "Loading...", F_M, C_GREY); ftC(118, "on the latest video", F_S, C_GREY); return; }
@@ -1570,7 +1629,7 @@ void showAlert(const Alert &a) {
     ft(58, 46, fit(nameOf(a.idx), F_S, gfx->width() - 66), F_S, C_WHITE);
     String m = withCommas(a.total);
     ftC(110, m, numFont(m, gfx->width() - 20), C_GOLD, gfx->width());
-    ftC(150, "subscribers", F_M, C_WHITE, gfx->width());
+    ftC(150, noun(a.idx), F_M, C_WHITE, gfx->width());
     waitShowing(ALERT_MS + 1000UL * tier);
     return;
   }
@@ -1619,7 +1678,7 @@ void showAlert(const Alert &a) {
     ftC(160, withCommas(ch[a.idx].subs) + " vs " + withCommas(ch[a.idx2].subs), F_S, C_GREY, gfx->width());
   } else {
     drawAvatar(a.idx, 6, 4, true);
-    ft(58, 24, "New subscribers!", F_M, C_GOLD);
+    ft(58, 24, ch[a.idx].tw ? "New followers!" : "New subscribers!", F_M, C_GOLD);
     ft(58, 46, fit(nameOf(a.idx), F_S, gfx->width() - 66), F_S, C_WHITE);
     String d = "+" + withCommas(a.delta);
     ftC(112, d, numFont(d, gfx->width() - 20), C_GREEN, gfx->width());
@@ -1698,7 +1757,7 @@ void drawRecap() {
     ft(8, 54, fit(nameOf(0), F_S, gfx->width() - 16), F_S, C_WHITE);
     String g = signedNum(ch[0].gainLastMonth);
     ftC(98, g, F_N42, ch[0].gainLastMonth > 0 ? C_GREEN : C_WHITE, gfx->width());
-    ftC(122, "subscribers", F_S, C_GREY, gfx->width());
+    ftC(122, noun(0), F_S, C_GREY, gfx->width());
     ftC(146, rank == 0 && n > 1 ? String("You grew the most!") : "#" + String(rank + 1) + " of " + String(n) + " for growth",
         F_M, rank == 0 ? C_GOLD : C_WHITE, gfx->width());
   }
@@ -2701,6 +2760,7 @@ td .av{width:28px;height:28px;display:block}td{padding:6px 4px}td.nm2{overflow:h
 .tug{display:flex;height:14px;border-radius:7px;overflow:hidden;margin:10px 0}.tug .a{background:var(--red)}.tug .b{background:var(--blue)}
 .list div{display:flex;justify-content:space-between;padding:5px 0}
 .wide{grid-column:1/-1}
+.twb{background:#9146ff;color:#fff;border-radius:5px;font-size:10px;font-weight:800;padding:1px 5px;margin-left:8px;vertical-align:3px;letter-spacing:.03em}
 .ctl{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-bottom:12px}
 .tg{display:inline-flex;align-items:center;gap:6px;border:1px solid var(--line);border-radius:999px;padding:4px 10px;font-size:13px;background:none;color:var(--muted);cursor:pointer}
 .tg.on{color:var(--text);border-color:#4a4a52;background:#222226}.tg i{width:10px;height:10px;border-radius:50%;display:inline-block}
@@ -2738,11 +2798,11 @@ const area=document.createElementNS(ns,'path');area.setAttribute('d',d+` L ${X(t
 const ln=document.createElementNS(ns,'path');ln.setAttribute('d',d);ln.setAttribute('fill','none');ln.setAttribute('stroke','#30d158');ln.setAttribute('stroke-width','2.5');ln.setAttribute('vector-effect','non-scaling-stroke');svg.append(ln);
 box.append(svg,h('div',{class:'sub',text:`${cmp(mn)} – ${cmp(mx)}  ·  ${new Date(t0*1000).toLocaleDateString('en-GB',{day:'numeric',month:'short'})} to now`}))}
 function channelCard(c){const card=h('div',{class:'card'+(c.err&&c.subs<0?' err':'')});
-const link=isLive(c)?'https://youtu.be/'+c.vid.id:c.id?'https://www.youtube.com/channel/'+c.id:'#';
-card.append(h('a',{class:'top',href:link,target:'_blank'},av(c,true),h('div',{style:'min-width:0'},h('div',{class:'nm',text:name(c)}),h('div',{class:'sub',text:[c.handle,c.country,c.joined?'since '+new Date(c.joined*1000).getFullYear():''].filter(Boolean).join(' · ')}))));
+const link=c.tw?'https://www.twitch.tv/'+c.tw:isLive(c)?'https://youtu.be/'+c.vid.id:c.id?'https://www.youtube.com/channel/'+c.id:'#';
+card.append(h('a',{class:'top',href:link,target:'_blank'},av(c,true),h('div',{style:'min-width:0'},h('div',{class:'nm'},name(c),c.tw?h('span',{class:'twb',text:'Twitch'}):null),h('div',{class:'sub',text:[c.tw?'twitch.tv/'+c.tw:c.handle,c.country,c.joined?'since '+new Date(c.joined*1000).getFullYear():''].filter(Boolean).join(' · ')}))));
 if(c.err&&c.subs<0){card.append(h('p',{text:c.err}));return card}
 const e=est(c);card.append(h('div',{class:'big'},h('span',{'data-est':c.i,text:fmt(e)}),(D.est&&c.step>1&&c.rate>0)?h('span',{class:'est',text:'est.'}):null));
-card.append(h('div',{class:'sub',text:`${cmp(c.views)} views · ${fmt(c.videos)} videos · ${c.videos>0?cmp(Math.round(c.views/c.videos)):'-'} avg`}));
+card.append(h('div',{class:'sub',text:c.tw?(isLive(c)?'followers · live now':'followers · offline'):`${cmp(c.views)} views · ${fmt(c.videos)} videos · ${c.videos>0?cmp(Math.round(c.views/c.videos)):'-'} avg`}));
 if(c.statsOk)card.append(h('div',{class:'chips'},[['Today',c.today],['Last 24 h',c.d1],['7 days',c.d7],['30 days',c.d30]].map(([k,v])=>h('div',{class:'chip'},k+' ',h('b',{class:cls(v),text:sg(v)}))),c.rate?h('div',{class:'chip'},'≈ ',h('b',{text:sg(Math.round(c.rate))}),'/day'):null));
 else card.append(h('div',{class:'chips'},h('div',{class:'chip',text:'Growth: collecting data'})));
 const f=Math.max(0,Math.min(1,(e-c.prev)/(c.next-c.prev||1)));
@@ -2753,7 +2813,7 @@ tabs.append(h('a',{class:'small',href:'/api/csv?i='+c.i,text:'Download CSV'}));c
 if(c.vt){const t=c.vt,ag=t.ageMin<60?t.ageMin+' min':(t.ageMin/60|0)+'h '+(t.ageMin%60)+'m';const box=h('div',{style:'margin-top:14px;padding:12px;border-radius:12px;background:#1f2a1f'},h('div',{class:'sub',style:'color:var(--gold)',text:'NEW VIDEO TRACKER'}),h('div',{style:'font-size:26px;font-weight:800',text:fmt(t.views)+' views'}),h('div',{class:'sub',text:`in ${ag}`+(t.rate>=0?` · ${cmp(t.rate)}/hour now`:'')}),t.cmp?h('div',{style:'margin-top:4px',class:t.cmp.includes('+')?'pos':t.cmp.includes('-')?'neg':'',text:t.cmp}):null);
 if(t.pts&&t.pts.length>1){const W=600,H=70,p=t.pts,t0=p[0][0],t1=p[p.length-1][0],mn=p[0][1],mx=Math.max(p[p.length-1][1],mn+1);const d=p.map((q,k)=>(k?'L':'M')+((q[0]-t0)/(t1-t0||1)*(W-4)+2).toFixed(1)+' '+(H-4-(q[1]-mn)/(mx-mn)*(H-10)).toFixed(1)).join(' ');const ns='http://www.w3.org/2000/svg',sv=document.createElementNS(ns,'svg');sv.setAttribute('viewBox',`0 0 ${W} ${H}`);sv.setAttribute('preserveAspectRatio','none');sv.setAttribute('class','g');sv.style.height='70px';const ln=document.createElementNS(ns,'path');ln.setAttribute('d',d);ln.setAttribute('fill','none');ln.setAttribute('stroke','#ffc53d');ln.setAttribute('stroke-width','2.5');ln.setAttribute('vector-effect','non-scaling-stroke');sv.append(ln);box.append(sv)}
 card.append(box)}
-if(c.vid){const v=c.vid;card.append(h('a',{class:'vid',href:'https://youtu.be/'+v.id,target:'_blank'},h('img',{src:`https://i.ytimg.com/vi/${v.id}/mqdefault.jpg`,alt:''}),h('div',{style:'min-width:0'},h('div',{class:'t'},v.live?h('span',{class:'live',text:'LIVE'}):null,v.title),h('div',{class:'sub',text:v.live?`${fmt(v.viewers)} watching now`:`${ago(v.pub)} · ${dur(v.dur)}`}),h('div',{class:'sub',text:`${cmp(v.views)} views · ${v.likes>=0?cmp(v.likes)+' likes':'likes hidden'} · ${v.comments>=0?cmp(v.comments)+' comments':'comments off'}`}))))}
+if(c.vid){const v=c.vid;card.append(h('a',{class:'vid',href:c.tw?'https://www.twitch.tv/'+c.tw:'https://youtu.be/'+v.id,target:'_blank'},h('img',{src:v.thumb||`https://i.ytimg.com/vi/${v.id}/mqdefault.jpg`,alt:''}),h('div',{style:'min-width:0'},h('div',{class:'t'},v.live?h('span',{class:'live',text:'LIVE'}):null,v.title),h('div',{class:'sub',text:v.live?`${fmt(v.viewers)} watching now`:`${ago(v.pub)} · ${dur(v.dur)}`}),c.tw?h('div',{class:'sub',text:v.game||''}):h('div',{class:'sub',text:`${cmp(v.views)} views · ${v.likes>=0?cmp(v.likes)+' likes':'likes hidden'} · ${v.comments>=0?cmp(v.comments)+' comments':'comments off'}`}))))}
 if(c.pb){const b=c.pb,dd=t=>t?new Date(t*1000).toLocaleDateString('en-GB',{day:'numeric',month:'short'}):'';const it=[];
 if(b.day)it.push(h('span',{},'Best day ',h('b',{text:sg(b.day)}),' '+dd(b.dayT)));if(b.week)it.push(h('span',{},'Best week ',h('b',{text:sg(b.week)}),' '+dd(b.weekT)));if(b.vid)it.push(h('span',{title:b.vidTitle||''},'Best video, 1st day ',h('b',{text:cmp(b.vid)+' views'})));
 if(it.length)card.append(h('div',{class:'pb'},h('span',{text:'Records:'}),it))}
@@ -2803,7 +2863,7 @@ function render(){const app=$('#app');app.textContent='';const C=D.channels;
 $('#meta').textContent=D.err?D.err:(D.updatedAgo>=0?'Updated '+(D.updatedAgo<60?'just now':(D.updatedAgo/60|0)+' min ago'):'');
 const row=h('aside',{class:'side'});
 // summary
-const ok=C.filter(c=>c.statsOk).sort((a,b)=>b.d1-a.d1);const nv=C.filter(c=>c.vid&&Date.now()/1000-c.vid.pub<86400);
+const ok=C.filter(c=>c.statsOk).sort((a,b)=>b.d1-a.d1);const nv=C.filter(c=>c.vid&&!c.tw&&Date.now()/1000-c.vid.pub<86400);
 row.append(h('div',{class:'card'},h('h2',{text:'Last 24 hours'}),h('div',{class:'sub',style:'margin:-8px 0 8px',text:'Rolling: gains since this time yesterday'}),h('div',{class:'list'},ok.length?ok.slice(0,5).map(c=>h('div',{},h('span',{text:name(c)}),h('b',{class:cls(c.d1),text:sg(c.d1)}))):h('div',{class:'sub',text:'Collecting data – check back in a few hours'})),h('div',{class:'sub',style:'margin-top:8px',text:nv.length?`${nv.length} new video${nv.length>1?'s':''} today`:'No new videos in the last day'})));
 // weather
 if(D.wx){const w=D.wx;row.append(h('div',{class:'card'},h('h2',{text:'Weather · '+w.place}),h('div',{class:'big',text:w.temp+'°'}),h('div',{text:w.text+' · feels '+w.feels+'°'}),h('div',{class:'sub',text:`High ${w.hi}° · Low ${w.lo}° · Wind ${w.wind} mph`}),w.rainHour>=0?h('div',{style:'margin-top:8px;color:var(--blue)',text:`Rain likely around ${String(w.rainHour).padStart(2,'0')}:00 (${w.rainPct}%)`}):null))}
@@ -2812,7 +2872,7 @@ if(D.race){const A=C[D.race[0]],B=C[D.race[1]],ea=est(A),eb=est(B),fa=ea+eb?ea/(
 row.append(h('div',{class:'card race'},h('h2',{text:'Race'}),h('div',{class:'rs'},h('span',{},av(A),h('b',{style:'color:var(--red)',text:name(A)})),h('b',{text:fmt(ea)})),h('div',{class:'rs'},h('span',{},av(B),h('b',{style:'color:var(--blue)',text:name(B)})),h('b',{text:fmt(eb)})),h('div',{class:'tug'},h('div',{class:'a',style:`width:${fa*100}%`}),h('div',{class:'b',style:`width:${(1-fa)*100}%`})),h('div',{text:`Gap ${fmt(gap)}`}),h('div',{class:'sub',text:closing>0.01?`${name(ch)} is catching up by ${fmt(Math.round(closing))}/day – could pass in about ${Math.max(1,Math.round(gap/closing))} days`:(lead.rate||ch.rate)?`${name(lead)} is pulling away`:'Trend: need more data'})))}
 // leaderboard
 const lb=[...C].filter(c=>c.subs>=0).sort((a,b)=>b.subs-a.subs);
-row.append(h('div',{class:'card'},h('h2',{text:'Leaderboard'}),h('table',{},h('tr',{class:'hd'},h('th',{colspan:'3'}),h('th',{class:'n',text:'Subs'}),h('th',{class:'n',text:'Today',title:'Since midnight'})),lb.map((c,k)=>h('tr',{class:c.i==0?'me':''},h('td',{text:k+1+'.'}),h('td',{},av(c)),h('td',{class:'nm2',text:name(c)}),h('td',{class:'n',text:cmp(c.subs)}),h('td',{class:'n '+cls(c.today),text:c.statsOk?sg(c.today):''}))))));
+row.append(h('div',{class:'card'},h('h2',{text:'Leaderboard'}),h('table',{},h('tr',{class:'hd'},h('th',{colspan:'3'}),h('th',{class:'n',text:C.some(c=>c.tw)?'Total':'Subs'}),h('th',{class:'n',text:'Today',title:'Since midnight'})),lb.map((c,k)=>h('tr',{class:c.i==0?'me':''},h('td',{text:k+1+'.'}),h('td',{},av(c)),h('td',{class:'nm2',text:name(c)}),h('td',{class:'n',text:cmp(c.subs)}),h('td',{class:'n '+cls(c.today),text:c.statsOk?sg(c.today):''}))))));
 {const mon=t=>new Date(t*1000).toLocaleDateString('en-GB',{month:'short'});const ms=[...C].filter(c=>c.subs>=0).sort((a,b)=>(b.mo||0)-(a.mo||0));
 if(ms.length&&C.some(c=>c.statsOk))row.append(h('div',{class:'card'},h('h2',{text:'Monthly'}),h('table',{},h('tr',{class:'hd'},h('th',{}),h('th',{class:'n',text:mon(D.m1)}),h('th',{class:'n',text:mon(D.m0)+' so far'})),ms.map(c=>h('tr',{class:c.i==0?'me':''},h('td',{class:'nm2',text:name(c)}),h('td',{class:'n '+(c.lm!=null?cls(c.lm):''),text:c.lm!=null?sg(c.lm):'–'}),h('td',{class:'n '+cls(c.mo),text:c.statsOk?sg(c.mo):'–'}))))))}
 const grid=h('section',{class:'grid'});C.forEach(c=>grid.append(channelCard(c)));if(C.filter(c=>c.subs>=0).length>1)grid.append(compareCard());app.append(h('div',{class:'layout'},row,grid))}
@@ -2846,7 +2906,7 @@ void handleApiData() {
     Channel &c = ch[i];
     JsonObject o = arr.add<JsonObject>();
     o["i"] = i; o["handle"] = c.handle; o["id"] = c.id; o["title"] = c.title;
-    o["subs"] = c.subs; o["step"] = c.subs >= 0 ? stepFor(c.subs) : 1;
+    o["subs"] = c.subs; o["step"] = (c.subs >= 0 && !c.tw) ? stepFor(c.subs) : 1;
     o["rate"] = c.ratePerDay; o["stepAt"] = (long)c.stepChangedAt;
     o["views"] = c.views; o["videos"] = c.videos; o["joined"] = (long)c.joined;
     o["country"] = c.country; o["avatar"] = c.avatarUrl; o["err"] = c.err;
@@ -2861,6 +2921,11 @@ void handleApiData() {
       t["at1h"] = vt.at1h; t["base1h"] = vt.base1h; t["at24h"] = vt.at24h; t["base24h"] = vt.base24h; t["cmp"] = vtCompare();
       JsonArray pts = t["pts"].to<JsonArray>();
       for (int k = 0; k < vt.n; k++) { JsonArray pp = pts.add<JsonArray>(); pp.add(vt.t[k]); pp.add(vt.v[k]); }
+    }
+    if (c.tw) {
+      o["tw"] = c.twLogin;
+      if (c.live) { JsonObject v = o["vid"].to<JsonObject>(); v["id"] = ""; v["title"] = c.vidTitle; v["pub"] = (long)c.vidPublished;
+                    v["live"] = true; v["viewers"] = c.liveViewers; v["thumb"] = c.twThumb; v["game"] = c.twGame; }
     }
     o["mo"] = c.gainMonth;
     if (c.lastMonthOk) o["lm"] = c.gainLastMonth;
@@ -2878,7 +2943,7 @@ void handleApiData() {
         x["a"] = c.cmAuthor[k]; x["t"] = c.cmText[k]; x["ts"] = (long)c.cmT[k]; x["l"] = c.cmLikes[k];
       }
     }
-    if (c.vidId.length() && c.vidTitle.length()) {
+    if (!c.tw && c.vidId.length() && c.vidTitle.length()) {
       JsonObject v = o["vid"].to<JsonObject>();
       v["id"] = c.vidId; v["title"] = c.vidTitle; v["pub"] = (long)c.vidPublished; v["dur"] = c.vidDuration;
       v["views"] = c.vidViews; v["likes"] = c.vidLikes; v["comments"] = c.vidComments;
@@ -3036,14 +3101,23 @@ void handleSettings() {
          "<b>Couldn't connect to Wi-Fi:</b><br>" + htmlEscape(wifiFailReason) + "</div>";
   }
   h += "<form method='POST' action='/save'>";
-  h += "<label>YouTube channels (up to 10, one per line)</label>";
+  h += "<label>Channels (up to 10, one per line)</label>";
   h += "<textarea name='channels' autocapitalize='off' autocorrect='off' spellcheck='false' placeholder='@yourchannel&#10;@mkbhd&#10;@veritasium' required>" +
        htmlEscape(cfgChannels) + "</textarea>";
-  h += "<small>@handles, UC… channel IDs or channel links. Put your own channel first – it's highlighted and shown on the night clock.</small>";
+  h += "<small>YouTube: @handles, UC… channel IDs or channel links. Twitch: <b>twitch.tv/name</b>. Put your own channel first – it's highlighted and shown on the night clock.</small>";
   h += "<label>YouTube Data API key</label>";
   h += "<input name='apikey' autocapitalize='off' placeholder='";
   h += cfgApiKey.length() ? "(saved — leave blank to keep)" : "AIza…";
   h += "'>";
+  h += "<details" + String(cfgTwId.length() || cfgChannels.indexOf("twitch") >= 0 ? " open" : "") + "><summary style='margin-top:14px;cursor:pointer'>Twitch (optional)</summary>";
+  h += "<small>Only needed for Twitch channels. Create a free app at <a href='https://dev.twitch.tv/console/apps' target='_blank'>dev.twitch.tv/console</a> "
+       "(Category: Other, Client type: Confidential, OAuth Redirect URL: <code>http://localhost</code>), then copy its Client ID and a new Secret here.</small>";
+  h += "<label>Twitch Client ID</label><input name='twid' autocapitalize='off' value='" + htmlEscape(cfgTwId) + "'>";
+  h += "<label>Twitch Client Secret</label><input name='twsec' autocapitalize='off' placeholder='";
+  h += cfgTwSecret.length() ? "(saved — leave blank to keep)" : "";
+  h += "'>";
+  if (twError.length() && !portalMode) h += "<small style='color:#e62117'>" + htmlEscape(twError) + "</small>";
+  h += "</details>";
 
   h += "<h1 style='font-size:17px;margin-top:26px'>Display</h1>";
   h += checkbox("auto", cfgAuto, "Switch channels automatically every 10 seconds");
@@ -3195,8 +3269,12 @@ void handleSave() {
     pass.remove(pass.length() - 1);
   while (pass.length() && (pass[0] == ' ' || pass[0] == '\n' || pass[0] == '\r' || pass[0] == '\t'))
     pass.remove(0, 1);
-  if (chs.length() == 0 || (key.length() == 0 && cfgApiKey.length() == 0)) {
-    sendMessage(400, "Missing details", "At least one channel and the API key are needed.");
+  bool ytListed = false;
+  { String l = chs + "\n"; l.replace(",", "\n"); int st = 0;
+    while (true) { int nl = l.indexOf('\n', st); if (nl < 0) break; String x = l.substring(st, nl); x.trim(); x.toLowerCase(); st = nl + 1;
+                   if (x.length() && x.indexOf("twitch.tv/") < 0 && !x.startsWith("twitch:")) ytListed = true; } }
+  if (chs.length() == 0 || (ytListed && key.length() == 0 && cfgApiKey.length() == 0)) {
+    sendMessage(400, "Missing details", "At least one channel is needed, and the YouTube API key for YouTube channels.");
     return;
   }
   String ip = server.arg("ip"), gw = server.arg("gw"), mask = server.arg("mask"), dnsS = server.arg("dns");
@@ -3237,6 +3315,8 @@ void handleSave() {
   cfgEst = server.arg("est") == "1";
   cfgCelebrate = server.arg("celebrate") == "1";
   cfgLiveAlert = server.arg("livealert") == "1";
+  { String v = server.arg("twid"); v.trim(); if (server.hasArg("twid")) cfgTwId = v;
+    v = server.arg("twsec"); v.trim(); if (v.length()) { cfgTwSecret = v; } }
   { String pin = server.arg("pin"); pin.trim();
     if (server.arg("nopin") == "1") cfgPin = "";
     else if (pin.length()) cfgPin = pin; }
@@ -3587,7 +3667,7 @@ void applyItem(JsonObject item, int i, bool alertOnGain) {
 
 void resolveHandles() {
   for (int i = 0; i < numCh; i++) {
-    if (ch[i].id.length()) continue;
+    if (ch[i].tw || ch[i].id.length()) continue;
     JsonDocument doc;
     int code = ytGet("channels", "part=statistics,snippet,contentDetails&fields=" + String(CH_FIELDS) +
                      "&forHandle=" + urlEncode(ch[i].handle), doc);
@@ -3603,15 +3683,15 @@ void resolveHandles() {
 void fetchAll() {
   resolveHandles();
   String ids;
-  for (int i = 0; i < numCh; i++) if (ch[i].id.length()) ids += (ids.length() ? "," : "") + ch[i].id;
-  if (!ids.length()) return;
+  for (int i = 0; i < numCh; i++) if (!ch[i].tw && ch[i].id.length()) ids += (ids.length() ? "," : "") + ch[i].id;
+  if (!ids.length()) { twitchFetch(); raceCheck(); return; }
   JsonDocument doc;
   int code = ytGet("channels", "part=statistics,snippet,contentDetails&fields=" + String(CH_FIELDS) + "&id=" + ids, doc);
   if (code != 200) { netError = apiErrorText(code, doc); return; }
   netError = "";
   lastFetchOk = millis();
   for (int i = 0; i < numCh; i++) {
-    if (!ch[i].id.length()) continue;
+    if (ch[i].tw || !ch[i].id.length()) continue;
     bool found = false;
     for (JsonObject item : doc["items"].as<JsonArray>()) {
       if (ch[i].id == (const char *)(item["id"] | "")) {
@@ -3624,13 +3704,191 @@ void fetchAll() {
     computeStats(i);
     updateRecords(i);
   }
-  // race: who's ahead? alert when that changes
+  twitchFetch();
+  raceCheck();
+}
+
+// race: who's ahead? alert when that changes
+void raceCheck() {
   if (raceSet() && ch[cfgRaceA].subs >= 0 && ch[cfgRaceB].subs >= 0) {
     int lead = ch[cfgRaceA].subs >= ch[cfgRaceB].subs ? cfgRaceA : cfgRaceB;
     if (raceLeader >= 0 && lead != raceLeader && ch[cfgRaceA].subs != ch[cfgRaceB].subs && numAlerts < MAX_CH * 2)
       alerts[numAlerts++] = { A_OVERTAKE, lead, raceLeader, 0, ch[lead].subs };
     raceLeader = lead;
   }
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+//  Twitch: followers, live status and pictures (Helix API, app access token)
+// ════════════════════════════════════════════════════════════════════════════
+String twToken; unsigned long twTokenUntil = 0;
+bool twLoaded = false;                 // no "went live" alerts for streams already running at start-up
+String twError;
+
+bool twGetToken() {
+  if (twToken.length() && millis() < twTokenUntil) return true;
+  if (!cfgTwId.length() || !cfgTwSecret.length()) { twError = "Twitch: add your Client ID and Secret in settings"; return false; }
+  WiFiClientSecure client; client.setInsecure();
+  HTTPClient http; http.setTimeout(10000);
+  if (!http.begin(client, "https://id.twitch.tv/oauth2/token")) return false;
+  http.addHeader("Content-Type", "application/x-www-form-urlencoded");
+  int code = http.POST("client_id=" + urlEncode(cfgTwId) + "&client_secret=" + urlEncode(cfgTwSecret) + "&grant_type=client_credentials");
+  String body = http.getString(); http.end();
+  if (code != 200) { twError = code == 400 || code == 403 ? "Twitch: Client ID or Secret is wrong" : "Twitch: can't sign in (" + String(code) + ")"; return false; }
+  JsonDocument doc; deserializeJson(doc, body);
+  twToken = doc["access_token"] | "";
+  long exp = doc["expires_in"] | 3600;
+  twTokenUntil = millis() + (unsigned long)max(60L, exp - 300) * 1000UL;
+  return twToken.length() > 0;
+}
+
+int twGet(const String &path, JsonDocument &doc) {
+  WiFiClientSecure client; client.setInsecure();
+  HTTPClient http; http.setTimeout(10000);
+  if (!http.begin(client, "https://api.twitch.tv/helix/" + path)) return -100;
+  http.addHeader("Client-Id", cfgTwId);
+  http.addHeader("Authorization", "Bearer " + twToken);
+  int code = http.GET();
+  if (code == 200) deserializeJson(doc, http.getStream());
+  http.end();
+  if (code == 401) twToken = "";         // expired: get a new one next time
+  return code;
+}
+
+// Twitch pictures: decode once into an 88x88 RGB565 bitmap (nearest-pixel scaling)
+uint16_t *twDst; int twSrcW, twSrcH;
+static void twPut(int sx, int sy, uint16_t px) {
+  int dx = sx * 88 / twSrcW, dy = sy * 88 / twSrcH;
+  if (dx >= 0 && dx < 88 && dy >= 0 && dy < 88) twDst[dy * 88 + dx] = px;
+}
+int twPngLine(PNGDRAW *d) {
+  static uint16_t line[320];
+  PNG *png = (PNG *)d->pUser;
+  png->getLineAsRGB565(d, line, PNG_RGB565_LITTLE_ENDIAN, 0x00000000);
+  for (int x = 0; x < d->iWidth && x < 320; x++) twPut(x, d->y, line[x]);
+  return 1;
+}
+int twJpgBlock(JPEGDRAW *d) {
+  for (int y = 0; y < d->iHeight; y++)
+    for (int x = 0; x < d->iWidth; x++) twPut(d->x + x, d->y + y, d->pPixels[y * d->iWidth + x]);
+  return 1;
+}
+void twDecodeAvatar(Channel &c, uint8_t *buf, int len) {
+  uint16_t *dst = (uint16_t *)malloc(88 * 88 * 2);
+  if (!dst) return;
+  memset(dst, 0, 88 * 88 * 2);
+  twDst = dst; bool ok = false;
+  if (len > 8 && buf[0] == 0x89 && buf[1] == 'P') {
+    PNG *png = new PNG();
+    if (png && png->openRAM(buf, len, twPngLine) == PNG_SUCCESS && png->getWidth() <= 320) {
+      twSrcW = png->getWidth(); twSrcH = png->getHeight();
+      ok = png->decode(png, 0) == PNG_SUCCESS;
+      png->close();
+    }
+    delete png;
+  } else if (len > 4 && buf[0] == 0xFF && buf[1] == 0xD8) {
+    if (jpeg.openRAM(buf, len, twJpgBlock)) {
+      jpeg.setPixelType(RGB565_LITTLE_ENDIAN);
+      twSrcW = jpeg.getWidth(); twSrcH = jpeg.getHeight();
+      ok = jpeg.decode(0, 0, 0) == 1;
+      jpeg.close();
+    }
+  }
+  if (ok) { if (c.av565) free(c.av565); c.av565 = dst; } else free(dst);
+}
+void twFetchAvatar(Channel &c, const String &url300) {
+  String url = url300; url.replace("300x300", "150x150");
+  WiFiClientSecure client; client.setInsecure();
+  HTTPClient http; http.setTimeout(10000);
+  if (!http.begin(client, url)) return;
+  if (http.GET() == 200) {
+    int len = http.getSize(), cap = (len > 0 && len < 90000) ? len : 90000;
+    uint8_t *buf = (uint8_t *)malloc(cap);
+    if (buf) {
+      WiFiClient *st = http.getStreamPtr(); int got = 0; unsigned long t0 = millis();
+      while (got < cap && millis() - t0 < 8000) {
+        int a = st->available();
+        if (a > 0) got += st->readBytes(buf + got, min(a, cap - got));
+        else if (!st->connected()) break; else delay(5);
+      }
+      if (len <= 0 || got == len) twDecodeAvatar(c, buf, got);
+      free(buf);
+    }
+  }
+  http.end();
+}
+
+void twitchFetch() {
+  bool any = false;
+  for (int i = 0; i < numCh; i++) if (ch[i].tw) any = true;
+  if (!any) { twError = ""; return; }
+  if (!twGetToken()) { for (int i = 0; i < numCh; i++) if (ch[i].tw && ch[i].subs < 0) ch[i].err = twError; return; }
+  // 1. user ids, names and pictures (until we have them)
+  String q;
+  for (int i = 0; i < numCh; i++) if (ch[i].tw && !ch[i].twId.length()) q += (q.length() ? "&" : "") + String("login=") + ch[i].twLogin;
+  if (q.length()) {
+    JsonDocument doc;
+    int code = twGet("users?" + q, doc);
+    if (code == 200) {
+      for (int i = 0; i < numCh; i++) {
+        if (!ch[i].tw || ch[i].twId.length()) continue;
+        bool found = false;
+        for (JsonObject u : doc["data"].as<JsonArray>()) {
+          if (ch[i].twLogin != (const char *)(u["login"] | "")) continue;
+          ch[i].twId = u["id"] | ""; ch[i].title = u["display_name"] | ch[i].twLogin;
+          ch[i].avatarUrl = u["profile_image_url"] | "";
+          ch[i].joined = parseIso(u["created_at"] | "");
+          found = true;
+          if (!ch[i].lastSampleT) loadLastSample(i);
+          if (ch[i].avatarUrl.length()) twFetchAvatar(ch[i], ch[i].avatarUrl);
+        }
+        if (!found) ch[i].err = "Twitch channel not found";
+      }
+    } else { twError = "Twitch error " + String(code); return; }
+  }
+  // 2. follower totals (one call each; exact numbers, no rounding)
+  bool okAny = false;
+  for (int i = 0; i < numCh; i++) {
+    Channel &c = ch[i];
+    if (!c.tw || !c.twId.length()) continue;
+    JsonDocument doc;
+    if (twGet("channels/followers?first=1&broadcaster_id=" + c.twId, doc) != 200) continue;
+    long n = doc["total"] | -1L;
+    if (n < 0) continue;
+    okAny = true;
+    if (n != c.subs) c.stepChangedAt = timeValid() ? nowT() : 0;
+    if (c.subs >= 0 && n > c.subs && numAlerts < MAX_CH * 2) {
+      long m = nextMilestone(c.subs);
+      alerts[numAlerts++] = n >= m ? Alert{ A_MILESTONE, i, -1, n - c.subs, m } : Alert{ A_GAIN, i, -1, n - c.subs, n };
+    }
+    c.subs = n; c.err = "";
+    recordSample(i); computeStats(i); updateRecords(i);
+    server.handleClient();
+  }
+  // 3. who's live (one call for all)
+  String ids;
+  for (int i = 0; i < numCh; i++) if (ch[i].tw && ch[i].twId.length()) ids += (ids.length() ? "&" : "") + String("user_id=") + ch[i].twId;
+  if (ids.length()) {
+    JsonDocument doc;
+    if (twGet("streams?" + ids, doc) == 200) {
+      for (int i = 0; i < numCh; i++) {
+        Channel &c = ch[i];
+        if (!c.tw || !c.twId.length()) continue;
+        bool wasLive = c.live; c.live = false;
+        for (JsonObject st : doc["data"].as<JsonArray>()) {
+          if (c.twId != (const char *)(st["user_id"] | "")) continue;
+          c.live = true;
+          c.vidTitle = st["title"] | ""; c.liveViewers = st["viewer_count"] | -1L;
+          c.vidPublished = parseIso(st["started_at"] | ""); c.twGame = st["game_name"] | "";
+          String th = st["thumbnail_url"] | ""; th.replace("{width}", "320"); th.replace("{height}", "180"); c.twThumb = th;
+        }
+        if (c.live && !wasLive && twLoaded && cfgLiveAlert && numAlerts < MAX_CH * 2)
+          alerts[numAlerts++] = { A_LIVE, i, -1, 0, c.liveViewers };
+      }
+      twLoaded = true;
+    }
+  }
+  if (okAny) { twError = ""; lastFetchOk = millis(); }
 }
 
 // Latest uploads for every channel: 1 unit each + 1 unit for all video details.
@@ -3735,7 +3993,7 @@ void fetchComments() {
 void fetchAvatars() {
   for (int i = 0; i < numCh; i++) {
     Channel &c = ch[i];
-    if (c.avatar || !c.avatarUrl.length()) continue;
+    if (c.tw || c.avatar || !c.avatarUrl.length()) continue;      // Twitch pictures are handled in twitchFetch
     WiFiClientSecure client; client.setInsecure();
     HTTPClient http;
     http.setFollowRedirects(HTTPC_STRICT_FOLLOW_REDIRECTS);
@@ -3775,7 +4033,7 @@ int portraitRot = 0;
 void setup() {
   Serial.begin(115200);
   delay(300);
-  Serial.println("SubCounter v9.8 starting");
+  Serial.println("SubCounter v9.9 starting");
   setenv("TZ", TZ_UK, 1); tzset();
 
   pinMode(SD_CS, OUTPUT);  digitalWrite(SD_CS, HIGH);
@@ -3800,7 +4058,8 @@ void setup() {
   loadSettings();
   prefs.begin("subcounter", true); app = constrain(prefs.getInt("app", APP_YT), 0, NUM_APPS - 1); prefs.end();
 
-  if (numNets == 0 || cfgApiKey.length() == 0 || numCh == 0) { startPortal(); return; }
+  bool needKey = false; for (int i = 0; i < numCh; i++) if (!ch[i].tw) needKey = true;
+  if (numNets == 0 || (needKey && cfgApiKey.length() == 0) || numCh == 0) { startPortal(); return; }
   if (!connectWiFi()) { drawWifiFailScreen(); delay(8000); startPortal(); return; }
 
   configTime(0, 0, "pool.ntp.org", "time.google.com");   // backup: clock is also set from Google's replies

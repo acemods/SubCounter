@@ -6,6 +6,7 @@ A desk gadget built on the **Waveshare ESP32-C6-Touch-LCD-1.47** that shows live
 
 ## What's new
 
+- **v9.9:** Twitch channels (followers, live status, alerts) alongside YouTube
 - **v9.8:** latest comments, personal records with alerts, monthly recap, compare chart and CSV download on the dashboard
 - **v9.7:** went-live alerts, milestone countdown, optional settings PIN, clearer Today / 24-hour labels
 - **v9.6:** YouTube-style red LIVE ring and badge on profile pictures while a channel is streaming
@@ -31,6 +32,9 @@ Full history: [docs/CHANGELOG.md](docs/CHANGELOG.md)
 - **New video tracker** for your own channel: views per hour for 48 hours, compared with your usual uploads, plus view milestone alerts
 - Subscriber history saved on the board, so graphs survive restarts
 
+**Twitch**
+- Add `twitch.tv/name` channels next to your YouTube ones: exact follower counts, live status, viewers and went-live alerts ([setup](docs/TWITCH.md))
+
 **Apps** (long-press the screen for the home menu)
 - **Weather:** clock, current conditions, next 12 hours, tomorrow, and a rain warning (Open-Meteo, no key needed)
 - **Spotify:** album art, scrolling title and artist, progress bar; tap to play or pause, swipe to skip, swipe up or down for volume. One-click sign-in from the settings page (via a small relay page you host on GitHub Pages)
@@ -55,7 +59,7 @@ Full history: [docs/CHANGELOG.md](docs/CHANGELOG.md)
 
 ## Quick start
 
-1. **Flash the board.** Open <https://espressif.github.io/esptool-js/> in Chrome, connect the board, and flash `builds/latest/SubCounter-v9.8-FULL-new-board-flash-at-0x0.bin` at address **0x0**.
+1. **Flash the board.** Open <https://espressif.github.io/esptool-js/> in Chrome, connect the board, and flash `builds/latest/SubCounter-v9.9-FULL-new-board-flash-at-0x0.bin` at address **0x0**.
 2. **Set it up.** The board shows *SETUP MODE*. Join the Wi-Fi network **SubCounter-Setup** from your phone, and the setup page opens by itself (or go to <http://192.168.4.1>). Pick your Wi-Fi, add your YouTube channels and a YouTube Data API key, then save.
 3. **Use it.** The board shows its address for a few seconds, then your subscriber count. Open **<http://subcounter.local>** (or the IP address) in a browser for the dashboard.
 
@@ -68,6 +72,7 @@ Full instructions: **[docs/GETTING-STARTED.md](docs/GETTING-STARTED.md)**
 | [Getting started](docs/GETTING-STARTED.md) | Flashing, first setup, getting a YouTube API key |
 | [Using SubCounter](docs/USING.md) | Gestures, cards, apps, dashboard, alerts |
 | [Wi-Fi & networks](docs/WIFI.md) | Multiple networks, fixed IP, iPhone hotspot, error messages |
+| [Twitch setup](docs/TWITCH.md) | Free Twitch app, adding Twitch channels |
 | [Spotify setup](docs/SPOTIFY.md) | Developer app, GitHub Pages relay, connecting |
 | [Updating & flash layout](docs/UPDATING.md) | Wireless updates, which file goes at which address |
 | [Building from source](docs/BUILDING.md) | Arduino IDE settings and libraries |

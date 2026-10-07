@@ -22,6 +22,7 @@ The firmware is a single Arduino sketch: `firmware/SubCounter/SubCounter.ino`.
 | GFX Library for Arduino (moononournation) | 1.6.8 |
 | ArduinoJson (Benoit Blanchon) | 7.4.2 |
 | JPEGDEC (bitbank2) | 1.8.4 |
+| PNGdec (bitbank2) | 1.1.7 |
 | U8g2 (olikraus) | 2.37.1 (used for its fonts) |
 
 ## arduino-cli
