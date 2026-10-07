@@ -2,6 +2,13 @@
 
 All builds are in [`builds/`](../builds). Source snapshots for most versions are in the git history.
 
+## v9.6
+- **LIVE badges:** when a channel is streaming, its profile picture gets YouTube's red ring and LIVE pill, on the board (main screen, overview, alerts) and on the dashboard (cards, race, leaderboard). The leaderboard on the board shows a LIVE tag next to the name.
+- Live streams are spotted even when a Short or scheduled stream was posted after them (checks the newest 3 uploads)
+- Live viewer counts refresh every 2 minutes, and the badge goes as soon as the stream ends
+- Latest videos checked every 10 minutes (was 15)
+- Dashboard: clicking a live channel's picture opens the stream; "1 days ago" now reads "1 day ago"
+
 ## v9.5
 - **`http://subcounter.local`**: open the dashboard without knowing the IP address (iPhone, Mac, Windows 10/11; Android support varies)
 - The board shows its IP address and `subcounter.local` for 5 seconds after joining Wi-Fi

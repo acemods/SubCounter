@@ -30,6 +30,10 @@ Swipe down from the main count for the **Leaderboard** (5 per page; swipe left o
 
 YouTube rounds public subscriber counts to 3 significant figures (e.g. 3,180 moves in steps of 10; 1.2M in steps of 10,000). With **Estimated live counts** on, the board estimates the count between steps from each channel's growth rate, and labels it **est.** Growth figures need a few hours of history first. The board records every channel hourly and keeps 31 days.
 
+## LIVE badges
+
+When a channel is streaming, its profile picture gets a red ring and a **LIVE** pill, just like on YouTube, on the board and on the dashboard. The leaderboard shows a LIVE tag next to the name. Streams are picked up within about 10 minutes of starting, and the badge goes within 2 minutes of them ending.
+
 ## Alerts
 
 - **New subscribers:** the screen flashes with the channel and how many it gained
@@ -80,8 +84,9 @@ Settings are at `/settings`, and wireless updates at `/update`.
 | What | How often | Cost |
 |---|---|---|
 | All channel stats | every 2 min | 1 unit |
-| Latest videos | every 15 min | channels + 1 |
+| Latest videos | every 10 min | channels + 1 |
+| Live streams (only while someone is live) | every 2 min | 1 |
 | Your new video | every 5 min for 48 h | 1 |
 | Your typical views | once a day while tracking | 2 |
 
-With 10 channels this is about 1,800 units a day, well inside the free 10,000.
+With 10 channels this is about 2,500–3,000 units a day, well inside the free 10,000.

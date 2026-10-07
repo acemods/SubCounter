@@ -1,5 +1,5 @@
 /*
- * SubCounter v9.5 — YouTube subscriber counter for Waveshare ESP32-C6-Touch-LCD-1.47
+ * SubCounter v9.6 — YouTube subscriber counter for Waveshare ESP32-C6-Touch-LCD-1.47
  *
  *  ON THE BOARD
  *    Swipe left / right ... next / previous channel   (BOOT short press = next)
@@ -66,7 +66,7 @@
 #define AP_NAME            "SubCounter-Setup"
 #define MAX_CH             10
 #define REFRESH_MS         (2UL * 60UL * 1000UL)    // channel stats: 1 API unit
-#define VIDEO_REFRESH_MS   (15UL * 60UL * 1000UL)   // latest videos: channels+1 units
+#define VIDEO_REFRESH_MS   (10UL * 60UL * 1000UL)   // latest videos: channels+1 units
 #define AUTO_SWITCH_MS     10000UL
 #define IDLE_RETURN_MS     120000UL
 #define NIGHT_IDLE_MS      60000UL
@@ -701,6 +701,7 @@ int jpegDraw(JPEGDRAW *p) {
   return 1;
 }
 
+int livePill(int cx, int by, bool big);
 // Draw a channel's picture at (x,y), full 88px or half size 44px
 bool drawAvatar(int i, int x, int y, bool half) {
   Channel &c = ch[i];
@@ -711,6 +712,10 @@ bool drawAvatar(int i, int x, int y, bool half) {
   avCx = x + w / 2; avCy = y + w / 2; avR = w / 2;
   jpeg.decode(x, y, half ? JPEG_SCALE_HALF : 0);
   jpeg.close();
+  if (c.live) {                       // YouTube-style live ring + pill
+    for (int k = 1; k <= (half ? 2 : 3); k++) gfx->drawCircle(avCx, avCy, avR + k, C_RED);
+    livePill(avCx, avCy + avR + (half ? 5 : 8), !half);
+  }
   return true;
 }
 
@@ -735,6 +740,8 @@ void drawPortalScreen() {
 // ── Readable fonts (U8g2) ───────────────────────────────────────────────────
 #define F_S   u8g2_font_helvB14_tf      // smallest text used anywhere
 #define F_M   u8g2_font_helvB18_tf      // normal text
+#define F_XS  u8g2_font_helvB08_tf      // LIVE badges only
+#define F_XS2 u8g2_font_helvB10_tf
 #define F_N24 u8g2_font_logisoso24_tn   // numbers
 #define F_N32 u8g2_font_logisoso32_tn
 #define F_N42 u8g2_font_logisoso42_tn
@@ -753,6 +760,19 @@ void ft(int x, int y, const String &s, const uint8_t *f, uint16_t c) {
 }
 void ftR(int xr, int y, const String &s, const uint8_t *f, uint16_t c) { ft(xr - tw(s, f), y, s, f, c); }
 void ftC(int y, const String &s, const uint8_t *f, uint16_t c, int w = RIGHT_EDGE + 10) { ft(max(0, (w - tw(s, f)) / 2), y, s, f, c); }
+
+// Red "LIVE" pill like YouTube's, centred on cx with its bottom edge at by. Returns its width.
+int livePill(int cx, int by, bool big) {
+  const uint8_t *f = big ? F_XS2 : F_XS;
+  int w = tw("LIVE", f) + (big ? 12 : 8), hgt = big ? 16 : 12;
+  int x = cx - w / 2, y = by - hgt;
+  gfx->fillRoundRect(x - 1, y - 1, w + 2, hgt + 2, (hgt + 2) / 2, C_BG);   // dark edge so it stands out
+  gfx->fillRoundRect(x, y, w, hgt, hgt / 2, C_RED);
+  ft(x + (big ? 6 : 4), by - (big ? 4 : 3), "LIVE", f, C_WHITE);
+  return w;
+}
+// Small pill after a name in a list (baseline y); returns space used
+int livePillAfter(int x, int baseY) { int w = tw("LIVE", F_XS) + 8; livePill(x + 4 + w / 2, baseY + 1, false); return w + 6; }
 
 // shorten with "..." until it fits maxW pixels
 String fit(String s, const uint8_t *f, int maxW) {
@@ -1039,7 +1059,10 @@ void drawBoard() {
     String subs = ch[i].subs >= 0 ? compact(ch[i].subs) : String("-");
     int sw = tw(subs, F_M);
     ft(8, y, num, F_S, C_GREY);
-    ft(30, y, fit(nameOf(i), F_M, gfx->width() - 8 - sw - 40), F_M, col);
+    int lw = ch[i].live ? tw("LIVE", F_XS) + 14 : 0;
+    String nm = fit(nameOf(i), F_M, gfx->width() - 8 - sw - 40 - lw);
+    ft(30, y, nm, F_M, col);
+    if (ch[i].live) livePillAfter(30 + tw(nm, F_M), y - 3);
     ftR(gfx->width() - 8, y, subs, F_M, col);
     y += 26;
   }
@@ -1522,13 +1545,19 @@ void drawPortraitBoard() {
     uint16_t col = (i == 0) ? C_GOLD : C_WHITE;
     String subs = ch[i].subs >= 0 ? compact(ch[i].subs) : String("-");
     if (rowH >= 44) {     // roomy: name on one line, count + today underneath
-      ft(6, y + 18, String(r + 1) + " " + fit(nameOf(i), F_S, W - 30), F_S, col);
+      int lw = ch[i].live ? tw("LIVE", F_XS) + 14 : 0;
+      String nm = String(r + 1) + " " + fit(nameOf(i), F_S, W - 30 - lw);
+      ft(6, y + 18, nm, F_S, col);
+      if (ch[i].live) livePillAfter(6 + tw(nm, F_S), y + 16);
       ft(6, y + 40, subs, F_M, col);
       if (ch[i].statsOk && ch[i].gainToday) ftR(W - 6, y + 40, signedNum(ch[i].gainToday), F_S, C_GREEN);
     } else {
       int sw = tw(subs, F_S);
       ft(6, y + 19, String(r + 1), F_S, C_GREY);
-      ft(24, y + 19, fit(nameOf(i), F_S, W - 34 - sw), F_S, col);
+      int lw = ch[i].live ? tw("LIVE", F_XS) + 14 : 0;
+      String nm = fit(nameOf(i), F_S, W - 34 - sw - lw);
+      ft(24, y + 19, nm, F_S, col);
+      if (ch[i].live) livePillAfter(24 + tw(nm, F_S), y + 17);
       ftR(W - 6, y + 19, subs, F_S, col);
     }
     y += rowH;
@@ -2391,6 +2420,11 @@ main{max-width:1500px;margin:0 auto;padding:20px}
 .err{background:#3a1210;border-color:#e62117}
 .av{width:44px;height:44px;border-radius:50%;object-fit:cover;background:#333;flex:none}
 .av.lg{width:64px;height:64px}
+.avw{position:relative;display:inline-flex;flex:none;border-radius:50%}
+.avw.on{box-shadow:0 0 0 2px var(--card),0 0 0 4px var(--red)}.avw.on.lg{box-shadow:0 0 0 3px var(--card),0 0 0 6px var(--red)}
+.avw .lv{position:absolute;left:50%;bottom:-7px;transform:translateX(-50%);background:var(--red);color:#fff;border:2px solid var(--card);border-radius:5px;padding:0 4px;font-size:9px;line-height:13px;font-weight:800;letter-spacing:.03em}
+.avw.lg .lv{font-size:11px;line-height:15px;padding:0 6px;bottom:-9px}
+td .avw .lv{font-size:7px;line-height:10px;padding:0 3px;bottom:-5px;border-width:1px}td .avw.on{box-shadow:0 0 0 1px var(--card),0 0 0 3px var(--red)}
 .top{display:flex;gap:12px;align-items:center}.top .nm{font-weight:700;font-size:17px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .sub{color:var(--muted);font-size:13px}
 .big{font-size:44px;font-weight:800;letter-spacing:-.02em;margin:10px 0 2px;font-variant-numeric:tabular-nums}
@@ -2421,12 +2455,13 @@ const fmt=n=>n==null||n<0?'-':Number(n).toLocaleString('en-GB');
 const cmp=n=>{if(n==null||n<0)return'-';if(n<10000)return fmt(n);const u=['K','M','B'];let i=-1;while(n>=1000&&i<2){n/=1000;i++}return(n>=100?n.toFixed(0):n>=10?n.toFixed(1):n.toFixed(2))+u[i]};
 const sg=n=>(n>=0?'+':'')+fmt(n);
 const cls=n=>n>0?'pos':n<0?'neg':'';
-function ago(t){if(!t)return'';let d=Date.now()/1000-t;if(d<3600)return Math.max(1,d/60|0)+' min ago';if(d<86400)return(d/3600|0)+' h ago';if(d<2592000)return(d/86400|0)+' days ago';return(d/2592000|0)+' months ago'}
+function ago(t){if(!t)return'';let d=Date.now()/1000-t;const p=(n,w)=>n+' '+w+(n==1?'':'s')+' ago';if(d<3600)return Math.max(1,d/60|0)+' min ago';if(d<86400)return(d/3600|0)+' h ago';if(d<2592000)return p(d/86400|0,'day');return p(d/2592000|0,'month')}
 function dur(s){if(!s)return'';const p=x=>String(x).padStart(2,'0');return s>=3600?`${s/3600|0}:${p((s/60|0)%60)}:${p(s%60)}`:`${s/60|0}:${p(s%60)}`}
 let D=null,graphs={};
 function est(c){if(!D.est||!c.rate||c.rate<=0||c.step<=1||!c.stepAt)return c.subs;return c.subs+Math.min(c.step-1,Math.max(0,Math.floor(c.rate*(Date.now()/1000-c.stepAt)/86400)))}
 function eta(c){const e=est(c);if(!(c.rate>0.01))return c.rate<0?'Losing subscribers':'Need more data for a date';const d=(c.next-e)/c.rate;if(d<1)return'Expected today';if(d>3650)return'10+ years away';return'Expected around '+new Date(Date.now()+d*864e5).toLocaleDateString('en-GB',{day:'numeric',month:'short',year:d>300?'numeric':undefined})}
-function av(c,lg){return c.avatar?h('img',{class:'av'+(lg?' lg':''),src:c.avatar,alt:''}):h('div',{class:'av'+(lg?' lg':'')})}
+function av(c,lg){const i=c.avatar?h('img',{class:'av'+(lg?' lg':''),src:c.avatar,alt:''}):h('div',{class:'av'+(lg?' lg':'')});const L=isLive(c);return h('span',{class:'avw'+(L?' on':'')+(lg?' lg':''),title:L?name(c)+' is live now':''},i,L?h('span',{class:'lv',text:'LIVE'}):null)}
+function isLive(c){return !!(c.vid&&c.vid.live)}
 function name(c){return c.title||c.handle}
 async function graph(c,days,box){box.textContent='';const r=await fetch('/api/history?i='+c.i+'&days='+days);const pts=await r.json();if(pts.length<2){box.append(h('div',{class:'sub',text:'Collecting data – recorded every hour'}));return}
 pts.push([Date.now()/1000|0,c.subs]);const W=600,H=120,t0=pts[0][0],t1=pts[pts.length-1][0];let mn=Math.min(...pts.map(p=>p[1])),mx=Math.max(...pts.map(p=>p[1]));if(mx==mn){mx++;mn--}
@@ -2436,7 +2471,7 @@ const area=document.createElementNS(ns,'path');area.setAttribute('d',d+` L ${X(t
 const ln=document.createElementNS(ns,'path');ln.setAttribute('d',d);ln.setAttribute('fill','none');ln.setAttribute('stroke','#30d158');ln.setAttribute('stroke-width','2.5');ln.setAttribute('vector-effect','non-scaling-stroke');svg.append(ln);
 box.append(svg,h('div',{class:'sub',text:`${cmp(mn)} – ${cmp(mx)}  ·  ${new Date(t0*1000).toLocaleDateString('en-GB',{day:'numeric',month:'short'})} to now`}))}
 function channelCard(c){const card=h('div',{class:'card'+(c.err&&c.subs<0?' err':'')});
-const link=c.id?'https://www.youtube.com/channel/'+c.id:'#';
+const link=isLive(c)?'https://youtu.be/'+c.vid.id:c.id?'https://www.youtube.com/channel/'+c.id:'#';
 card.append(h('a',{class:'top',href:link,target:'_blank'},av(c,true),h('div',{style:'min-width:0'},h('div',{class:'nm',text:name(c)}),h('div',{class:'sub',text:[c.handle,c.country,c.joined?'since '+new Date(c.joined*1000).getFullYear():''].filter(Boolean).join(' · ')}))));
 if(c.err&&c.subs<0){card.append(h('p',{text:c.err}));return card}
 const e=est(c);card.append(h('div',{class:'big'},h('span',{'data-est':c.i,text:fmt(e)}),(D.est&&c.step>1&&c.rate>0)?h('span',{class:'est',text:'est.'}):null));
@@ -3218,39 +3253,71 @@ void fetchAll() {
   }
 }
 
-// Latest upload for every channel: 1 unit each + 1 unit for all video details
+// Latest uploads for every channel: 1 unit each + 1 unit for all video details.
+// Looks at the newest 3 so a live stream is still spotted if a Short or a
+// scheduled premiere sits on top of it.
+#define VID_LOOK 3
+void applyVideo(Channel &c, JsonObject it) {
+  c.vidId = it["id"] | "";
+  c.vidTitle = it["snippet"]["title"] | "";
+  c.vidPublished = parseIso(it["snippet"]["publishedAt"] | "");
+  c.live = String(it["snippet"]["liveBroadcastContent"] | "none") == "live";
+  c.vidDuration = parseDuration(it["contentDetails"]["duration"] | "");
+  c.vidViews = atoll(it["statistics"]["viewCount"] | "-1");
+  c.vidLikes = String(it["statistics"]["likeCount"] | "-1").toInt();
+  c.vidComments = String(it["statistics"]["commentCount"] | "-1").toInt();
+  c.liveViewers = String(it["liveStreamingDetails"]["concurrentViewers"] | "-1").toInt();
+}
+const char *VID_FIELDS = "part=snippet,statistics,contentDetails,liveStreamingDetails"
+  "&fields=items(id,snippet(title,publishedAt,liveBroadcastContent),statistics(viewCount,likeCount,commentCount),"
+  "contentDetails/duration,liveStreamingDetails/concurrentViewers)&id=";
+
 void fetchLatestVideos() {
-  String vids;
+  String cand[MAX_CH][VID_LOOK]; String vids;
   for (int i = 0; i < numCh; i++) {
     if (!ch[i].uploads.length()) continue;
     JsonDocument doc;
-    int code = ytGet("playlistItems", "part=contentDetails&maxResults=1&fields=items/contentDetails/videoId&playlistId=" +
-                     ch[i].uploads, doc);
+    int code = ytGet("playlistItems", "part=contentDetails&maxResults=" + String(VID_LOOK) +
+                     "&fields=items/contentDetails/videoId&playlistId=" + ch[i].uploads, doc);
     if (code != 200) continue;
-    String v = doc["items"][0]["contentDetails"]["videoId"] | "";
-    if (v.length()) { ch[i].vidId = v; vids += (vids.length() ? "," : "") + v; }
+    int k = 0;
+    for (JsonObject it : doc["items"].as<JsonArray>()) {
+      String v = it["contentDetails"]["videoId"] | "";
+      if (v.length() && k < VID_LOOK) { cand[i][k++] = v; vids += (vids.length() ? "," : "") + v; }
+    }
   }
   if (!vids.length()) return;
   JsonDocument doc;
-  int code = ytGet("videos", "part=snippet,statistics,contentDetails,liveStreamingDetails"
-                   "&fields=items(id,snippet(title,publishedAt,liveBroadcastContent),statistics(viewCount,likeCount,commentCount),"
-                   "contentDetails/duration,liveStreamingDetails/concurrentViewers)&id=" + vids, doc);
+  int code = ytGet("videos", String(VID_FIELDS) + vids, doc);
   if (code != 200) return;
-  for (JsonObject it : doc["items"].as<JsonArray>()) {
-    String id = it["id"] | "";
-    for (int i = 0; i < numCh; i++) {
-      if (ch[i].vidId != id) continue;
-      Channel &c = ch[i];
-      c.vidTitle = it["snippet"]["title"] | "";
-      c.vidPublished = parseIso(it["snippet"]["publishedAt"] | "");
-      c.live = String(it["snippet"]["liveBroadcastContent"] | "none") == "live";
-      c.vidDuration = parseDuration(it["contentDetails"]["duration"] | "");
-      c.vidViews = atoll(it["statistics"]["viewCount"] | "-1");
-      c.vidLikes = String(it["statistics"]["likeCount"] | "-1").toInt();
-      c.vidComments = String(it["statistics"]["commentCount"] | "-1").toInt();
-      c.liveViewers = String(it["liveStreamingDetails"]["concurrentViewers"] | "-1").toInt();
+  JsonArray items = doc["items"].as<JsonArray>();
+  for (int i = 0; i < numCh; i++) {
+    if (!cand[i][0].length()) continue;
+    JsonObject pick, firstDone;
+    for (int k = 0; k < VID_LOOK && cand[i][k].length(); k++) {
+      for (JsonObject it : items) {
+        if (cand[i][k] != (const char *)(it["id"] | "")) continue;
+        String lbc = it["snippet"]["liveBroadcastContent"] | "none";
+        if (lbc == "live" && pick.isNull()) pick = it;                    // live wins
+        if (lbc == "none" && firstDone.isNull()) firstDone = it;          // newest normal video
+      }
     }
+    if (pick.isNull()) pick = firstDone;
+    if (pick.isNull()) continue;
+    applyVideo(ch[i], pick);
   }
+}
+
+// While someone is live: refresh just their stream (1 unit) every stats round,
+// so the viewer count stays current and the badge goes away when they finish
+void refreshLiveVideos() {
+  String vids;
+  for (int i = 0; i < numCh; i++) if (ch[i].live && ch[i].vidId.length()) vids += (vids.length() ? "," : "") + ch[i].vidId;
+  if (!vids.length()) return;
+  JsonDocument doc;
+  if (ytGet("videos", String(VID_FIELDS) + vids, doc) != 200) return;
+  for (JsonObject it : doc["items"].as<JsonArray>())
+    for (int i = 0; i < numCh; i++) if (ch[i].vidId == (const char *)(it["id"] | "")) applyVideo(ch[i], it);
 }
 
 // Profile pictures (not API quota — plain image downloads), once per boot
@@ -3297,7 +3364,7 @@ int portraitRot = 0;
 void setup() {
   Serial.begin(115200);
   delay(300);
-  Serial.println("SubCounter v9.5 starting");
+  Serial.println("SubCounter v9.6 starting");
   setenv("TZ", TZ_UK, 1); tzset();
 
   pinMode(SD_CS, OUTPUT);  digitalWrite(SD_CS, HIGH);
@@ -3545,6 +3612,7 @@ void loop() {
   if (lastFetch == 0 || millis() - lastFetch > REFRESH_MS) {
     lastFetch = millis();
     fetchAll();
+    refreshLiveVideos();     // keeps LIVE badges and viewer counts current
     fetchAvatars();          // picks up any that failed earlier
     refreshed = true;
   }

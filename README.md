@@ -6,6 +6,7 @@ A desk gadget built on the **Waveshare ESP32-C6-Touch-LCD-1.47** that shows live
 
 ## What's new
 
+- **v9.6:** YouTube-style red LIVE ring and badge on profile pictures while a channel is streaming
 - **v9.5:** open the dashboard at `http://subcounter.local`; IP address shown on start-up and on the home menu
 - **v9.4:** redesigned web dashboard: a side column (last 24 hours, weather, race, leaderboard) next to a grid of channel cards, laid out for desktop, tablet and phone
 - **v9.3:** idle clock after a few minutes without use
@@ -21,6 +22,7 @@ Full history: [docs/CHANGELOG.md](docs/CHANGELOG.md)
 - Swipe up for detail cards: Overview (profile picture, views, videos), Latest video (with a LIVE badge), Growth (today / 7 / 30 days), a 7-day graph and Next milestone (with a predicted date)
 - Swipe down for the Leaderboard, then the Subscriber race (two channels head to head, with an "OVERTAKE!" alert)
 - Alerts for new subscribers, with confetti for milestones (bigger milestone, bigger party)
+- **LIVE badges:** a red ring and LIVE pill on a channel's picture while they're streaming, like on YouTube
 - Estimated live counts between YouTube's rounded steps (marked "est.")
 - **New video tracker** for your own channel: views per hour for 48 hours, compared with your usual uploads, plus view milestone alerts
 - Subscriber history saved on the board, so graphs survive restarts
@@ -47,7 +49,7 @@ Full history: [docs/CHANGELOG.md](docs/CHANGELOG.md)
 
 ## Quick start
 
-1. **Flash the board.** Open <https://espressif.github.io/esptool-js/> in Chrome, connect the board, and flash `builds/latest/SubCounter-v9.5-FULL-new-board-flash-at-0x0.bin` at address **0x0**.
+1. **Flash the board.** Open <https://espressif.github.io/esptool-js/> in Chrome, connect the board, and flash `builds/latest/SubCounter-v9.6-FULL-new-board-flash-at-0x0.bin` at address **0x0**.
 2. **Set it up.** The board shows *SETUP MODE*. Join the Wi-Fi network **SubCounter-Setup** from your phone, and the setup page opens by itself (or go to <http://192.168.4.1>). Pick your Wi-Fi, add your YouTube channels and a YouTube Data API key, then save.
 3. **Use it.** The board shows its address for a few seconds, then your subscriber count. Open **<http://subcounter.local>** (or the IP address) in a browser for the dashboard.
 
