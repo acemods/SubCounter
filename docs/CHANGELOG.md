@@ -2,6 +2,9 @@
 
 All builds are in [`builds/`](../builds). Source snapshots for most versions are in the git history.
 
+## v11.3
+- Home menu back to **three big tiles** (YouTube, Weather, Spotify); **swipe left** for a second page with **Device** (room for more later). Page dots show where you are; a red dot means an update is waiting on the Device page.
+
 ## v11.2
 - **Device screen** (long-press → Device): QR code to open the dashboard on your phone, IP address, version, and a **Check for update / Install** button right on the touch screen. The QR screen also shows for a few seconds at start-up.
 - **Phone notifications** with the free ntfy app: milestones, went live, new records, overtakes, your video's view milestones (and optionally every new subscriber). Settings → Phone notifications, with a *Send a test notification* button.

@@ -1,7 +1,7 @@
 {
- "version": "11.2",
- "app": "SubCounter-v11.2-APP-ONLY.bin",
- "size": 1768272,
- "md5": "6ebf070e56afb324a833e4d95d10380c",
- "notes": "Device screen with QR code and update button, phone notifications (ntfy), top videos, colour themes and brightness, settings backup/restore"
+ "version": "11.3",
+ "app": "SubCounter-v11.3-APP-ONLY.bin",
+ "size": 1768432,
+ "md5": "5624ad8422368da1c2ed536cc929f008",
+ "notes": "Home menu back to three big tiles; swipe left for Device"
 }

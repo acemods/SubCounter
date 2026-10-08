@@ -54,7 +54,7 @@ Settings → *Security* → type a PIN (4–12 characters) in both boxes → **S
 
 ## Device screen
 
-Long-press for the home menu and tap **Device**:
+Long-press for the home menu, **swipe left** to the second page and tap **Device**:
 - a **QR code**: point your phone's camera at it to open the dashboard
 - the board's IP address, `subcounter.local` and the version it's running
 - **Check for update**, or **Install vX.Y** when a new version is out (a red dot on the Device tile means one is waiting)

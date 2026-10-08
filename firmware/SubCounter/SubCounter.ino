@@ -1,5 +1,5 @@
 /*
- * SubCounter v11.2 — YouTube / Twitch subscriber counter and desk hub for the
+ * SubCounter v11.3 — YouTube / Twitch subscriber counter and desk hub for the
  * Waveshare ESP32-C6-Touch-LCD-1.47.  https://github.com/acemods/SubCounter
  *
  *  ON THE BOARD
@@ -7,7 +7,7 @@
  *    Swipe up ............. detail cards: Overview, Latest video, Comments, Growth,
  *                           Records, 7-day graph, Milestone
  *    Swipe down ........... back; from the main count: Leaderboard, then Race
- *    Long-press, or hold BOOT ~1 s ... home menu (YouTube, Weather, Spotify)
+ *    Long-press, or hold BOOT ~1 s ... home menu (YouTube, Weather, Spotify; swipe for Device)
  *    Shake / face-down / on its side / double-tap the desk ... refresh / off / tall board / next
  *    Hold BOOT 3 s ........ setup mode
  *
@@ -52,7 +52,7 @@
 #include <nvs.h>       // settings backup: list every saved setting
 #include <ESPmDNS.h>   // http://subcounter.local
 #define HOSTNAME "subcounter"
-#define FW_VERSION "11.2"     // shown on start-up, home menu, settings, update page and dashboard
+#define FW_VERSION "11.3"     // shown on start-up, home menu, settings, update page and dashboard
 
 // ── Pins (ESP32-C6 version of the board) ────────────────────────────────────
 #define LCD_SCK   1

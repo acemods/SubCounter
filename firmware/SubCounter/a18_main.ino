@@ -269,6 +269,7 @@ void loopBody() {
     }
     if (swipe == 'H') {                                     // long-press: home menu (or close it)
       menuOpen = !menuOpen;
+      if (menuOpen) menuPage = 0;                           // always open on the apps page
       gfx->fillScreen(C_BG); drawApp();
       swipe = 0;
     }
@@ -282,8 +283,12 @@ void loopBody() {
     }
     else if (menuOpen) {
       if (swipe == 'T') {
-        int a = constrain(tapX * MENU_TILES / gfx->width(), 0, MENU_TILES - 1);
-        if (a >= NUM_APPS) openDevice(); else openApp(a);
+        int a = menuPage * MENU_PER_PAGE + constrain(tapX * MENU_PER_PAGE / gfx->width(), 0, MENU_PER_PAGE - 1);
+        if (a < NUM_APPS) openApp(a);
+        else if (a < MENU_TILES) openDevice();
+      } else if ((swipe == 'L' || swipe == 'R') && menuPages() > 1) {
+        menuPage = (menuPage + (swipe == 'L' ? 1 : menuPages() - 1)) % menuPages();
+        gfx->fillScreen(C_BG); drawMenu();
       } else if (bootShort) openApp(app);
       if (millis() - lastInteract > 20000UL) openApp(app);  // menu left open: go back
     }

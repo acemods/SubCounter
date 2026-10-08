@@ -505,7 +505,10 @@ void drawAppIcon(int a, int cx, int cy) {
   }
 }
 
-#define MENU_TILES 4            // the three apps + Device
+#define MENU_TILES 4            // the three apps + Device (more tiles can be added later)
+#define MENU_PER_PAGE 3         // three big tiles per page; swipe left/right for the next page
+int menuPage = 0;
+int menuPages() { return (MENU_TILES + MENU_PER_PAGE - 1) / MENU_PER_PAGE; }
 void drawDeviceIcon(int cx, int cy, uint16_t col) {
   gfx->drawRoundRect(cx - 17, cy - 26, 34, 52, 6, col);              // a phone...
   gfx->drawRoundRect(cx - 16, cy - 25, 32, 50, 5, col);
@@ -518,15 +521,28 @@ void drawDeviceIcon(int cx, int cy, uint16_t col) {
 void drawMenu() {
   gfx->fillScreen(C_BG);
   ftR(gfx->width() - 6, 14, "v" FW_VERSION, F_XS, C_DKGREY);
-  if (updAvail) ft(6, 14, "v" + updVer + " available - tap Device", F_XS, C_GOLD);
+  if (updAvail) ft(6, 14, "v" + updVer + " available - swipe to Device", F_XS, C_GOLD);
   const char *names[MENU_TILES] = { "YouTube", "Weather", "Spotify", "Device" };
-  int w = gfx->width() / MENU_TILES;
-  for (int a = 0; a < MENU_TILES; a++) {
-    int cx = a * w + w / 2;
-    if (a == app) gfx->drawRoundRect(a * w + 4, 22, w - 8, 128, 12, C_DKGREY);
+  menuPage = constrain(menuPage, 0, menuPages() - 1);
+  int w = gfx->width() / MENU_PER_PAGE;
+  for (int s = 0; s < MENU_PER_PAGE; s++) {
+    int a = menuPage * MENU_PER_PAGE + s;
+    if (a >= MENU_TILES) break;
+    int cx = s * w + w / 2;
+    if (a == app) gfx->drawRoundRect(s * w + 6, 22, w - 12, 120, 12, C_DKGREY);
     if (a < NUM_APPS) drawAppIcon(a, cx, 70);
     else { drawDeviceIcon(cx, 70, updAvail ? C_GOLD : C_WHITE); if (updAvail) gfx->fillCircle(cx + 18, 44, 6, C_RED); }
     ft(cx - tw(names[a], F_S) / 2, 130, names[a], F_S, a == app ? C_WHITE : C_GREY);
+  }
+  // page dots (a red one if an update is waiting on a page you're not on)
+  int np = menuPages();
+  if (np > 1) {
+    int x0 = gfx->width() / 2 - (np - 1) * 7;
+    for (int p = 0; p < np; p++) {
+      bool hasUpd = updAvail && p != menuPage && p == (NUM_APPS / MENU_PER_PAGE);
+      if (p == menuPage) gfx->fillCircle(x0 + p * 14, 151, 3, C_WHITE);
+      else gfx->fillCircle(x0 + p * 14, 151, 3, hasUpd ? C_RED : C_DKGREY);
+    }
   }
   if (WiFi.status() == WL_CONNECTED) ftC(168, WiFi.localIP().toString() + "  ·  " HOSTNAME ".local", F_S, C_GREY, gfx->width());
   else ftC(168, "Tap an app", F_S, C_DKGREY, gfx->width());
