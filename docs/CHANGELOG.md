@@ -2,6 +2,12 @@
 
 All builds are in [`builds/`](../builds). Source snapshots for most versions are in the git history.
 
+## v11.0
+- **Background networking:** all internet requests now run in their own task, so touch, swipes, long-press, animations and the web pages stay smooth however slow the network is (no more freezes while Spotify, YouTube or Twitch answer)
+- **Faster refreshes:** secure connections to YouTube, Twitch and Spotify are kept open and re-used for a short while instead of being set up for every request
+- Spotify taps and swipes are sent in the background; Wi-Fi drop-outs no longer freeze the screen while reconnecting
+- **Code split into files** (`firmware/SubCounter/a01_… a18_…`), see [BUILDING.md](BUILDING.md)
+
 ## v10.4
 - **Fixed: stuck in the Spotify app.** When Spotify sign-in failed, the board retried every 3 s and froze briefly each time, so long-presses were missed. It now backs off (15 s, 30 s, 1 min … up to 5 min), polls every 6 s when paused, and uses shorter timeouts.
 - **Hold BOOT for about 1 second** to open the home menu from anywhere (3 seconds is still setup mode)

@@ -1,6 +1,6 @@
 # Building from source
 
-The firmware is a single Arduino sketch: `firmware/SubCounter/SubCounter.ino`.
+The firmware is an Arduino sketch in `firmware/SubCounter/`: open `SubCounter.ino` and the IDE shows the other files as tabs.
 
 ## Arduino IDE
 
@@ -56,16 +56,30 @@ python3 -c "import sys;open('usb.bin','wb').write(b'\xff'*0x2000+open('build/Sub
 
 ## Code map
 
-| Section | What it does |
+Arduino joins the files into one program: `SubCounter.ino` first, then the others in name order (that's why they're numbered).
+
+| File | What it does |
 |---|---|
-| Settings | Preferences (NVS) load and save, saved networks |
-| Subscriber history | LittleFS hourly samples, growth stats, estimates |
-| Screens | Main and detail cards, leaderboard (U8g2 fonts) |
-| Touch / Motion | AXS5106L swipes, taps and long-press; QMI8658 shake, tap and orientation |
-| Celebrations / race / summary / night | Fun features |
-| Wireless updates / New video tracker | OTA via `Update`, own-upload tracking |
-| Apps | Home menu, Weather (Open-Meteo), Spotify (Web API) |
-| Web | Dashboard, JSON API, settings, setup portal |
-| Wi-Fi | Multi-network connect, diagnostics, fixed IP, roaming |
-| YouTube API | Channels, latest videos, avatars |
-| Setup & loop | Modes (normal, sleep, portrait, summary, night) and app dispatch |
+| `SubCounter.ino` | Settings constants, shared data, **background networking** (lock, re-usable HTTPS connections) |
+| `a01_panel` | Display start-up sequence (JD9853) |
+| `a02_helpers` | Text, numbers, time, URL helpers |
+| `a03_settings` | Load/save settings (NVS), channel lists |
+| `a04_history` | Subscriber history (LittleFS), growth stats, records, estimates |
+| `a05_avatars` | Round profile pictures |
+| `a06_screens` | Main count and detail cards, leaderboard (U8g2 fonts) |
+| `a07_touch` / `a08_motion` | AXS5106L swipes, taps, long-press; QMI8658 shake, tap, orientation |
+| `a09_alerts` | Alerts, confetti, race, daily summary, recap, clocks, tall leaderboard |
+| `a10_ota` | Wireless updates |
+| `a11_tracker` | New video tracker |
+| `a12_apps` | Home menu, Weather (Open-Meteo), Spotify (Web API) |
+| `a13_web` | Dashboard, JSON/CSV API, settings page, PIN |
+| `a14_portal` / `a15_wifi` | Setup mode; multi-network Wi-Fi, roaming |
+| `a16_youtube` / `a17_twitch` | YouTube Data API; Twitch Helix API |
+| `a18_main` | `setup()`, `loop()` and the **network task** |
+
+### How the two tasks work
+
+- **`loop()`** (main task) handles the screen, touch, buttons, motion and web pages. It never waits on the internet.
+- **The network task** (`netCycle()` in `a18_main`) does every timed request: YouTube, Twitch, Spotify, weather, pictures. It sets flags (`netRefreshed`, `netSpRedraw` …) that tell `loop()` to redraw.
+- Shared data is protected by one lock. Each task holds it while it reads or changes data; network calls release it while they wait (`NetIO`). So data is never changed halfway through a redraw, and slow servers never freeze the screen.
+- YouTube, Twitch and Spotify requests re-use their secure connection for 20–30 s (`httpsCall`), which cuts each request from 1–2 s to a fraction of that.
