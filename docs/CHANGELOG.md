@@ -2,6 +2,9 @@
 
 All builds are in [`builds/`](../builds). Source snapshots for most versions are in the git history.
 
+## v10.3
+- Fixed a stray "Â" in the home menu between the IP address and subcounter.local (now a proper · dot)
+
 ## v10.2
 - **Twitch has its own section in settings** with its own channel box: type just the name (e.g. `shroud`); pasted `twitch.tv/…` links work too
 - Twitch lines from the old mixed list move across automatically; a Twitch link pasted in the YouTube box is moved over on save

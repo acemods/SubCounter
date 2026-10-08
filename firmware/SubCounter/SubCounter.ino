@@ -1,5 +1,5 @@
 /*
- * SubCounter v10.2 — YouTube subscriber counter for Waveshare ESP32-C6-Touch-LCD-1.47
+ * SubCounter v10.3 — YouTube subscriber counter for Waveshare ESP32-C6-Touch-LCD-1.47
  *
  *  ON THE BOARD
  *    Swipe left / right ... next / previous channel   (BOOT short press = next)
@@ -48,7 +48,7 @@
 #include <Update.h>    // wireless firmware updates
 #include <ESPmDNS.h>   // http://subcounter.local
 #define HOSTNAME "subcounter"
-#define FW_VERSION "10.2"     // shown on start-up, home menu, settings, update page and dashboard
+#define FW_VERSION "10.3"     // shown on start-up, home menu, settings, update page and dashboard
 
 // ── Pins (ESP32-C6 version of the board) ────────────────────────────────────
 #define LCD_SCK   1
@@ -2721,7 +2721,7 @@ void drawMenu() {
     drawAppIcon(a, cx, 70);
     ft(cx - tw(names[a], F_S) / 2, 130, names[a], F_S, a == app ? C_WHITE : C_GREY);
   }
-  if (WiFi.status() == WL_CONNECTED) ftC(168, WiFi.localIP().toString() + "  Â·  " HOSTNAME ".local", F_S, C_GREY, gfx->width());
+  if (WiFi.status() == WL_CONNECTED) ftC(168, WiFi.localIP().toString() + "  ·  " HOSTNAME ".local", F_S, C_GREY, gfx->width());
   else ftC(168, "Tap an app", F_S, C_DKGREY, gfx->width());
 }
 
