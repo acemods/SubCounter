@@ -28,10 +28,15 @@ jobs:
 
       - name: Install ESP32 core and libraries
         run: |
-          arduino-cli config init --additional-urls https://espressif.github.io/arduino-esp32/package_esp32_index.json
-          arduino-cli core update-index
-          arduino-cli core install esp32:esp32@3.3.12
-          arduino-cli lib install "GFX Library for Arduino@1.6.8" "ArduinoJson@7.4.2" "JPEGDEC@1.8.4" "PNGdec@1.1.7" "U8g2@2.37.1"
+          URL=https://espressif.github.io/arduino-esp32/package_esp32_index.json
+          arduino-cli core update-index --additional-urls "$URL"
+          arduino-cli core install esp32:esp32@3.3.12 --additional-urls "$URL"
+          arduino-cli lib update-index
+          # pinned versions first; fall back to the newest if a version isn't in the index
+          for L in "GFX Library for Arduino@1.6.8" "ArduinoJson@7.4.2" "JPEGDEC@1.8.4" "PNGdec@1.1.7" "U8g2@2.37.1"; do
+            arduino-cli lib install "$L" || arduino-cli lib install "${L%@*}"
+          done
+          arduino-cli lib list
 
       - name: Compile
         run: |
