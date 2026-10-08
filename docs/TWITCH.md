@@ -10,7 +10,7 @@ SubCounter can track Twitch channels alongside YouTube ones: follower count, liv
 2. Open the **Applications** tab → **Register Your Application**.
 3. Fill in:
    - **Name:** must be unique across all of Twitch, e.g. `SubCounter-yourname`
-   - **OAuth Redirect URLs:** `http://localhost` → click **Add** (SubCounter doesn't use it, but the form needs one)
+   - **OAuth Redirect URLs:** `https://localhost` → click **Add**. Twitch now insists on **https**. SubCounter never uses this address, so any https address is fine; if `https://localhost` is refused, use your GitHub Pages address (e.g. `https://yourname.github.io/`).
    - **Category:** *Other*
    - **Client Type** (if shown): *Confidential*
    - Tick **I'm not a robot**

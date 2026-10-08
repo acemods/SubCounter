@@ -3140,7 +3140,7 @@ void handleSettings() {
   h += "'><small>Only needed for YouTube channels.</small>";
   h += "<details" + String(cfgTwId.length() || cfgChannels.indexOf("twitch") >= 0 ? " open" : "") + "><summary>Twitch app (only for Twitch channels)</summary>";
   h += "<small>Create a free app at <a href='https://dev.twitch.tv/console/apps' target='_blank'>dev.twitch.tv/console</a> "
-       "(Category: Other, Client type: Confidential, OAuth Redirect URL: <code>http://localhost</code>), then copy its Client ID and a new Secret here.</small>";
+       "(Category: Other, Client type: Confidential, OAuth Redirect URL: <code>https://localhost</code> – any https address works, it isn't used), then copy its Client ID and a new Secret here.</small>";
   h += "<label>Twitch Client ID</label><input name='twid' autocapitalize='off' autocomplete='off' value='" + htmlEscape(cfgTwId) + "'>";
   h += "<label>Twitch Client Secret</label><input name='twsec' type='password' autocapitalize='off' autocomplete='new-password' placeholder='";
   h += cfgTwSecret.length() ? "(saved — leave blank to keep)" : "";
