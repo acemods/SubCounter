@@ -1213,7 +1213,24 @@ void handleNotFound() {
   server.send(302, "text/plain", "");
 }
 
+// Plain-text diagnostics: open http://subcounter.local/debug and copy what it says
+void handleDebug() {
+  String o; o.reserve(1500);
+  o += "SubCounter v" FW_VERSION "\n";
+  o += "Up " + String(millis() / 1000) + " s   free memory " + String(ESP.getFreeHeap()) + " (lowest " + String(ESP.getMinFreeHeap()) + ")\n";
+  o += "Network task: " + String((const char *)netStage) + (netHolding ? " (busy with data)" : "") + "\n";
+  o += "Wi-Fi signal " + String(WiFi.RSSI()) + " dBm\n\n";
+  o += "Times the screen was frozen for more than 0.4 s (newest first), worst " + String(worstStall) + " ms:\n";
+  if (!stallN) o += "  none\n";
+  for (int k = 0; k < stallN; k++) {
+    const Stall &s = stalls[(stallPos - 1 - k + 16) % 16];
+    o += "  at " + String(s.at / 1000) + " s: " + String(s.ms) + " ms  " + s.what + "\n";
+  }
+  server.send(200, "text/plain; charset=utf-8", o);
+}
+
 void registerRoutes() {
+  server.on("/debug", HTTP_GET, handleDebug);
   server.on("/", HTTP_GET, handleDashboard);
   server.on("/settings", HTTP_GET, handleSettings);
   server.on("/save", HTTP_POST, handleSave);

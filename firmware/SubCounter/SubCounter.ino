@@ -52,7 +52,7 @@
 #include <nvs.h>       // settings backup: list every saved setting
 #include <ESPmDNS.h>   // http://subcounter.local
 #define HOSTNAME "subcounter"
-#define FW_VERSION "12.0"     // shown on start-up, home menu, settings, update page and dashboard
+#define FW_VERSION "12.1"     // shown on start-up, home menu, settings, update page and dashboard
 
 // ── Pins (ESP32-C6 version of the board) ────────────────────────────────────
 #define LCD_SCK   1
@@ -191,6 +191,19 @@ volatile bool netRunning = false;
 volatile bool netPause = false;          // during wireless updates and Wi-Fi switches
 volatile bool netRefreshed = false, netWxRefreshed = false, netSpRedraw = false;
 volatile bool netBusy = false;           // the network task is in the middle of a cycle
+// ── Diagnostics (/debug): what the network task is doing, and any moment the screen froze ──
+volatile const char *netStage = "starting";
+volatile bool netHolding = false;          // the network task has the data right now (not waiting on the internet)
+struct Stall { unsigned long at, ms; char what[48]; };
+Stall stalls[16]; int stallN = 0, stallPos = 0;
+unsigned long worstStall = 0;
+void noteStall(unsigned long ms, const String &what) {
+  Stall &s = stalls[stallPos]; s.at = millis(); s.ms = ms;
+  strncpy(s.what, what.c_str(), sizeof(s.what) - 1); s.what[sizeof(s.what) - 1] = 0;
+  stallPos = (stallPos + 1) % 16; if (stallN < 16) stallN++;
+  if (ms > worstStall) worstStall = ms;
+  Serial.printf("STALL %lu ms: %s\n", ms, s.what);
+}
 bool onNetTask() { return netRunning && xTaskGetCurrentTaskHandle() == netTaskH; }
 void lockData()   { if (dataLock) xSemaphoreTakeRecursive(dataLock, portMAX_DELAY); }
 void unlockData() { if (dataLock) xSemaphoreGiveRecursive(dataLock); }
@@ -202,8 +215,9 @@ struct NetIO {
   NetIO() {
     if (!dataLock) return;
     while (xSemaphoreGetMutexHolder(dataLock) == xTaskGetCurrentTaskHandle()) { xSemaphoreGiveRecursive(dataLock); n++; }
+    if (n && onNetTask()) netHolding = false;
   }
-  ~NetIO() { for (int k = 0; k < n; k++) xSemaphoreTakeRecursive(dataLock, portMAX_DELAY); }
+  ~NetIO() { for (int k = 0; k < n; k++) xSemaphoreTakeRecursive(dataLock, portMAX_DELAY); if (n && onNetTask()) netHolding = true; }
 };
 // Before switching Wi-Fi: stop new network jobs and wait (up to 10 s) for the current one to finish
 void netQuiesce() {

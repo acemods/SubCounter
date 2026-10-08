@@ -96,45 +96,46 @@ void netCycle() {
   if (portalMode || netPause || pendingSwitch >= 0 || WiFi.status() != WL_CONNECTED) return;
   DataGuard g;
   if (netPause) return;
-  netBusy = true;
+  netBusy = true; netHolding = true;
+  netStage = "Spotify command";
   if (spPendingCmd) { char c = spPendingCmd; spPendingCmd = 0; if (cfgSpRefresh.length()) spCommandNet(c); }
   if (lastFetch == 0 || millis() - lastFetch > REFRESH_MS) {
     lastFetch = millis();
-    fetchAll();
-    refreshLiveVideos();     // keeps LIVE badges and viewer counts current
-    fetchAvatars();          // picks up any that failed earlier
+    netStage = "channel counts"; fetchAll();
+    netStage = "live streams";     refreshLiveVideos();     // keeps LIVE badges and viewer counts current
+    netStage = "profile pictures"; fetchAvatars();          // picks up any that failed earlier
     netRefreshed = true;
   }
   if (lastVideoFetch == 0 || millis() - lastVideoFetch > VIDEO_REFRESH_MS) {
     lastVideoFetch = millis();
-    fetchLatestVideos();
+    netStage = "latest videos"; fetchLatestVideos();
     vtCheckNewUpload();
     netRefreshed = true;
   }
   if (lastCommentFetch == 0 || millis() - lastCommentFetch > COMMENT_REFRESH_MS) {
     lastCommentFetch = millis();
-    fetchComments();
+    netStage = "comments"; fetchComments();
   }
   // your new upload: its own numbers every 5 minutes, typical views once a day
   if (vt.active && (lastVtFetch == 0 || millis() - lastVtFetch > 5UL * 60000UL)) {
     lastVtFetch = millis();
-    vtPoll();
+    netStage = "new video tracker"; vtPoll();
     netRefreshed = true;
   }
   if (vt.active && (lastTypicalFetch == 0 || millis() - lastTypicalFetch > 24UL * 3600000UL)) {
     lastTypicalFetch = millis();
-    vtFetchTypical();
+    netStage = "typical views"; vtFetchTypical();
   }
   if (lastWxFetch == 0 || millis() - lastWxFetch > 15UL * 60000UL) {
     lastWxFetch = millis();
-    fetchWeather();
+    netStage = "weather"; fetchWeather();
     netWxRefreshed = true;
   }
   // Spotify: every 3 s while it's on screen
   if (mode == M_NORMAL && !menuOpen && app == APP_SP && cfgSpRefresh.length() &&
       (lastSpPoll == 0 || millis() - lastSpPoll > spWait)) {
     bool wasPlaying = sp.playing, had = sp.hasTrack;
-    bool changed = spPoll();
+    netStage = "Spotify"; bool changed = spPoll();
     lastSpPoll = millis();
     // A failing sign-in used to be retried every 3 s, and each try freezes the board for a
     // moment, so long-presses were missed. Back off: 15 s, 30 s, 1 min ... up to 5 min.
@@ -146,15 +147,15 @@ void netCycle() {
   // new firmware on GitHub? once a day (first check 2 minutes after start-up), or when asked
   if (updCheckReq || (lastUpdCheck == 0 ? millis() > 120000UL : millis() - lastUpdCheck > 24UL * 3600000UL)) {
     updCheckReq = false; lastUpdCheck = millis();
-    checkForUpdate();
+    netStage = "update check"; checkForUpdate();
   }
   if (lastRecentFetch == 0 ? millis() > 180000UL : millis() - lastRecentFetch > RECENT_REFRESH_MS) {
     lastRecentFetch = millis();
-    fetchRecent();
+    netStage = "recent uploads"; fetchRecent();
   }
-  if (noteN) sendNotes();
-  connCloseIdle(connYT); connCloseIdle(connTW); connCloseIdle(connSP, 30000);
-  netBusy = false;
+  netStage = "phone notifications"; if (noteN) sendNotes();
+  netStage = "closing connections"; connCloseIdle(connYT); connCloseIdle(connTW); connCloseIdle(connSP, 30000);
+  netBusy = false; netHolding = false; netStage = "idle";
 }
 void netTask(void *) {
   for (;;) { netCycle(); vTaskDelay(pdMS_TO_TICKS(40)); }
@@ -205,13 +206,30 @@ void userActivity() {
 bool ytVisible() { return mode == M_NORMAL && !menuOpen && app == APP_YT; }
 
 void loopBody();
+bool lastLongIsWeb = false;
+const char *lastLongWhat = "drawing / inputs";
 void loop() {
-  { DataGuard g; loopBody(); }      // screen, touch and web pages; the network task fills in the data
+  static unsigned long lastEnd = 0;
+  unsigned long t0 = millis();
+  if (lastEnd && t0 - lastEnd > 400 && !portalMode) noteStall(t0 - lastEnd, String("main loop starved, network: ") + (const char *)netStage);
+  bool held = netHolding; const char *stage = (const char *)netStage;
+  {
+    DataGuard g;                    // screen, touch and web pages; the network task fills in the data
+    unsigned long waited = millis() - t0;
+    if (waited > 400 && !portalMode) noteStall(waited, String("waiting for network task: ") + (held ? "" : "(released) ") + stage);
+    unsigned long t1 = millis();
+    loopBody();
+    unsigned long took = millis() - t1;
+    if (took > 400 && !portalMode && !lastLongIsWeb) noteStall(took, String("screen: ") + lastLongWhat);
+    lastLongIsWeb = false; lastLongWhat = "drawing / inputs";
+  }
   delay(2);
+  lastEnd = millis();
 }
 
 void loopBody() {
-  server.handleClient();
+  { unsigned long t = millis(); server.handleClient(); unsigned long d = millis() - t;
+    if (d > 400 && !portalMode) { noteStall(d, "web page " + server.uri()); lastLongIsWeb = true; } }
   if (portalMode) {
     dns.processNextRequest();
     // In setup mode because no saved network was found? Every 3 minutes, if nobody is using

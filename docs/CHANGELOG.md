@@ -2,6 +2,9 @@
 
 All builds are in [`builds/`](../builds). Source snapshots for most versions are in the git history.
 
+## v12.1
+- **Diagnostics page** at `http://subcounter.local/debug`: uptime, free memory, Wi-Fi signal, what the network task is doing, and a log of any moment the screen froze for more than 0.4 s and why. Added to track down a freeze some boards show for about a minute after start-up.
+
 ## v12.0
 - New setting: **Updates → Check for updates at start-up** (on by default). Untick it and the start-up QR screen shows for 6 seconds without checking GitHub or waiting 20 seconds. The once-a-day background check still runs, so the home menu and dashboard still tell you when a new version is out.
 

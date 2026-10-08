@@ -1,7 +1,7 @@
 {
- "version": "12.0",
- "app": "SubCounter-v12.0-APP-ONLY.bin",
- "size": 1780112,
- "md5": "f530db54e062293b3402532611bf98c0",
- "notes": "New setting: Updates - Check for updates at start-up (on by default); turn it off to skip the start-up check"
+ "version": "12.1",
+ "app": "SubCounter-v12.1-APP-ONLY.bin",
+ "size": 1784864,
+ "md5": "9867c1c4d592aff7da26be2cddf34fae",
+ "notes": "Diagnostics page at /debug: shows anything that froze the screen, to track down a start-up freeze"
 }
