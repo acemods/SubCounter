@@ -10,9 +10,12 @@ int portraitRot = 0;
 // It checks GitHub for new firmware straight away, and the button works here too:
 // if there's an update it stays up for 20 s so you can tap Install (or swipe to skip).
 void showAddress() {
-  devChecking = true; drawDevice();
-  checkForUpdate(); lastUpdCheck = millis() | 1;   // counts as today's check
-  devChecking = false; drawDevice();
+  if (cfgBootUpd) {                                // Settings → Updates → "Check for updates at start-up"
+    devChecking = true; drawDevice();
+    checkForUpdate(); lastUpdCheck = millis() | 1; // counts as today's check
+    devChecking = false;
+  }
+  drawDevice();
   unsigned long showFor = updAvail ? 20000UL : 6000UL, start = millis();
   while (millis() - start < showFor) {
     server.handleClient();

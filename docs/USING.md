@@ -67,7 +67,7 @@ Long-press for the home menu, **swipe left** to the second page and tap **Device
 
 Swipe, long-press or press BOOT to go back.
 
-The same screen shows for a few seconds every time the board starts. It checks GitHub for new firmware straight away; if there is one, it stays up for 20 seconds so you can tap **Install** (any other touch or BOOT carries on as normal).
+The same screen shows for a few seconds every time the board starts. It checks GitHub for new firmware straight away; if there is one, it stays up for 20 seconds so you can tap **Install** (any other touch or BOOT carries on as normal). You can turn this check off in Settings → **Updates** → *Check for updates at start-up*.
 
 ![Device screen](images/device-screen.png)
 

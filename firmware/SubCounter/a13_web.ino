@@ -999,6 +999,7 @@ void handleSettings() {
 
   // ── Security ──
   h += sec("updates", "Updates");
+  h += checkbox("bootupd", cfgBootUpd, "Check for updates at start-up (offers to install on the QR screen)");
   h += checkbox("autoupd", cfgAutoUpd, "Install new versions from GitHub automatically (at 3 am)");
   h += "<small>Either way the board checks once a day and shows when a new version is out; "
        "install it from the <a href='/update'>Update page</a>.</small>";
@@ -1120,6 +1121,7 @@ void handleSave() {
   cfgCelebrate = server.arg("celebrate") == "1";
   cfgLiveAlert = server.arg("livealert") == "1";
   cfgAutoUpd = server.arg("autoupd") == "1";
+  cfgBootUpd = server.arg("bootupd") == "1";
   { String t = server.arg("ntfy"); t.trim(); t.replace(" ", "-"); cfgNtfy = t;
     String sv = server.arg("ntfysrv"); sv.trim(); if (sv.endsWith("/")) sv.remove(sv.length() - 1);
     if (sv.startsWith("http")) cfgNtfyServer = sv;

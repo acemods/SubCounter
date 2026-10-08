@@ -52,7 +52,7 @@
 #include <nvs.h>       // settings backup: list every saved setting
 #include <ESPmDNS.h>   // http://subcounter.local
 #define HOSTNAME "subcounter"
-#define FW_VERSION "11.9"     // shown on start-up, home menu, settings, update page and dashboard
+#define FW_VERSION "12.0"     // shown on start-up, home menu, settings, update page and dashboard
 
 // ── Pins (ESP32-C6 version of the board) ────────────────────────────────────
 #define LCD_SCK   1
@@ -351,6 +351,7 @@ String cfgTwId, cfgTwSecret;                     // Twitch app (dev.twitch.tv/co
 bool   cfgLiveAlert = true;                      // alert when a channel goes live
 int    cfgTheme = 0;                              // colour theme (see THEMES)
 int    cfgBright = 63, cfgNightBright = 7;        // brightness in %
+bool   cfgBootUpd = true;                        // check GitHub on the start-up screen (and wait 20 s if there's one)
 bool   cfgAutoUpd = false;                       // install new versions from GitHub by itself (3 am)
 String cfgUpdUrl = "https://raw.githubusercontent.com/acemods/SubCounter/main/builds/latest/";   // where to look for updates
 String cfgSpRedirect;                            // https address registered with Spotify (e.g. GitHub Pages relay)

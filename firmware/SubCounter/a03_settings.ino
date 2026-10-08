@@ -116,6 +116,7 @@ void loadSettings() {
   cfgTwSecret = prefs.getString("twsec", "");
   cfgLiveAlert = prefs.getBool("livealert", true);
   cfgAutoUpd = prefs.getBool("autoupd", false);
+  cfgBootUpd = prefs.getBool("bootupd", true);
   cfgNtfy = prefs.getString("ntfy", "");
   cfgNtfyServer = prefs.getString("ntfysrv", cfgNtfyServer);
   cfgNtfyMask = prefs.getInt("ntfymask", cfgNtfyMask);
@@ -177,6 +178,7 @@ void saveSettings() {
   prefs.putString("twsec", cfgTwSecret);
   prefs.putBool("livealert", cfgLiveAlert);
   prefs.putBool("autoupd", cfgAutoUpd);
+  prefs.putBool("bootupd", cfgBootUpd);
   prefs.putString("ntfy", cfgNtfy);
   prefs.putString("ntfysrv", cfgNtfyServer);
   prefs.putInt("ntfymask", cfgNtfyMask);

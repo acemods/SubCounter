@@ -2,6 +2,9 @@
 
 All builds are in [`builds/`](../builds). Source snapshots for most versions are in the git history.
 
+## v12.0
+- New setting: **Updates → Check for updates at start-up** (on by default). Untick it and the start-up QR screen shows for 6 seconds without checking GitHub or waiting 20 seconds. The once-a-day background check still runs, so the home menu and dashboard still tell you when a new version is out.
+
 ## v11.9
 - **Update check at start-up:** the QR-code screen you see after the board joins Wi-Fi now checks GitHub straight away. If a new version is out it says so and stays up for 20 seconds: tap **Install** to update there and then, or swipe / press BOOT to skip. Its button works now (before, it was just a picture until the board finished starting).
 
