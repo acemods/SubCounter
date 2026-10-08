@@ -1,5 +1,5 @@
 /*
- * SubCounter v10.0 — YouTube subscriber counter for Waveshare ESP32-C6-Touch-LCD-1.47
+ * SubCounter v10.1 — YouTube subscriber counter for Waveshare ESP32-C6-Touch-LCD-1.47
  *
  *  ON THE BOARD
  *    Swipe left / right ... next / previous channel   (BOOT short press = next)
@@ -48,7 +48,7 @@
 #include <Update.h>    // wireless firmware updates
 #include <ESPmDNS.h>   // http://subcounter.local
 #define HOSTNAME "subcounter"
-#define FW_VERSION "10.0"     // shown on start-up, home menu, settings, update page and dashboard
+#define FW_VERSION "10.1"     // shown on start-up, home menu, settings, update page and dashboard
 
 // ── Pins (ESP32-C6 version of the board) ────────────────────────────────────
 #define LCD_SCK   1
@@ -2712,6 +2712,16 @@ textarea{min-height:150px}
 button{width:100%;margin-top:22px;padding:14px;border:0;border-radius:10px;background:#e62117;color:#fff;font-size:17px;font-weight:600}
 small{display:block;color:#777;font-size:12px;margin-top:6px}a{color:#4ea1ff}
 .st{font-size:13px;color:#aaa;margin-top:6px}.st b{color:#fff}
+h2{font-size:17px;margin:30px 0 4px;padding-top:16px;border-top:1px solid #2a2a2e;scroll-margin-top:12px}
+.jump{display:flex;flex-wrap:wrap;gap:6px;margin:0 0 14px}.jump a{font-size:13px;background:#2a2a2e;color:#ddd;border-radius:999px;padding:5px 10px;text-decoration:none}
+summary{margin-top:14px;cursor:pointer;color:#aaa;font-size:14px}
+.row{display:flex;gap:8px;align-items:center}.row span{color:#aaa}
+.b2{background:#2a2a2e;font-size:15px;padding:12px;margin-top:10px}
+.mini{width:auto;margin:0;padding:5px 10px;font-size:13px;background:#2a2a2e}
+.btnlink{display:block;text-align:center;margin-top:10px;padding:12px;border-radius:10px;background:#1db954;color:#fff;font-weight:600;text-decoration:none}
+.saved{display:flex;flex-wrap:wrap;gap:6px 14px;align-items:center;padding:8px 0;border-top:1px solid #333}.saved b{flex:1 1 100%;word-break:break-word;color:#fff}
+.ok{color:#30d158;margin:6px 0}
+.savebar{position:sticky;bottom:0;background:#1c1c1e;padding:6px 0 10px;margin-top:22px;box-shadow:0 -10px 14px #1c1c1e}.savebar button{margin-top:6px}
 </style></head><body><div class="card">)HTML";
 
 
@@ -3096,72 +3106,107 @@ String channelSelect(const char *name, int val) {
   return s + "</select>";
 }
 
+// Section heading with an anchor for the jump links at the top
+String sec(const char *id, const char *title) {
+  return String("<h2 id='") + id + "'>" + title + "</h2>";
+}
+
 void handleSettings() {
   if (!authed()) return;
   String h = FPSTR(PAGE_HEAD);
-  h += "<h1>&#9654; SubCounter settings</h1><p>Saved on the board only.";
-  if (!portalMode) h += " <a href='/'>&larr; Dashboard</a>";
-  h += "</p>";
+  h += "<h1>&#9654; SubCounter settings</h1><p>Saved on the board only. v" FW_VERSION;
+  if (!portalMode) h += " &middot; <a href='/'>&larr; Dashboard</a>";
+  h += "</p><nav class='jump'><a href='#channels'>Channels</a><a href='#display'>Display</a><a href='#alerts'>Alerts</a>"
+       "<a href='#weather'>Weather</a><a href='#spotify'>Spotify</a><a href='#motion'>Motion</a><a href='#wifi'>Wi-Fi</a>"
+       "<a href='#security'>Security</a>" + String(portalMode ? "" : "<a href='#firmware'>Firmware</a>") + "</nav>";
   if (wifiFailReason.length()) {
     h += "<div style='background:#3a1210;border:1px solid #e62117;border-radius:10px;padding:12px;margin-bottom:8px;font-size:14px'>"
          "<b>Couldn't connect to Wi-Fi:</b><br>" + htmlEscape(wifiFailReason) + "</div>";
   }
+  // Everything is inside ONE form so a single Save sends it all. Extra actions
+  // (Connect now, Spotify, calibrate) are buttons with their own formaction.
   h += "<form method='POST' action='/save'>";
-  h += "<label>Channels (up to 10, one per line)</label>";
-  h += "<textarea name='channels' autocapitalize='off' autocorrect='off' spellcheck='false' placeholder='@yourchannel&#10;@mkbhd&#10;@veritasium' required>" +
+
+  // ── Channels ──
+  h += sec("channels", "Channels");
+  h += "<label>Channels to follow (up to 10, one per line)</label>";
+  h += "<textarea name='channels' autocapitalize='off' autocorrect='off' spellcheck='false' placeholder='@yourchannel&#10;@mkbhd&#10;twitch.tv/somestreamer' required>" +
        htmlEscape(cfgChannels) + "</textarea>";
-  h += "<small>YouTube: @handles, UC… channel IDs or channel links. Twitch: <b>twitch.tv/name</b>. Put your own channel first – it's highlighted and shown on the night clock.</small>";
+  h += "<small>YouTube: @handles, UC… channel IDs or channel links. Twitch: <b>twitch.tv/name</b>. "
+       "Put your own channel first – it's highlighted and shown on the night clock.</small>";
   h += "<label>YouTube Data API key</label>";
-  h += "<input name='apikey' autocapitalize='off' placeholder='";
+  h += "<input name='apikey' autocapitalize='off' autocomplete='off' placeholder='";
   h += cfgApiKey.length() ? "(saved — leave blank to keep)" : "AIza…";
-  h += "'>";
-  h += "<details" + String(cfgTwId.length() || cfgChannels.indexOf("twitch") >= 0 ? " open" : "") + "><summary style='margin-top:14px;cursor:pointer'>Twitch (optional)</summary>";
-  h += "<small>Only needed for Twitch channels. Create a free app at <a href='https://dev.twitch.tv/console/apps' target='_blank'>dev.twitch.tv/console</a> "
+  h += "'><small>Only needed for YouTube channels.</small>";
+  h += "<details" + String(cfgTwId.length() || cfgChannels.indexOf("twitch") >= 0 ? " open" : "") + "><summary>Twitch app (only for Twitch channels)</summary>";
+  h += "<small>Create a free app at <a href='https://dev.twitch.tv/console/apps' target='_blank'>dev.twitch.tv/console</a> "
        "(Category: Other, Client type: Confidential, OAuth Redirect URL: <code>http://localhost</code>), then copy its Client ID and a new Secret here.</small>";
-  h += "<label>Twitch Client ID</label><input name='twid' autocapitalize='off' value='" + htmlEscape(cfgTwId) + "'>";
-  h += "<label>Twitch Client Secret</label><input name='twsec' autocapitalize='off' placeholder='";
+  h += "<label>Twitch Client ID</label><input name='twid' autocapitalize='off' autocomplete='off' value='" + htmlEscape(cfgTwId) + "'>";
+  h += "<label>Twitch Client Secret</label><input name='twsec' type='password' autocapitalize='off' autocomplete='new-password' placeholder='";
   h += cfgTwSecret.length() ? "(saved — leave blank to keep)" : "";
   h += "'>";
   if (twError.length() && !portalMode) h += "<small style='color:#e62117'>" + htmlEscape(twError) + "</small>";
   h += "</details>";
 
-  h += "<h1 style='font-size:17px;margin-top:26px'>Display</h1>";
+  // ── Display ──
+  h += sec("display", "Display");
   h += checkbox("auto", cfgAuto, "Switch channels automatically every 10 seconds");
   h += checkbox("est", cfgEst, "Estimated live counts between YouTube's rounded steps (“est.”)");
-  h += checkbox("celebrate", cfgCelebrate, "Confetti for milestones (bigger milestones, bigger party)");
-  h += checkbox("livealert", cfgLiveAlert, "Alert when a channel goes live (and switch to it)");
-  h += checkbox("summary", cfgSummary, "Daily summary on screen at 9 am");
-  h += "<label>Show the clock after this long without use</label><select name='idleclk'>";
+  h += "<label>Show the big clock after this long without use</label><select name='idleclk'>";
   { const int opts[] = { 0, 1, 2, 3, 5, 10 };
     for (int o : opts) h += "<option value='" + String(o) + "'" + (cfgIdleClock == o ? " selected" : "") + ">" +
                             (o == 0 ? String("Never") : String(o) + (o == 1 ? " minute" : " minutes")) + "</option>"; }
   h += "</select><small>Touch, press BOOT or pick the board up to go back.</small>";
+  h += "<label>Night clock (dims and shows the time)</label><div class='row'>" +
+       hourSelect("nightStart", cfgNightStart) + "<span>to</span>" + hourSelect("nightEnd", cfgNightEnd) + "</div>";
   if (numCh >= 2) {
-    h += "<label>Subscriber race</label><div style='display:flex;gap:8px'>" + channelSelect("raceA", cfgRaceA) +
-         "<span style='align-self:center'>vs</span>" + channelSelect("raceB", cfgRaceB) + "</div>";
-    h += "<small>Swipe down twice from the main count to see it. You get an alert if one overtakes the other.</small>";
+    h += "<label>Subscriber race</label><div class='row'>" + channelSelect("raceA", cfgRaceA) +
+         "<span>vs</span>" + channelSelect("raceB", cfgRaceB) + "</div>";
+    h += "<small>Swipe down twice from the main count to see it.</small>";
   }
-  h += "<label>Night clock (dims and shows the time)</label><div style='display:flex;gap:8px'>" +
-       hourSelect("nightStart", cfgNightStart) + "<span style='align-self:center'>to</span>" + hourSelect("nightEnd", cfgNightEnd) + "</div>";
 
-  h += "<h1 style='font-size:17px;margin-top:26px'>Weather</h1>";
+  // ── Alerts ──
+  h += sec("alerts", "Alerts");
+  h += checkbox("celebrate", cfgCelebrate, "Confetti for milestones (bigger milestones, bigger party)");
+  h += checkbox("livealert", cfgLiveAlert, "Alert when a channel goes live (and switch to it)");
+  h += checkbox("summary", cfgSummary, "Daily summary at 9 am (a monthly recap on the 1st)");
+  h += "<small>New-subscriber, overtake and record alerts are always on. Alerts are skipped at night, "
+       "when the board is face-down, and while Spotify is playing.</small>";
+
+  // ── Weather ──
+  h += sec("weather", "Weather");
   h += "<label>Town or city</label><input name='wxtown' value='" + htmlEscape(cfgWxName) + "' placeholder='e.g. Glasgow'>";
   h += "<small>Long-press the board's screen and pick Weather. Forecasts from Open-Meteo.</small>";
 
-  h += "<h1 id='spotify' style='font-size:17px;margin-top:26px'>Spotify</h1>";
-  if (cfgSpRefresh.length()) h += "<p style='color:#30d158;margin:0 0 6px'>Connected &#10003;</p>";
-  h += "<small>One-time setup (needs Spotify Premium): put the relay page on GitHub Pages (or any https address you own), then at "
+  // ── Spotify ──
+  h += sec("spotify", "Spotify");
+  if (cfgSpRefresh.length()) h += "<p class='ok'>Connected &#10003;</p>";
+  h += "<details" + String(cfgSpId.length() ? "" : " open") + "><summary>Spotify app details (one-time setup, needs Premium)</summary>";
+  h += "<small>Put the relay page on GitHub Pages (or any https address you own), then at "
        "<b>developer.spotify.com/dashboard</b> &rarr; Create app &rarr; add that https address as the Redirect URI &rarr; tick <b>Web API</b> &rarr; Save. "
        "Copy the Client ID, Client secret and the same Redirect URI here, and save.</small>";
   h += "<label>Redirect URI (exactly as entered at Spotify)</label><input name='spredir' value='" + htmlEscape(cfgSpRedirect) +
        "' autocapitalize='off' placeholder='https://yourname.github.io/spotify-callback/'>";
-  h += "<label>Client ID</label><input name='spid' value='" + htmlEscape(cfgSpId) + "' autocapitalize='off'>";
-  h += "<label>Client secret</label><input name='spsecret' type='password' autocapitalize='off' placeholder='" +
+  h += "<label>Client ID</label><input name='spid' value='" + htmlEscape(cfgSpId) + "' autocapitalize='off' autocomplete='off'>";
+  h += "<label>Client secret</label><input name='spsecret' type='password' autocapitalize='off' autocomplete='new-password' placeholder='" +
        String(cfgSpSecret.length() ? "(saved — leave blank to keep)" : "") + "'>";
-  if (cfgSpId.length() && cfgSpSecret.length() && !portalMode)
-    h += "<small style='margin-top:10px'>Then <a href='#spconnect'>connect your account</a> below the Save button.</small>";
+  h += "</details>";
+  if (!portalMode && cfgSpId.length() && cfgSpSecret.length() && cfgSpRedirect.length()) {
+    if (!cfgSpRefresh.length()) {
+      h += "<a class='btnlink' href='" + htmlEscape(spAuthUrl()) + "'>Connect Spotify</a>"
+           "<small>Press Agree on Spotify's page and you'll be brought straight back here.</small>"
+           "<details><summary>The relay page showed a code instead?</summary>"
+           "<label>Paste the code or that page's full address</label><input name='url' placeholder='code or full address' autocapitalize='off'>"
+           "<button type='submit' class='b2' formaction='/spotify/code' formnovalidate>Use this code</button></details>";
+    } else {
+      h += "<button type='submit' class='b2' formaction='/spotify/disconnect' formnovalidate>Disconnect Spotify</button>";
+    }
+  } else if (!portalMode) {
+    h += "<small>Save the app details first; a <b>Connect Spotify</b> button then appears here.</small>";
+  }
 
-  h += "<h1 style='font-size:17px;margin-top:26px'>Motion</h1>";
+  // ── Motion ──
+  h += sec("motion", "Motion");
   if (!imuOk && !portalMode) h += "<small style='color:#e62117'>Motion sensor not detected.</small>";
   h += checkbox("shake", cfgShake, "Shake to refresh");
   h += checkbox("facedown", cfgFaceDown, "Face-down turns the screen off");
@@ -3172,20 +3217,23 @@ void handleSettings() {
   const char *sens[] = { "", "Low (firm knocks)", "Medium", "High (light taps)" };
   for (int k = 1; k <= 3; k++) h += "<option value='" + String(k) + "'" + (cfgTapSens == k ? " selected" : "") + ">" + sens[k] + "</option>";
   h += "</select>";
+  if (!portalMode && imuOk) {
+    h += "<label>Calibration</label><small>Put the board in the position you normally use it (on its stand or flat), then press:</small>"
+         "<button type='submit' class='b2' formaction='/calibrate' formnovalidate>Set this as the normal position</button>";
+  }
 
   // ── Wi-Fi: saved networks + add/edit one ──
   int edit = server.hasArg("edit") ? server.arg("edit").toInt() : -1;
   if (edit >= numNets) edit = -1;
   Net blank; Net &e = edit >= 0 ? nets[edit] : blank;
-  h += "<h1 id='wifi' style='font-size:17px;margin-top:26px'>Wi-Fi networks</h1>";
+  h += sec("wifi", "Wi-Fi networks");
   if (numNets) {
     h += "<small>The board joins your <b>Preferred</b> network when it's in range, otherwise the strongest saved one. "
          "<b>Connect now</b> switches straight away.</small><div class='st' style='margin:10px 0'>";
     for (int k = 0; k < numNets; k++) {
-      h += "<div style='display:flex;gap:10px;align-items:center;padding:6px 0;border-top:1px solid #333'><b style='flex:1'>" + htmlEscape(nets[k].ssid) + "</b>";
+      h += "<div class='saved'><b>" + htmlEscape(nets[k].ssid) + "</b>";
       if (k == curNet && !portalMode) h += "<span style='color:#30d158'>connected</span>";
-      else if (!portalMode) h += "<button type='submit' formaction='/wifi/connect?n=" + String(k) + "' formnovalidate "
-                                 "style='width:auto;margin:0;padding:5px 10px;font-size:13px;background:#2a2a2e'>Connect now</button>";
+      else if (!portalMode) h += "<button type='submit' formaction='/wifi/connect?n=" + String(k) + "' formnovalidate class='mini'>Connect now</button>";
       if (nets[k].ip.length()) h += "<span>fixed IP</span>";
       h += "<label style='margin:0'><input type='radio' name='pref' value='" + String(k) + "' style='width:auto'" +
            String(cfgPreferred == k ? " checked" : "") + "> Preferred</label>";
@@ -3197,7 +3245,7 @@ void handleSettings() {
     h += "</div>";
   }
   h += "<label>" + String(edit >= 0 ? "Editing: " + htmlEscape(e.ssid) : (numNets ? String("Add another network (e.g. home)") : String("Wi-Fi network"))) + "</label>";
-  h += "<button type='button' id='scanBtn' onclick='scan()' style='background:#2a2a2e;margin-top:6px'>&#128246; Scan for networks</button>";
+  h += "<button type='button' id='scanBtn' onclick='scan()' class='b2' style='margin-top:6px'>&#128246; Scan for networks</button>";
   h += "<div id='nets' style='margin:8px 0'></div>";
   h += "<input id='s' name='ssid' value='" + htmlEscape(e.ssid) + "' placeholder='Network name (tap one above, or type it)'" + String(numNets ? "" : " required") + ">";
   if (numNets && edit < 0) h += "<small>Leave blank if you're not adding a network.</small>";
@@ -3208,8 +3256,7 @@ void handleSettings() {
        "onclick=\"document.getElementById('pw').type=this.checked?'text':'password'\"> Show password</label></small>";
   h += "<label>Username (only for work Wi-Fi that asks for one)</label>";
   h += "<input name='user' value='" + htmlEscape(e.user) + "' autocapitalize='off' placeholder='Leave blank for normal Wi-Fi'>";
-  h += "<details style='margin-top:18px'" + String(e.ip.length() || e.compat ? " open" : "") +
-       "><summary style='color:#aaa;font-size:14px'>Advanced settings for this network</summary>";
+  h += "<details" + String(e.ip.length() || e.compat ? " open" : "") + "><summary>Advanced settings for this network</summary>";
   h += checkbox("compat", e.compat, "Compatibility mode (Wi-Fi 4 instead of Wi-Fi 6)");
   h += "<label>Fixed IP address (blank = automatic)</label>";
   h += "<input name='ip' value='" + htmlEscape(e.ip) + "' placeholder='e.g. 192.168.1.250' inputmode='decimal'>";
@@ -3221,35 +3268,32 @@ void handleSettings() {
   h += "<input name='dns' value='" + htmlEscape(e.dns) + "' placeholder='e.g. 8.8.8.8' inputmode='decimal'>";
   h += "<small>If this one doesn't answer, the board also tries 8.8.8.8.</small>";
   h += "</details>";
-  h += "<button type='submit'>Save &amp; restart</button></form>";
 
-  if (!portalMode && cfgSpId.length() && cfgSpSecret.length() && cfgSpRedirect.length()) {
-    h += "<form id='spconnect' method='POST' action='/spotify/code' style='margin-top:26px'><label>Connect Spotify</label>"
-         "<a href='" + htmlEscape(spAuthUrl()) + "'><button type='button' style='background:#1db954;margin-top:0'>Connect Spotify</button></a>"
-         "<small>Press Agree on Spotify's page and you'll be brought straight back here. "
-         "(If the relay page shows a code instead, paste that page's full address or the code here:)</small>"
-         "<input name='url' placeholder='code or full address' autocapitalize='off' required>"
-         "<button type='submit' style='background:#333'>Use this code</button></form>";
-    if (cfgSpRefresh.length())
-      h += "<form method='POST' action='/spotify/disconnect'><button type='submit' style='background:#333;margin-top:8px'>Disconnect Spotify</button></form>";
-  }
-  h += "<h1 style='font-size:17px;margin-top:26px'>Security</h1>";
-  h += "<label>Settings PIN</label><input name='pin' type='password' inputmode='numeric' autocomplete='new-password' maxlength='12' placeholder='";
-  h += cfgPin.length() ? "(PIN set — leave blank to keep)" : "None — anyone on your Wi-Fi can change settings";
-  h += "'>";
+  // ── Security ──
+  h += sec("security", "Security");
+  if (cfgPin.length()) h += "<p class='ok'>PIN is on &#10003;</p>";
+  else h += "<small>No PIN set: anyone on your Wi-Fi can open this page and change things.</small>";
+  h += "<label>" + String(cfgPin.length() ? "New PIN" : "Choose a PIN (4–12 characters)") + "</label>"
+       "<input name='pin' type='password' inputmode='numeric' autocomplete='new-password' maxlength='12' placeholder='" +
+       String(cfgPin.length() ? "Leave blank to keep the current PIN" : "e.g. 4 digits") + "'>";
+  h += "<label>Type it again</label><input name='pin2' type='password' inputmode='numeric' autocomplete='new-password' maxlength='12'>";
   if (cfgPin.length()) h += checkbox("nopin", false, "Remove the PIN");
-  h += "<small>Protects these settings and firmware updates. Your browser will ask for it: user name <b>admin</b>, password = PIN. "
-       "The dashboard stays open to view. Forgotten it? Hold BOOT for 3 seconds and change it in setup mode.</small>";
-  if (!portalMode) h += "<p style='margin-top:22px'><a href='/update'>&#11014; Update firmware wirelessly</a></p>";
-  if (!portalMode && imuOk) {
-    h += "<form method='POST' action='/calibrate' style='margin-top:22px'>"
-         "<label>Motion calibration</label><small>Put the board in the position you normally use it (on its stand or flat), then press:</small>"
-         "<button type='submit' style='background:#333'>Set this as the normal position</button></form>";
+  h += "<small>After you save, your browser asks for it whenever you open Settings or Update: "
+       "user name <b>admin</b>, password = your PIN. The dashboard stays open to view. "
+       "Forgotten it? Hold BOOT for 3 seconds: setup mode doesn't ask for it, so you can change it there.</small>";
+
+  // ── Save ──
+  h += "<div class='savebar'><button type='submit'>Save &amp; restart</button></div>";
+  h += "</form>";
+
+  // ── Firmware (links only) ──
+  if (!portalMode) {
+    h += sec("firmware", "Firmware");
+    h += "<p style='margin:0'>Running <b>v" FW_VERSION "</b> &middot; <a href='/update'>&#11014; Update wirelessly</a></p>";
   }
   h += "<small style='margin-top:16px'>Board Wi-Fi MAC address: " + boardMac() + "</small></div>";
   h += FPSTR(SCAN_JS);
   if (portalMode) h += "<script>scan()</script>";
-  h += "<p style='margin-top:28px;color:#8d8d95;font-size:13px;text-align:center'>SubCounter v" FW_VERSION "</p>";
   h += "</body></html>";
   server.send(200, "text/html", h);
 }
@@ -3267,6 +3311,11 @@ void handleCalibrate() {
 
 void handleSave() {
   if (!authed()) return;
+  { String pin = server.arg("pin"), pin2 = server.arg("pin2"); pin.trim(); pin2.trim();
+    if (pin.length() && server.arg("nopin") != "1") {
+      if (pin != pin2) { sendMessage(400, "PINs don't match", "Type the same PIN in both boxes. Nothing was saved."); return; }
+      if (pin.length() < 4) { sendMessage(400, "PIN too short", "Use at least 4 characters. Nothing was saved."); return; }
+    } }
   String ssid = server.arg("ssid");
   String pass = server.arg("pass");
   String user = server.arg("user");     user.trim();
@@ -3324,7 +3373,7 @@ void handleSave() {
   cfgLiveAlert = server.arg("livealert") == "1";
   { String v = server.arg("twid"); v.trim(); if (server.hasArg("twid")) cfgTwId = v;
     v = server.arg("twsec"); v.trim(); if (v.length()) { cfgTwSecret = v; } }
-  { String pin = server.arg("pin"); pin.trim();
+  { String pin = server.arg("pin"), pin2 = server.arg("pin2"); pin.trim(); pin2.trim();
     if (server.arg("nopin") == "1") cfgPin = "";
     else if (pin.length()) cfgPin = pin; }
   cfgSummary = server.arg("summary") == "1";

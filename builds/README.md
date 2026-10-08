@@ -1,12 +1,12 @@
 # Builds
 
-**Current version: v10.0** in [`latest/`](latest)
+**Current version: v10.1** in [`latest/`](latest)
 
 | File | Use for | How |
 |---|---|---|
-| `SubCounter-v10.0-APP-ONLY.bin` | Updating a running board (v9 or later) | Upload at `http://<board-ip>/update` |
-| `SubCounter-v10.0-USB-UPDATE-flash-at-0xE000.bin` | Updating over USB, keeping settings | esptool-js at **0xE000** |
-| `SubCounter-v10.0-FULL-new-board-flash-at-0x0.bin` | New or wiped board | esptool-js at **0x0** (erases settings) |
+| `SubCounter-v10.1-APP-ONLY.bin` | Updating a running board (v9 or later) | Upload at `http://<board-ip>/update` |
+| `SubCounter-v10.1-USB-UPDATE-flash-at-0xE000.bin` | Updating over USB, keeping settings | esptool-js at **0xE000** |
+| `SubCounter-v10.1-FULL-new-board-flash-at-0x0.bin` | New or wiped board | esptool-js at **0x0** (erases settings) |
 
 Older builds are in [`archive/`](archive), one folder per version. The address to use is in each file name.
 Before v9 there was no wireless update: `APP-ONLY-flash-at-0x10000` files went at 0x10000, and v1–v4 files were full images at 0x0.

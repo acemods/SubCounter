@@ -49,7 +49,7 @@ So at 9 am a channel can show +10 today but +30 in the last 24 hours. All gains 
 
 ## Settings PIN
 
-Settings → *Security* → set a PIN. Your browser will then ask for it when you open settings or update the firmware: user name **admin**, password = your PIN. The dashboard stays open for anyone on your network to view. Forgotten it? Hold BOOT for 3 seconds: setup mode doesn't ask for the PIN, so you can clear or change it there.
+Settings → *Security* → type a PIN (4–12 characters) in both boxes → **Save & restart**. From then on your browser asks for it when you open Settings or Update: user name **admin**, password = your PIN (your browser can remember it). To change it, type a new one in both boxes; to turn it off, tick *Remove the PIN*. The dashboard stays open for anyone on your network to view. Forgotten it? Hold BOOT for 3 seconds: setup mode doesn't ask for the PIN, so you can clear or change it there.
 
 ## Alerts
 

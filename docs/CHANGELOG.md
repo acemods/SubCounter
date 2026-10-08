@@ -2,6 +2,13 @@
 
 All builds are in [`builds/`](../builds). Source snapshots for most versions are in the git history.
 
+## v10.1
+- **Fixed: the settings PIN couldn't be set.** The PIN box was below the Save button, outside the form, so it was never sent. Everything is now in one form.
+- PIN now has a *Type it again* box (must match, at least 4 characters); nothing is saved if they don't match
+- **Settings page reorganised:** jump links at the top, then Channels, Display, Alerts, Weather, Spotify, Motion, Wi-Fi, Security; a Save button that stays at the bottom of the screen; firmware version and update link at the end
+- Spotify app details fold away once set up; Connect / Disconnect and motion calibration sit in their own sections
+- Saved Wi-Fi network names no longer get cut off
+
 ## v10.0
 - **Version number shown everywhere:** start-up screen, home menu (top right), bottom of the settings page, update page ("Currently running v10.0") and the dashboard header
 - One `FW_VERSION` setting in the code drives all of them
