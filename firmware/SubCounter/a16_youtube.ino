@@ -14,7 +14,9 @@ int ytGet(const String &endpoint, const String &query, JsonDocument &doc) {
 }
 
 String apiErrorText(int code, JsonDocument &doc) {
-  if (code < 0) return "Can't reach YouTube - check DNS/firewall (" + String(code) + ")";
+  if (code == -100 || (code < 0 && ESP.getMaxAllocHeap() < 45000)) return "Board low on memory - retrying (" + String(code) + ")";
+  if (code == HTTPC_ERROR_READ_TIMEOUT) return "YouTube didn't answer in time - weak Wi-Fi? (" + String(code) + ")";
+  if (code < 0) return "Can't reach YouTube - Wi-Fi or DNS (" + String(code) + ")";
   String msg = doc["error"]["message"] | "";
   if (msg.indexOf("API key not valid") >= 0) return "API key not valid";
   if (msg.indexOf("has not been used") >= 0 || msg.indexOf("disabled") >= 0) return "YouTube Data API not enabled for this key";

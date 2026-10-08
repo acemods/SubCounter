@@ -49,7 +49,6 @@ unsigned long lastUpdCheck = 0;
 time_t updCheckedAt = 0;
 bool updCheckedOnce = false;        // set even before the clock is known (start-up check)
 volatile bool updCheckReq = false, updInstallReq = false;
-Conn connGH;
 
 // "11.10" > "11.9" > "11.1"
 bool versionNewer(const String &a, const String &b) {

@@ -181,4 +181,4 @@ With 10 channels this is about 3,000–3,500 units a day, well inside the free 1
 
 ## Diagnostics
 
-If the board seems to freeze, open **`http://subcounter.local/debug`** (or `http://<board-ip>/debug`). It's a plain-text page showing how long the board has been running, free memory, Wi-Fi signal, what the network side is doing right now, and the last 16 times the screen was frozen for more than 0.4 seconds, with what it was busy with each time. Copy it into a GitHub issue if you're reporting a problem.
+If the board seems to freeze, open **`http://subcounter.local/debug`** (or `http://<board-ip>/debug`). It's a plain-text page showing how long the board has been running, free memory, Wi-Fi signal, what the network side is doing right now, the last 16 times the screen was frozen for more than 0.4 seconds (with what it was busy with each time, including which web page), and the last 12 failed internet requests with the error code and how much memory was free. Copy it into a GitHub issue if you're reporting a problem.

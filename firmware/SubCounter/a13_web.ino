@@ -1226,10 +1226,26 @@ void handleDebug() {
     const Stall &s = stalls[(stallPos - 1 - k + 16) % 16];
     o += "  at " + String(s.at / 1000) + " s: " + String(s.ms) + " ms  " + s.what + "\n";
   }
+  o += "\nFailed internet requests (newest first), " + String(netErrTotal) + " since start-up:\n";
+  if (!netErrN) o += "  none\n";
+  for (int k = 0; k < netErrN; k++) {
+    const NetErr &e = netErrs[(netErrPos - 1 - k + 12) % 12];
+    o += "  at " + String(e.at / 1000) + " s: " + String(e.host) + " error " + String(e.code) +
+         "  (free " + String(e.freeMem) + ", biggest block " + String(e.block) + ")\n";
+  }
+  o += "\nOpen connections: YouTube " + String(connYT.cli ? "yes" : "no") + ", Twitch " + String(connTW.cli ? "yes" : "no") +
+       ", Spotify " + String(connSP.cli ? "yes" : "no") + "\nBiggest free block now " + String(ESP.getMaxAllocHeap()) + "\n";
   server.send(200, "text/plain; charset=utf-8", o);
 }
 
 void registerRoutes() {
+  server.addMiddleware([](WebServer &sv, Middleware::Callback next) {   // time every page (for /debug)
+    unsigned long t = millis(); String u = sv.uri();
+    bool r = next();
+    unsigned long d = millis() - t;
+    if (d > 400 && !portalMode) { noteStall(d, "web page " + u); lastLongIsWeb = true; }
+    return r;
+  });
   server.on("/debug", HTTP_GET, handleDebug);
   server.on("/", HTTP_GET, handleDashboard);
   server.on("/settings", HTTP_GET, handleSettings);

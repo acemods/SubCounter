@@ -2,6 +2,11 @@
 
 All builds are in [`builds/`](../builds). Source snapshots for most versions are in the git history.
 
+## v12.2
+- **More reliable fetching:** each secure connection needs about 40 KB of memory in one piece. When memory is tight the board now closes its other kept-open connections (Twitch, Spotify, GitHub) before connecting, and if a request can't connect at all it frees memory and tries once more straight away instead of showing an error until the next refresh
+- Clearer error messages: "Board low on memory", "YouTube didn't answer in time - weak Wi-Fi?" or "Can't reach YouTube - Wi-Fi or DNS", instead of always blaming DNS/firewall
+- `/debug` now names the web page behind a slow moment and lists the last 12 failed internet requests with the error code and free memory at the time
+
 ## v12.1
 - **Diagnostics page** at `http://subcounter.local/debug`: uptime, free memory, Wi-Fi signal, what the network task is doing, and a log of any moment the screen froze for more than 0.4 s and why. Added to track down a freeze some boards show for about a minute after start-up.
 

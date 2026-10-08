@@ -1,7 +1,7 @@
 {
- "version": "12.1",
- "app": "SubCounter-v12.1-APP-ONLY.bin",
- "size": 1784864,
- "md5": "9867c1c4d592aff7da26be2cddf34fae",
- "notes": "Diagnostics page at /debug: shows anything that froze the screen, to track down a start-up freeze"
+ "version": "12.2",
+ "app": "SubCounter-v12.2-APP-ONLY.bin",
+ "size": 1788800,
+ "md5": "5c1b464c6a7baa0ae0cc5b3e373013f8",
+ "notes": "More reliable YouTube fetching when memory is tight (frees other connections and retries); /debug now lists failed requests and slow web pages"
 }

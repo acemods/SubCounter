@@ -206,7 +206,6 @@ void userActivity() {
 bool ytVisible() { return mode == M_NORMAL && !menuOpen && app == APP_YT; }
 
 void loopBody();
-bool lastLongIsWeb = false;
 const char *lastLongWhat = "drawing / inputs";
 void loop() {
   static unsigned long lastEnd = 0;
@@ -229,7 +228,7 @@ void loop() {
 
 void loopBody() {
   { unsigned long t = millis(); server.handleClient(); unsigned long d = millis() - t;
-    if (d > 400 && !portalMode) { noteStall(d, "web page " + server.uri()); lastLongIsWeb = true; } }
+    if (d > 400 && !portalMode && !lastLongIsWeb) { noteStall(d, "web connection (slow or empty request)"); lastLongIsWeb = true; } }
   if (portalMode) {
     dns.processNextRequest();
     // In setup mode because no saved network was found? Every 3 minutes, if nobody is using

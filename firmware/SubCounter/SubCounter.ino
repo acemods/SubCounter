@@ -52,7 +52,7 @@
 #include <nvs.h>       // settings backup: list every saved setting
 #include <ESPmDNS.h>   // http://subcounter.local
 #define HOSTNAME "subcounter"
-#define FW_VERSION "12.1"     // shown on start-up, home menu, settings, update page and dashboard
+#define FW_VERSION "12.2"     // shown on start-up, home menu, settings, update page and dashboard
 
 // ── Pins (ESP32-C6 version of the board) ────────────────────────────────────
 #define LCD_SCK   1
@@ -197,6 +197,7 @@ volatile bool netHolding = false;          // the network task has the data righ
 struct Stall { unsigned long at, ms; char what[48]; };
 Stall stalls[16]; int stallN = 0, stallPos = 0;
 unsigned long worstStall = 0;
+bool lastLongIsWeb = false;              // this loop's slow moment was a web page (already logged)
 void noteStall(unsigned long ms, const String &what) {
   Stall &s = stalls[stallPos]; s.at = millis(); s.ms = ms;
   strncpy(s.what, what.c_str(), sizeof(s.what) - 1); s.what[sizeof(s.what) - 1] = 0;
@@ -236,11 +237,29 @@ void pump() { if (!onNetTask()) server.handleClient(); else { NetIO io; vTaskDel
 // request to the same server makes refreshes much quicker. Idle ones are closed
 // after 20 s to give the memory back.
 struct Conn { WiFiClientSecure *cli = nullptr; HTTPClient *http = nullptr; unsigned long lastUse = 0; bool temp = false; };
-Conn connYT, connTW, connSP;
+Conn connYT, connTW, connSP, connGH;
+// Each secure connection needs ~40 KB in one piece. Before opening a new one, close any
+// other kept-open connections that aren't in use if memory is getting tight.
+void connFreeOthers(Conn *keep) {
+  Conn *all[] = { &connYT, &connTW, &connSP, &connGH };
+  for (Conn *c : all) if (c != keep && c->cli) { c->cli->stop(); delete c->http; delete c->cli; c->http = nullptr; c->cli = nullptr; }
+}
+bool memTight() { return ESP.getMaxAllocHeap() < 52000 || ESP.getFreeHeap() < 70000; }
+// Diagnostics: the last few failed internet requests (shown on /debug)
+struct NetErr { unsigned long at; int code; uint32_t freeMem, block; char host[28]; };
+NetErr netErrs[12]; int netErrN = 0, netErrPos = 0; unsigned long netErrTotal = 0;
+void noteNetErr(const String &url, int code) {
+  NetErr &e = netErrs[netErrPos]; e.at = millis(); e.code = code; e.freeMem = ESP.getFreeHeap(); e.block = ESP.getMaxAllocHeap();
+  int a = url.indexOf("://"); a = a < 0 ? 0 : a + 3; int b = url.indexOf('/', a); if (b < 0) b = url.length();
+  String h = url.substring(a, b); strncpy(e.host, h.c_str(), sizeof(e.host) - 1); e.host[sizeof(e.host) - 1] = 0;
+  netErrPos = (netErrPos + 1) % 12; if (netErrN < 12) netErrN++; netErrTotal++;
+  Serial.printf("NET ERR %d %s heap %u block %u\n", code, e.host, e.freeMem, e.block);
+}
 HTTPClient *connBegin(Conn &c, const String &url, Conn &tmp) {
   Conn *u = &c;
   if (!onNetTask() && netRunning) u = &tmp;            // other tasks get a one-off connection
   if (ESP.getFreeHeap() < 50000 && u->cli && !u->temp) { delete u->http; delete u->cli; u->http = nullptr; u->cli = nullptr; }
+  if (!u->cli && memTight() && (onNetTask() || !netRunning)) connFreeOthers(&c);   // make room for the new connection
   if (!u->cli) {
     u->cli = new (std::nothrow) WiFiClientSecure(); u->http = new (std::nothrow) HTTPClient();
     if (!u->cli || !u->http) { delete u->cli; delete u->http; u->cli = nullptr; u->http = nullptr; return nullptr; }
@@ -286,8 +305,16 @@ int httpsCall(Conn &c, const char *method, const String &url, const Hdr *hs, int
     bool staleConn = code == HTTPC_ERROR_CONNECTION_REFUSED || code == HTTPC_ERROR_SEND_HEADER_FAILED ||
                      code == HTTPC_ERROR_NOT_CONNECTED || code == HTTPC_ERROR_CONNECTION_LOST;
     if (attempt == 0 && hadOpen && staleConn && !strcmp(method, "GET")) { connClose(c); continue; }
+    // Couldn't connect at all (weak Wi-Fi, or not enough memory for a secure connection):
+    // free up memory and try once more on a fresh connection. GETs only.
+    if (attempt == 0 && code < 0 && code != HTTPC_ERROR_READ_TIMEOUT && !strcmp(method, "GET")) {
+      noteNetErr(url, code);
+      connClose(c); if (onNetTask() || !netRunning) connFreeOthers(&c);
+      delay(400); continue;
+    }
     break;
   }
+  if (code < 0 || code >= 500) noteNetErr(url, code);
   return code;
 }
 // Download a picture into a new buffer (caller frees). Lets go of the data lock while waiting.
@@ -300,7 +327,9 @@ uint8_t *httpDownload(const String &url, int &outLen, int maxLen) {
   http.setFollowRedirects(HTTPC_STRICT_FOLLOW_REDIRECTS);
   if (!http.begin(client, url)) return nullptr;
   uint8_t *buf = nullptr;
-  if (http.GET() == 200) {
+  int dcode = http.GET();
+  if (dcode != 200) noteNetErr(url, dcode);
+  if (dcode == 200) {
     int len = http.getSize();
     int cap = (len > 0 && len < maxLen) ? len : maxLen;
     buf = (uint8_t *)malloc(cap);
