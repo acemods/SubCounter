@@ -1,5 +1,5 @@
 /*
- * SubCounter v10.1 — YouTube subscriber counter for Waveshare ESP32-C6-Touch-LCD-1.47
+ * SubCounter v10.2 — YouTube subscriber counter for Waveshare ESP32-C6-Touch-LCD-1.47
  *
  *  ON THE BOARD
  *    Swipe left / right ... next / previous channel   (BOOT short press = next)
@@ -48,7 +48,7 @@
 #include <Update.h>    // wireless firmware updates
 #include <ESPmDNS.h>   // http://subcounter.local
 #define HOSTNAME "subcounter"
-#define FW_VERSION "10.1"     // shown on start-up, home menu, settings, update page and dashboard
+#define FW_VERSION "10.2"     // shown on start-up, home menu, settings, update page and dashboard
 
 // ── Pins (ESP32-C6 version of the board) ────────────────────────────────────
 #define LCD_SCK   1
@@ -190,6 +190,7 @@ float  cfgWxLat = 55.861f, cfgWxLon = -4.250f;   // weather location (default Gl
 String cfgWxName = "Glasgow";
 String cfgSpId, cfgSpSecret, cfgSpRefresh;       // Spotify app + saved login
 String cfgPin;
+String cfgTwitch;                                // Twitch channel names, one per line
 String cfgTwId, cfgTwSecret;                     // Twitch app (dev.twitch.tv/console)                                   // settings PIN (blank = none)
 bool   cfgLiveAlert = true;                      // alert when a channel goes live
 String cfgSpRedirect;                            // https address registered with Spotify (e.g. GitHub Pages relay)
@@ -494,9 +495,46 @@ long stepFor(long n) {
 // ════════════════════════════════════════════════════════════════════════════
 //  Settings
 // ════════════════════════════════════════════════════════════════════════════
+// "SomeStreamer", "twitch.tv/somestreamer", "https://www.twitch.tv/somestreamer/videos", "@somestreamer" -> "somestreamer"
+String twNameFrom(String x) {
+  x.trim(); x.toLowerCase();
+  int p = x.indexOf("twitch.tv/"); if (p >= 0) x = x.substring(p + 10);
+  if (x.startsWith("twitch:")) x = x.substring(7);
+  if (x.startsWith("@")) x = x.substring(1);
+  int e = 0; while (e < (int)x.length() && (isalnum((unsigned char)x[e]) || x[e] == '_')) e++;
+  return x.substring(0, e);
+}
+bool isTwitchLine(String x) { x.trim(); x.toLowerCase(); return x.indexOf("twitch.tv/") >= 0 || x.startsWith("twitch:"); }
+// Split a pasted list: YouTube lines stay in yt, Twitch lines become plain names in tw
+void splitLists(const String &in, String &yt, String &tw) {
+  String l = in + "\n"; l.replace(",", "\n"); l.replace("\r", "");
+  int st = 0;
+  while (true) {
+    int nl = l.indexOf('\n', st); if (nl < 0) break;
+    String x = l.substring(st, nl); x.trim(); st = nl + 1;
+    if (!x.length()) continue;
+    if (isTwitchLine(x)) { String n = twNameFrom(x); if (n.length()) tw += n + "\n"; }
+    else yt += x + "\n";
+  }
+}
+String normTwitchList(const String &in) {
+  String out, l = in + "\n"; l.replace(",", "\n"); l.replace("\r", "");
+  int st = 0;
+  while (true) {
+    int nl = l.indexOf('\n', st); if (nl < 0) break;
+    String n = twNameFrom(l.substring(st, nl)); st = nl + 1;
+    if (n.length() && out.indexOf(n + "\n") != 0 && out.indexOf("\n" + n + "\n") < 0) out += n + "\n";
+  }
+  out.trim();
+  return out;
+}
+
 void parseChannels() {
   numCh = 0;
   String list = cfgChannels + "\n";
+  { String t = cfgTwitch + "\n"; int st = 0;            // Twitch names from their own box
+    while (true) { int nl = t.indexOf('\n', st); if (nl < 0) break; String n = t.substring(st, nl); n.trim(); st = nl + 1;
+                   if (n.length()) list += "twitch:" + n + "\n"; } }
   list.replace(",", "\n");
   list.replace("\r", "");
   int start = 0;
@@ -558,6 +596,11 @@ void loadSettings() {
     numNets = 1;
   }
   cfgChannels = prefs.getString("channels", prefs.getString("channel", ""));
+  cfgTwitch = prefs.getString("twch", "");
+  if (cfgChannels.indexOf("twitch") >= 0) {           // older versions mixed Twitch into the YouTube list
+    String yt, tw; splitLists(cfgChannels, yt, tw);
+    yt.trim(); cfgChannels = yt; cfgTwitch = normTwitchList(cfgTwitch + "\n" + tw);
+  }
   cfgApiKey   = prefs.getString("apikey", "");
   cfgAuto     = prefs.getBool("auto", false);
   cfgEst      = prefs.getBool("est", true);
@@ -609,6 +652,7 @@ void saveSettings() {
     prefs.putBool((p + "compat").c_str(), nets[k].compat);
   }
   prefs.putString("channels", cfgChannels);
+  prefs.putString("twch", cfgTwitch);
   prefs.putString("apikey", cfgApiKey);
   prefs.putBool("auto", cfgAuto);
   prefs.putBool("est", cfgEst);
@@ -3116,7 +3160,7 @@ void handleSettings() {
   String h = FPSTR(PAGE_HEAD);
   h += "<h1>&#9654; SubCounter settings</h1><p>Saved on the board only. v" FW_VERSION;
   if (!portalMode) h += " &middot; <a href='/'>&larr; Dashboard</a>";
-  h += "</p><nav class='jump'><a href='#channels'>Channels</a><a href='#display'>Display</a><a href='#alerts'>Alerts</a>"
+  h += "</p><nav class='jump'><a href='#channels'>YouTube</a><a href='#twitch'>Twitch</a><a href='#display'>Display</a><a href='#alerts'>Alerts</a>"
        "<a href='#weather'>Weather</a><a href='#spotify'>Spotify</a><a href='#motion'>Motion</a><a href='#wifi'>Wi-Fi</a>"
        "<a href='#security'>Security</a>" + String(portalMode ? "" : "<a href='#firmware'>Firmware</a>") + "</nav>";
   if (wifiFailReason.length()) {
@@ -3127,25 +3171,35 @@ void handleSettings() {
   // (Connect now, Spotify, calibrate) are buttons with their own formaction.
   h += "<form method='POST' action='/save'>";
 
-  // ── Channels ──
-  h += sec("channels", "Channels");
-  h += "<label>Channels to follow (up to 10, one per line)</label>";
-  h += "<textarea name='channels' autocapitalize='off' autocorrect='off' spellcheck='false' placeholder='@yourchannel&#10;@mkbhd&#10;twitch.tv/somestreamer' required>" +
+  // ── YouTube ──
+  h += sec("channels", "YouTube");
+  h += "<label>YouTube channels (one per line)</label>";
+  h += "<textarea name='channels' autocapitalize='off' autocorrect='off' spellcheck='false' placeholder='@yourchannel&#10;@mkbhd&#10;@veritasium'>" +
        htmlEscape(cfgChannels) + "</textarea>";
-  h += "<small>YouTube: @handles, UC… channel IDs or channel links. Twitch: <b>twitch.tv/name</b>. "
-       "Put your own channel first – it's highlighted and shown on the night clock.</small>";
+  h += "<small>@handles, UC… channel IDs or channel links. Put your own channel first – it's highlighted and shown on the night clock.</small>";
   h += "<label>YouTube Data API key</label>";
   h += "<input name='apikey' autocapitalize='off' autocomplete='off' placeholder='";
   h += cfgApiKey.length() ? "(saved — leave blank to keep)" : "AIza…";
-  h += "'><small>Only needed for YouTube channels.</small>";
-  h += "<details" + String(cfgTwId.length() || cfgChannels.indexOf("twitch") >= 0 ? " open" : "") + "><summary>Twitch app (only for Twitch channels)</summary>";
-  h += "<small>Create a free app at <a href='https://dev.twitch.tv/console/apps' target='_blank'>dev.twitch.tv/console</a> "
-       "(Category: Other, Client type: Confidential, OAuth Redirect URL: <code>https://localhost</code> – any https address works, it isn't used), then copy its Client ID and a new Secret here.</small>";
-  h += "<label>Twitch Client ID</label><input name='twid' autocapitalize='off' autocomplete='off' value='" + htmlEscape(cfgTwId) + "'>";
-  h += "<label>Twitch Client Secret</label><input name='twsec' type='password' autocapitalize='off' autocomplete='new-password' placeholder='";
+  h += "'><small>Only needed if you follow YouTube channels.</small>";
+
+  // ── Twitch ──
+  h += sec("twitch", "Twitch");
+  h += "<label>Twitch channels (just the name, one per line)</label>";
+  h += "<textarea name='twch' autocapitalize='off' autocorrect='off' spellcheck='false' style='min-height:90px' placeholder='shroud&#10;pokimane'>" +
+       htmlEscape(cfgTwitch) + "</textarea>";
+  h += "<small>Type the name as it appears in their Twitch address (twitch.tv/<b>name</b>). Pasting the full link works too. "
+       "YouTube and Twitch together: up to 10 channels.</small>";
+  if (twError.length() && !portalMode) h += "<small style='color:#e62117'>" + htmlEscape(twError) + "</small>";
+  h += "<details" + String(cfgTwId.length() && cfgTwSecret.length() ? "" : " open") + "><summary>Twitch app details" +
+       String(cfgTwId.length() && cfgTwSecret.length() ? " (saved &#10003;)" : " (needed for Twitch channels)") + "</summary>";
+  h += "<small>Create a free app at <a href='https://dev.twitch.tv/console/apps' target='_blank'>dev.twitch.tv/console</a>: "
+       "Register Your Application &rarr; any unique name &rarr; OAuth Redirect URL <code>https://localhost</code> (any https address works, it isn't used) "
+       "&rarr; Category: Other &rarr; Client type: Confidential &rarr; Create &rarr; Manage &rarr; copy the Client ID and a <b>New Secret</b>. "
+       "Your Twitch account needs two-factor sign-in turned on.</small>";
+  h += "<label>Client ID</label><input name='twid' autocapitalize='off' autocomplete='off' value='" + htmlEscape(cfgTwId) + "'>";
+  h += "<label>Client Secret</label><input name='twsec' type='password' autocapitalize='off' autocomplete='new-password' placeholder='";
   h += cfgTwSecret.length() ? "(saved — leave blank to keep)" : "";
   h += "'>";
-  if (twError.length() && !portalMode) h += "<small style='color:#e62117'>" + htmlEscape(twError) + "</small>";
   h += "</details>";
 
   // ── Display ──
@@ -3325,12 +3379,12 @@ void handleSave() {
     pass.remove(pass.length() - 1);
   while (pass.length() && (pass[0] == ' ' || pass[0] == '\n' || pass[0] == '\r' || pass[0] == '\t'))
     pass.remove(0, 1);
-  bool ytListed = false;
-  { String l = chs + "\n"; l.replace(",", "\n"); int st = 0;
-    while (true) { int nl = l.indexOf('\n', st); if (nl < 0) break; String x = l.substring(st, nl); x.trim(); x.toLowerCase(); st = nl + 1;
-                   if (x.length() && x.indexOf("twitch.tv/") < 0 && !x.startsWith("twitch:")) ytListed = true; } }
-  if (chs.length() == 0 || (ytListed && key.length() == 0 && cfgApiKey.length() == 0)) {
-    sendMessage(400, "Missing details", "At least one channel is needed, and the YouTube API key for YouTube channels.");
+  String twList;
+  { String yt, tw; splitLists(chs, yt, tw); yt.trim(); chs = yt;        // a Twitch link pasted in the YouTube box moves across
+    twList = normTwitchList(server.arg("twch") + "\n" + tw); }
+  bool ytListed = chs.length() > 0;
+  if ((!ytListed && !twList.length()) || (ytListed && key.length() == 0 && cfgApiKey.length() == 0)) {
+    sendMessage(400, "Missing details", ytListed ? "YouTube channels need the YouTube Data API key." : "Add at least one YouTube or Twitch channel.");
     return;
   }
   String ip = server.arg("ip"), gw = server.arg("gw"), mask = server.arg("mask"), dnsS = server.arg("dns");
@@ -3366,6 +3420,7 @@ void handleSave() {
   numNets = nk;
   cfgPreferred = prefNew;
   cfgChannels = chs;
+  cfgTwitch = twList;
   if (key.length()) cfgApiKey = key;
   cfgAuto = server.arg("auto") == "1";
   cfgEst = server.arg("est") == "1";

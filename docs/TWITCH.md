@@ -19,21 +19,21 @@ SubCounter can track Twitch channels alongside YouTube ones: follower count, liv
 6. Copy the **Client ID**.
 7. Click **New Secret**, confirm, and copy the **Client Secret** straight away (it's only shown once; making another one cancels the old one).
 
-## 2. Add them to SubCounter
+## 2. Add the app details and channels to SubCounter
 
-Open `http://subcounter.local/settings` (or the board's IP + `/settings`) → **Channels** section → open **Twitch app (only for Twitch channels)** → paste the **Client ID** and **Client Secret** → **Save & restart**.
+1. Open `http://subcounter.local/settings` (or the board's IP + `/settings`) and tap **Twitch** at the top.
+2. In **Twitch channels**, type each channel's name, one per line, exactly as in their address (twitch.tv/**name**):
 
-## 3. Add Twitch channels
+   ```
+   shroud
+   pokimane
+   ```
 
-In the channel list, one per line, use the Twitch address:
+   Pasting the full `https://www.twitch.tv/name` link works too. YouTube and Twitch together: up to 10 channels.
+3. Open **Twitch app details** and paste the **Client ID** and **Client Secret**.
+4. Press **Save & restart**.
 
-```
-@youryoutubechannel
-twitch.tv/somestreamer
-twitch.tv/anotherone
-```
-
-`twitch:somestreamer` also works. YouTube and Twitch channels can be mixed, up to 10 in total. If your list is Twitch-only, you don't need a YouTube API key.
+If your list is Twitch-only, you don't need a YouTube API key.
 
 ## What you get
 

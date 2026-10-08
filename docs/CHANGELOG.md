@@ -2,6 +2,11 @@
 
 All builds are in [`builds/`](../builds). Source snapshots for most versions are in the git history.
 
+## v10.2
+- **Twitch has its own section in settings** with its own channel box: type just the name (e.g. `shroud`); pasted `twitch.tv/…` links work too
+- Twitch lines from the old mixed list move across automatically; a Twitch link pasted in the YouTube box is moved over on save
+- Twitch app details fold away once saved; settings hint now says `https://localhost` (Twitch requires https)
+
 ## v10.1
 - **Fixed: the settings PIN couldn't be set.** The PIN box was below the Save button, outside the form, so it was never sent. Everything is now in one form.
 - PIN now has a *Type it again* box (must match, at least 4 characters); nothing is saved if they don't match

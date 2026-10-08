@@ -6,6 +6,7 @@ A desk gadget built on the **Waveshare ESP32-C6-Touch-LCD-1.47** that shows live
 
 ## What's new
 
+- **v10.2:** Twitch gets its own settings section – just type the channel name
 - **v10.1:** settings PIN fixed, settings page reorganised
 - **v10.0:** the firmware version is shown on the board, settings, update page and dashboard
 - **v9.9:** Twitch channels (followers, live status, alerts) alongside YouTube
@@ -35,7 +36,7 @@ Full history: [docs/CHANGELOG.md](docs/CHANGELOG.md)
 - Subscriber history saved on the board, so graphs survive restarts
 
 **Twitch**
-- Add `twitch.tv/name` channels next to your YouTube ones: exact follower counts, live status, viewers and went-live alerts ([setup](docs/TWITCH.md))
+- Add Twitch channels by name in their own settings section: exact follower counts, live status, viewers and went-live alerts ([setup](docs/TWITCH.md))
 
 **Apps** (long-press the screen for the home menu)
 - **Weather:** clock, current conditions, next 12 hours, tomorrow, and a rain warning (Open-Meteo, no key needed)
@@ -61,7 +62,7 @@ Full history: [docs/CHANGELOG.md](docs/CHANGELOG.md)
 
 ## Quick start
 
-1. **Flash the board.** Open <https://espressif.github.io/esptool-js/> in Chrome, connect the board, and flash `builds/latest/SubCounter-v10.1-FULL-new-board-flash-at-0x0.bin` at address **0x0**.
+1. **Flash the board.** Open <https://espressif.github.io/esptool-js/> in Chrome, connect the board, and flash `builds/latest/SubCounter-v10.2-FULL-new-board-flash-at-0x0.bin` at address **0x0**.
 2. **Set it up.** The board shows *SETUP MODE*. Join the Wi-Fi network **SubCounter-Setup** from your phone, and the setup page opens by itself (or go to <http://192.168.4.1>). Pick your Wi-Fi, add your YouTube channels and a YouTube Data API key, then save.
 3. **Use it.** The board shows its address for a few seconds, then your subscriber count. Open **<http://subcounter.local>** (or the IP address) in a browser for the dashboard.
 
