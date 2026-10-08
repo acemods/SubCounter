@@ -35,6 +35,10 @@ The race can pit any two channels against each other, including YouTube vs Twitc
 
 Swipe down from the main count for the **Leaderboard** (5 per page; swipe left or right for more), and again for the **Race**. Choose the two race channels in settings.
 
+If you follow both YouTube and Twitch channels, each name on the leaderboard (and the tall portrait leaderboard) gets a small **YouTube** or **Twitch** logo, so you can tell apart someone who's on both. With only one platform the logos are left out to keep the names wide.
+
+<img src="images/leaderboard.png" width="334" alt="Leaderboard with YouTube and Twitch logos">
+
 ### About the numbers
 
 YouTube rounds public subscriber counts to 3 significant figures (e.g. 3,180 moves in steps of 10; 1.2M in steps of 10,000). With **Estimated live counts** on, the board estimates the count between steps from each channel's growth rate, and labels it **est.** Growth figures need a few hours of history first. The board records every channel hourly and keeps 31 days.

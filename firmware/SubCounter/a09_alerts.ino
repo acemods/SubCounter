@@ -346,6 +346,7 @@ void drawPortraitBoard() {
   for (int a = 0; a < numCh; a++) for (int b = a + 1; b < numCh; b++)
     if (ch[idx[b]].subs > ch[idx[a]].subs) { int t = idx[a]; idx[a] = idx[b]; idx[b] = t; }
   int rowH = numCh > 0 ? min(48, 284 / numCh) : 28;
+  bool icons = mixedPlatforms();
   int y = 34;
   for (int r = 0; r < numCh; r++) {
     int i = idx[r];
@@ -353,18 +354,24 @@ void drawPortraitBoard() {
     String subs = ch[i].subs >= 0 ? compact(ch[i].subs) : String("-");
     if (rowH >= 44) {     // roomy: name on one line, count + today underneath
       int lw = ch[i].live ? tw("LIVE", F_XS) + 14 : 0;
-      String nm = String(r + 1) + " " + fit(nameOf(i), F_S, W - 30 - lw);
-      ft(6, y + 18, nm, F_S, col);
-      if (ch[i].live) livePillAfter(6 + tw(nm, F_S), y + 16);
+      String rk = String(r + 1) + " ";
+      int nx = 6 + tw(rk, F_S);
+      ft(6, y + 18, rk, F_S, col);
+      if (icons) { platformIcon(nx, y + 7, ch[i].tw); nx += 21; }
+      String nm = fit(nameOf(i), F_S, W - nx - 6 - lw);
+      ft(nx, y + 18, nm, F_S, col);
+      if (ch[i].live) livePillAfter(nx + tw(nm, F_S), y + 16);
       ft(6, y + 40, subs, F_M, col);
       if (ch[i].statsOk && ch[i].gainToday) ftR(W - 6, y + 40, signedNum(ch[i].gainToday), F_S, C_GREEN);
     } else {
       int sw = tw(subs, F_S);
       ft(6, y + 19, String(r + 1), F_S, C_GREY);
       int lw = ch[i].live ? tw("LIVE", F_XS) + 14 : 0;
-      String nm = fit(nameOf(i), F_S, W - 34 - sw - lw);
-      ft(24, y + 19, nm, F_S, col);
-      if (ch[i].live) livePillAfter(24 + tw(nm, F_S), y + 17);
+      int nx = 24;
+      if (icons) { platformIcon(nx, y + 8, ch[i].tw); nx += 21; }
+      String nm = fit(nameOf(i), F_S, W - nx - 10 - sw - lw);
+      ft(nx, y + 19, nm, F_S, col);
+      if (ch[i].live) livePillAfter(nx + tw(nm, F_S), y + 17);
       ftR(W - 6, y + 19, subs, F_S, col);
     }
     y += rowH;

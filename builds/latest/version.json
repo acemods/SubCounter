@@ -1,7 +1,7 @@
 {
- "version": "12.4",
- "app": "SubCounter-v12.4-APP-ONLY.bin",
- "size": 1792800,
- "md5": "222a163a255fe4e06d433f44080fab22",
- "notes": "Device screen: Check for update no longer gets stuck on Checking; a tapped check runs before anything else"
+ "version": "12.5",
+ "app": "SubCounter-v12.5-APP-ONLY.bin",
+ "size": 1793136,
+ "md5": "985b42ed2b1b9b8317ba5fe1b5c85dd1",
+ "notes": "Board leaderboards show a small YouTube or Twitch logo by each name when you follow both"
 }

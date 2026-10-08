@@ -442,6 +442,13 @@ void drawMilestone() {
 // ── Leaderboard (5 rows per page; swipe left/right for more) ────────────────
 int boardPage = 0;
 #define BOARD_ROWS 5
+void platformIcon(int x, int y, bool twitch);
+// Both YouTube and Twitch channels in the list? Then the leaderboards show a small logo by each name.
+bool mixedPlatforms() {
+  bool yt = false, tv = false;
+  for (int i = 0; i < numCh; i++) { if (ch[i].tw) tv = true; else yt = true; }
+  return yt && tv;
+}
 void drawBoard() {
   gfx->fillScreen(C_BG);
   int pages = (numCh + BOARD_ROWS - 1) / BOARD_ROWS;
@@ -452,6 +459,8 @@ void drawBoard() {
   int idx[MAX_CH]; for (int i = 0; i < numCh; i++) idx[i] = i;
   for (int a = 0; a < numCh; a++) for (int b = a + 1; b < numCh; b++)
     if (ch[idx[b]].subs > ch[idx[a]].subs) { int t = idx[a]; idx[a] = idx[b]; idx[b] = t; }
+  bool icons = mixedPlatforms();
+  int nx = icons ? 50 : 30;                       // where the name starts
   int y = 56;
   for (int r = boardPage * BOARD_ROWS; r < min(numCh, (boardPage + 1) * BOARD_ROWS); r++) {
     int i = idx[r];
@@ -461,9 +470,10 @@ void drawBoard() {
     int sw = tw(subs, F_M);
     ft(8, y, num, F_S, C_GREY);
     int lw = ch[i].live ? tw("LIVE", F_XS) + 14 : 0;
-    String nm = fit(nameOf(i), F_M, gfx->width() - 8 - sw - 40 - lw);
-    ft(30, y, nm, F_M, col);
-    if (ch[i].live) livePillAfter(30 + tw(nm, F_M), y - 3);
+    if (icons) platformIcon(27, y - 13, ch[i].tw);
+    String nm = fit(nameOf(i), F_M, gfx->width() - 8 - sw - 10 - nx - lw);
+    ft(nx, y, nm, F_M, col);
+    if (ch[i].live) livePillAfter(nx + tw(nm, F_M), y - 3);
     ftR(gfx->width() - 8, y, subs, F_M, col);
     y += 26;
   }

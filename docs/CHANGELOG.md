@@ -2,6 +2,10 @@
 
 All builds are in [`builds/`](../builds). Source snapshots for most versions are in the git history.
 
+## v12.5
+- **Platform logos on the board's leaderboards:** when you follow both YouTube and Twitch channels, the leaderboard and the tall portrait leaderboard show a small YouTube or Twitch logo by each name (handy when someone is on both). Left out when everything is one platform.
+- Docs: new leaderboard picture; colour theme pictures redrawn with the logos
+
 ## v12.4
 - **Device screen stuck on "Checking...":** fixed. The screen waited for the check's timestamp to change, which never happened if the board's clock wasn't set yet, and had no time limit. It now waits for the check itself to finish (worked or not), and gives up after 30 s with "No reply - weak Wi-Fi? Tap to try again".
 - A check you ask for (on the board or the Update page) now runs before the board's other background jobs, instead of waiting behind Spotify, weather and so on
