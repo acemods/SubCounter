@@ -1,7 +1,7 @@
 {
- "version": "11.8",
- "app": "SubCounter-v11.8-APP-ONLY.bin",
- "size": 1779504,
- "md5": "54238ad337cae0c14c55851b76a42c62",
- "notes": "Dashboard uses the new Creators logo, and the board's web pages now have a browser tab icon"
+ "version": "11.9",
+ "app": "SubCounter-v11.9-APP-ONLY.bin",
+ "size": 1779824,
+ "md5": "7d7276ec686c59adbf8736948f5a7d9e",
+ "notes": "Start-up screen checks GitHub for updates straight away; tap Install there if one is waiting"
 }

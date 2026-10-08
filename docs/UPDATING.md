@@ -2,8 +2,9 @@
 
 ## From GitHub (v11.1 and later), easiest
 
-The board checks GitHub once a day. When a new version is out you'll see:
+The board checks GitHub **every time it starts up** (on the QR-code screen you see after it joins Wi-Fi) and then once a day. When a new version is out you'll see:
 
+- **at start-up:** the QR screen says "v… available!" and stays up for 20 seconds. Tap **Install v…** to update there and then, or swipe / press BOOT to skip it.
 - **on the board:** "v… available" at the top of the home menu and a red dot on the Device page. Long-press → swipe left → **Device** → **Install v…**. Or tap **Check for update** to look straight away.
 - **on the dashboard:** a green **Update** button in the header
 - **on the Update page** (`http://subcounter.local/update`): an **Install** button, and **Check now**
@@ -15,7 +16,7 @@ To have it install by itself: Settings → **Updates** → *Install new versions
 ## Wireless update (recommended, v9 and later)
 
 1. Open `http://<board-ip>/update` (or Settings → *Firmware* → *Update*).
-2. Choose the **APP-ONLY** file, e.g. `SubCounter-v11.8-APP-ONLY.bin`.
+2. Choose the **APP-ONLY** file, e.g. `SubCounter-v11.9-APP-ONLY.bin`.
 3. Wait about 30 seconds; the board installs and restarts.
 
 Settings, Wi-Fi networks, Spotify login and subscriber history are all kept. The page refuses FULL images. If an update fails, the board keeps running the old version.

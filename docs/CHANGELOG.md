@@ -2,6 +2,9 @@
 
 All builds are in [`builds/`](../builds). Source snapshots for most versions are in the git history.
 
+## v11.9
+- **Update check at start-up:** the QR-code screen you see after the board joins Wi-Fi now checks GitHub straight away. If a new version is out it says so and stays up for 20 seconds: tap **Install** to update there and then, or swipe / press BOOT to skip. Its button works now (before, it was just a picture until the board finished starting).
+
 ## v11.8
 - Dashboard header uses the same **Creators** badge as the home-menu tile
 - **Browser icon:** the dashboard, settings and update pages now have a tab/bookmark icon (SVG for modern browsers, PNG fallback at `/favicon.ico`), plus an `apple-touch-icon` for Add to Home Screen on phones

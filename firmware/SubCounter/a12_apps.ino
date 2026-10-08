@@ -586,7 +586,7 @@ void drawDevice() {
   if (devChecking) st = "Checking...";
   else if (updAvail) { st = "v" + updVer + " available!"; sc = C_GREEN; }
   else if (updErr.length()) { st = updErr; sc = C_RED; }
-  else if (updCheckedAt) st = "Up to date";
+  else if (updCheckedAt || updCheckedOnce) st = "Up to date";
   ft(x, 122, fit(st, F_XS2, w), F_XS2, sc);
   // the button
   String b = updAvail ? "Install v" + updVer : String("Check for update");

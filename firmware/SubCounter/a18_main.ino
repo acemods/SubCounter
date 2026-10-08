@@ -6,6 +6,27 @@ unsigned long summaryShownAt = 0;
 int lastSummaryDay = -1;
 int portraitRot = 0;
 
+// After joining Wi-Fi: the Device screen (QR code, address, version) for a few seconds.
+// It checks GitHub for new firmware straight away, and the button works here too:
+// if there's an update it stays up for 20 s so you can tap Install (or swipe to skip).
+void showAddress() {
+  devChecking = true; drawDevice();
+  checkForUpdate(); lastUpdCheck = millis() | 1;   // counts as today's check
+  devChecking = false; drawDevice();
+  unsigned long showFor = updAvail ? 20000UL : 6000UL, start = millis();
+  while (millis() - start < showFor) {
+    server.handleClient();
+    char s = pollSwipe();
+    if (s == 'T' && tapX >= 166 && tapY >= 120) {             // the button
+      if (updAvail) installGithubUpdate();                     // restarts when it works
+      else { devChecking = true; drawDevice(); checkForUpdate(); devChecking = false; }
+      drawDevice(); start = millis(); if (updAvail) showFor = 20000UL;
+    } else if (s) break;                                       // any other touch: carry on
+    if (digitalRead(BOOT_BTN) == LOW) break;                   // BOOT: carry on
+    delay(10);
+  }
+}
+
 void setup() {
   Serial.begin(115200);
   delay(300);

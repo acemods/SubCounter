@@ -47,6 +47,7 @@ long updSize = 0;
 bool updAvail = false;
 unsigned long lastUpdCheck = 0;
 time_t updCheckedAt = 0;
+bool updCheckedOnce = false;        // set even before the clock is known (start-up check)
 volatile bool updCheckReq = false, updInstallReq = false;
 Conn connGH;
 
@@ -71,6 +72,7 @@ void checkForUpdate() {
   int code = httpsCall(connGH, "GET", url, nullptr, 0, &body);
   connClose(connGH);
   updCheckedAt = timeValid() ? nowT() : 0;
+  updCheckedOnce = true;
   if (code != 200) { updErr = "Couldn't check for updates (" + String(code) + ")"; return; }
   JsonDocument doc;
   if (deserializeJson(doc, body)) { updErr = "Update info unreadable"; return; }

@@ -6,6 +6,7 @@ A desk gadget built on the **Waveshare ESP32-C6-Touch-LCD-1.47** that shows live
 
 ## What's new
 
+- **v11.9:** start-up screen checks for updates straight away and lets you install from there
 - **v11.8:** dashboard uses the new Creators logo; browser tab and phone home-screen icon
 - **v11.7:** the main home-menu tile is now **Creators** (half YouTube, half Twitch)
 - **v11.6:** home menu tidy-up; all documentation pictures refreshed
@@ -70,7 +71,7 @@ Full history: [docs/CHANGELOG.md](docs/CHANGELOG.md)
 
 ## Quick start
 
-1. **Flash the board.** Open <https://espressif.github.io/esptool-js/> in Chrome, connect the board, and flash `builds/latest/SubCounter-v11.8-FULL-new-board-flash-at-0x0.bin` at address **0x0**.
+1. **Flash the board.** Open <https://espressif.github.io/esptool-js/> in Chrome, connect the board, and flash `builds/latest/SubCounter-v11.9-FULL-new-board-flash-at-0x0.bin` at address **0x0**.
 2. **Set it up.** The board shows *SETUP MODE*. Join the Wi-Fi network **SubCounter-Setup** from your phone, and the setup page opens by itself (or go to <http://192.168.4.1>). Pick your Wi-Fi, add your YouTube channels and a YouTube Data API key, then save.
 3. **Use it.** The board shows a QR code and its address for a few seconds, then your subscriber count. Scan the code, or open **<http://subcounter.local>**, for the dashboard.
 

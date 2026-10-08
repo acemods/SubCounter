@@ -54,12 +54,6 @@ void waitShowing(unsigned long ms) {
   while (millis() - start < ms) { server.handleClient(); delay(20); }
 }
 
-// After joining Wi-Fi: show where the dashboard is for a few seconds
-void drawDevice();
-void showAddress() {
-  drawDevice();            // QR code, address and version (same as Device in the home menu)
-  waitShowing(6000);
-}
 
 void showAlert(const Alert &a) {
   if (a.type == A_MILESTONE) {
