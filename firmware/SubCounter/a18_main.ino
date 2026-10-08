@@ -97,6 +97,10 @@ void netCycle() {
   DataGuard g;
   if (netPause) return;
   netBusy = true; netHolding = true;
+  if (updCheckReq) {                       // someone tapped "Check for update": do that first
+    updCheckReq = false; lastUpdCheck = millis();
+    netStage = "update check"; checkForUpdate();
+  }
   netStage = "Spotify command";
   if (spPendingCmd) { char c = spPendingCmd; spPendingCmd = 0; if (cfgSpRefresh.length()) spCommandNet(c); }
   if (lastFetch == 0 || millis() - lastFetch > REFRESH_MS) {
@@ -317,9 +321,12 @@ void loopBody() {
     if (deviceOpen) {
       if (swipe == 'T' && tapX >= 166 && tapY >= 120) {      // the button
         if (updAvail) { updInstallReq = true; }
-        else { devChecking = true; updCheckReq = true; drawDevice(); }
+        else if (!devChecking) { devChecking = true; devCheckSeq = updCheckSeq; devCheckAt = millis(); updCheckReq = true; drawDevice(); }
       }
-      if (devChecking && updCheckedAt != devShownCheck) { devChecking = false; devShownCheck = updCheckedAt; drawDevice(); }
+      if (devChecking && updCheckSeq != devCheckSeq) { devChecking = false; drawDevice(); }
+      else if (devChecking && millis() - devCheckAt > 30000UL) {           // no answer: don't spin forever
+        devChecking = false; updErr = "No reply - weak Wi-Fi? Tap to try again"; drawDevice();
+      }
       if (millis() - lastInteract > 60000UL) openApp(app);  // left open: go back
     }
     else if (menuOpen) {

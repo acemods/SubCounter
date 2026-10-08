@@ -1,7 +1,7 @@
 {
- "version": "12.3",
- "app": "SubCounter-v12.3-APP-ONLY.bin",
- "size": 1791760,
- "md5": "265686a2e52cd2da6d4d8abff61c9e85",
- "notes": "Settings page, dashboard data and backups are sent in small pieces, so they no longer get cut off when memory is tight"
+ "version": "12.4",
+ "app": "SubCounter-v12.4-APP-ONLY.bin",
+ "size": 1792800,
+ "md5": "222a163a255fe4e06d433f44080fab22",
+ "notes": "Device screen: Check for update no longer gets stuck on Checking; a tapped check runs before anything else"
 }

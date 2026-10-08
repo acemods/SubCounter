@@ -2,6 +2,11 @@
 
 All builds are in [`builds/`](../builds). Source snapshots for most versions are in the git history.
 
+## v12.4
+- **Device screen stuck on "Checking...":** fixed. The screen waited for the check's timestamp to change, which never happened if the board's clock wasn't set yet, and had no time limit. It now waits for the check itself to finish (worked or not), and gives up after 30 s with "No reply - weak Wi-Fi? Tap to try again".
+- A check you ask for (on the board or the Update page) now runs before the board's other background jobs, instead of waiting behind Spotify, weather and so on
+- `/debug` shows whether the clock is set and the result of the last update check
+
 ## v12.3
 - **Settings page cut off part-way down:** fixed. The page (20-30 KB) used to be built in memory in one piece before sending; when memory was tight the end of it was silently dropped. It's now sent in 1 KB pieces as it's built. The dashboard's data and the settings backup are sent the same way.
 

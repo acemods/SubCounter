@@ -47,7 +47,8 @@ long updSize = 0;
 bool updAvail = false;
 unsigned long lastUpdCheck = 0;
 time_t updCheckedAt = 0;
-bool updCheckedOnce = false;        // set even before the clock is known (start-up check)
+bool updCheckedOnce = false;
+volatile uint32_t updCheckSeq = 0;  // goes up every time a check finishes (worked or not)        // set even before the clock is known (start-up check)
 volatile bool updCheckReq = false, updInstallReq = false;
 
 // "11.10" > "11.9" > "11.1"
@@ -65,8 +66,10 @@ bool versionNewer(const String &a, const String &b) {
 }
 
 // Runs on the network task
-void checkForUpdate() {
-  if (!cfgUpdUrl.startsWith("https://")) return;
+void checkForUpdateOnce();
+void checkForUpdate() { checkForUpdateOnce(); updCheckSeq++; }
+void checkForUpdateOnce() {
+  if (!cfgUpdUrl.startsWith("https://")) { updErr = "Update address isn't set"; return; }
   String url = cfgUpdUrl + "version.json", body;
   int code = httpsCall(connGH, "GET", url, nullptr, 0, &body);
   connClose(connGH);

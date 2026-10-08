@@ -1238,7 +1238,9 @@ void handleDebug() {
   o += "SubCounter v" FW_VERSION "\n";
   o += "Up " + String(millis() / 1000) + " s   free memory " + String(ESP.getFreeHeap()) + " (lowest " + String(ESP.getMinFreeHeap()) + ")\n";
   o += "Network task: " + String((const char *)netStage) + (netHolding ? " (busy with data)" : "") + "\n";
-  o += "Wi-Fi signal " + String(WiFi.RSSI()) + " dBm\n\n";
+  o += "Wi-Fi signal " + String(WiFi.RSSI()) + " dBm\n";
+  o += "Clock " + String(timeValid() ? "set" : "NOT set") + "   update check: " + String(updCheckSeq) + " done" +
+       (updErr.length() ? ", last error: " + updErr : String("")) + (updAvail ? ", v" + updVer + " available" : String("")) + "\n\n";
   o += "Times the screen was frozen for more than 0.4 s (newest first), worst " + String(worstStall) + " ms:\n";
   if (!stallN) o += "  none\n";
   for (int k = 0; k < stallN; k++) {

@@ -556,6 +556,7 @@ void drawMenu() {
 
 // ── Device screen: QR code for the dashboard, address, version, updates ─────
 bool deviceOpen = false, devChecking = false;
+uint32_t devCheckSeq = 0; unsigned long devCheckAt = 0;
 time_t devShownCheck = 0;
 int qrX, qrY, qrScale;
 void qrDraw(esp_qrcode_handle_t q) {
@@ -593,7 +594,7 @@ void drawDevice() {
   gfx->fillRoundRect(x, 130, w, 34, 8, updAvail ? 0x2589 : 0x2104);
   ft(x + (w - tw(b, F_XS2)) / 2, 152, b, F_XS2, C_WHITE);
 }
-void openDevice() { deviceOpen = true; menuOpen = true; devShownCheck = updCheckedAt; gfx->fillScreen(C_BG); drawDevice(); }
+void openDevice() { deviceOpen = true; menuOpen = true; devShownCheck = updCheckedAt; if (devChecking && millis() - devCheckAt > 30000UL) devChecking = false; gfx->fillScreen(C_BG); drawDevice(); }
 
 void drawApp() {
   if (deviceOpen) { drawDevice(); return; }
