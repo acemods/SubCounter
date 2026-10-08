@@ -1,7 +1,7 @@
 {
- "version": "12.2",
- "app": "SubCounter-v12.2-APP-ONLY.bin",
- "size": 1788800,
- "md5": "5c1b464c6a7baa0ae0cc5b3e373013f8",
- "notes": "More reliable YouTube fetching when memory is tight (frees other connections and retries); /debug now lists failed requests and slow web pages"
+ "version": "12.3",
+ "app": "SubCounter-v12.3-APP-ONLY.bin",
+ "size": 1791760,
+ "md5": "265686a2e52cd2da6d4d8abff61c9e85",
+ "notes": "Settings page, dashboard data and backups are sent in small pieces, so they no longer get cut off when memory is tight"
 }

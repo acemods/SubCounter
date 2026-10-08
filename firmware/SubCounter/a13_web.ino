@@ -265,6 +265,23 @@ void handleIconPng() { sendIcon("image/png", ICON_PNG32, sizeof(ICON_PNG32)); }
 void handleTouchIcon() { sendIcon("image/png", ICON_PNG180, sizeof(ICON_PNG180)); }
 #define ICON_LINKS "<link rel='icon' href='/favicon.svg' type='image/svg+xml'><link rel='icon' href='/favicon.png' sizes='32x32' type='image/png'><link rel='apple-touch-icon' href='/apple-touch-icon.png'>"
 
+// Send a page in small pieces as it's built, instead of building it all in memory first.
+// A 20-30 KB page needs one big free block, and when memory is tight the end of the page
+// was silently lost (settings page cut off part-way). This only ever holds 1 KB.
+struct ChunkOut : public Print {
+  char buf[1024]; size_t n = 0; bool started = false; const char *type; int code;
+  ChunkOut(const char *t, int c = 200) : type(t), code(c) {}
+  void begin() { if (!started) { server.setContentLength(CONTENT_LENGTH_UNKNOWN); server.send(code, type, ""); started = true; } }
+  size_t write(uint8_t c) override { buf[n++] = (char)c; if (n == sizeof(buf)) flush(); return 1; }
+  size_t write(const uint8_t *p, size_t l) override { for (size_t i = 0; i < l; i++) write(p[i]); return l; }
+  void flush() override { begin(); if (n) { server.sendContent(buf, n); n = 0; } }
+  void end() { flush(); server.sendContent(""); }
+  ChunkOut &operator+=(const String &s) { print(s); return *this; }
+  ChunkOut &operator+=(const char *s) { print(s); return *this; }
+  ChunkOut &operator+=(const __FlashStringHelper *s) { print(s); return *this; }
+  ChunkOut &operator+=(char c) { write((uint8_t)c); return *this; }
+};
+
 const char PAGE_HEAD[] PROGMEM = R"HTML(<!doctype html><html><head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>SubCounter setup</title>)HTML" ICON_LINKS R"HTML(<style>
@@ -560,9 +577,9 @@ void handleApiData() {
       v["live"] = c.live; v["viewers"] = c.liveViewers;
     }
   }
-  String out;
+  ChunkOut out("application/json");
   serializeJson(doc, out);
-  server.send(200, "application/json", out);
+  out.end();
 }
 
 // [[time, subs], ...] for one channel, streamed in chunks
@@ -668,9 +685,10 @@ void handleBackup() {
   }
   nvs_release_iterator(it);
   prefs.end();
-  String out; serializeJsonPretty(doc, out);
   server.sendHeader("Content-Disposition", String("attachment; filename=\"subcounter-settings") + (secrets ? "-with-keys" : "") + ".json\"");
-  server.send(200, "application/json", out);
+  ChunkOut out("application/json");
+  serializeJsonPretty(doc, out);
+  out.end();
 }
 void handleRestore() {
   if (!authed()) return;
@@ -803,7 +821,8 @@ String sec(const char *id, const char *title) {
 
 void handleSettings() {
   if (!authed()) return;
-  String h = FPSTR(PAGE_HEAD);
+  ChunkOut h("text/html");
+  h += FPSTR(PAGE_HEAD);
   h += "<h1>&#9654; SubCounter settings</h1><p>Saved on the board only. v" FW_VERSION;
   if (!portalMode) h += " &middot; <a href='/'>&larr; Dashboard</a>";
   h += "</p><nav class='jump'><a href='#channels'>YouTube</a><a href='#twitch'>Twitch</a><a href='#display'>Display</a><a href='#alerts'>Alerts</a>"
@@ -1043,7 +1062,7 @@ void handleSettings() {
   h += FPSTR(SCAN_JS);
   if (portalMode) h += "<script>scan()</script>";
   h += "</body></html>";
-  server.send(200, "text/html", h);
+  h.end();
 }
 
 void sendMessage(int code, const String &title, const String &body) {

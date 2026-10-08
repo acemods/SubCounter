@@ -2,6 +2,9 @@
 
 All builds are in [`builds/`](../builds). Source snapshots for most versions are in the git history.
 
+## v12.3
+- **Settings page cut off part-way down:** fixed. The page (20-30 KB) used to be built in memory in one piece before sending; when memory was tight the end of it was silently dropped. It's now sent in 1 KB pieces as it's built. The dashboard's data and the settings backup are sent the same way.
+
 ## v12.2
 - **More reliable fetching:** each secure connection needs about 40 KB of memory in one piece. When memory is tight the board now closes its other kept-open connections (Twitch, Spotify, GitHub) before connecting, and if a request can't connect at all it frees memory and tries once more straight away instead of showing an error until the next refresh
 - Clearer error messages: "Board low on memory", "YouTube didn't answer in time - weak Wi-Fi?" or "Can't reach YouTube - Wi-Fi or DNS", instead of always blaming DNS/firewall
