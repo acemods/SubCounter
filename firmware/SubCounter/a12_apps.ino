@@ -508,6 +508,7 @@ void drawAppIcon(int a, int cx, int cy) {
 void drawMenu() {
   gfx->fillScreen(C_BG);
   ftR(gfx->width() - 6, 14, "v" FW_VERSION, F_XS, C_DKGREY);
+  if (updAvail) ft(6, 14, "v" + updVer + " available - see the Update page", F_XS, C_GOLD);
   const char *names[NUM_APPS] = { "YouTube", "Weather", "Spotify" };
   int w = gfx->width() / NUM_APPS;
   for (int a = 0; a < NUM_APPS; a++) {

@@ -90,7 +90,7 @@ td .av{width:28px;height:28px;display:block}td{padding:6px 4px}td.nm2{overflow:h
 .cm .c{padding:6px 0}.cm .c b{font-size:13px}.cm .c p{margin:2px 0 0;font-size:14px;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
 .pb{display:flex;flex-wrap:wrap;gap:6px 14px;font-size:13px;color:var(--muted);margin-top:10px}.pb b{color:var(--gold)}
 </style></head><body>
-<header><div class="logo"></div><h1>SubCounter</h1><span class="meta" id="meta"></span><a class="btn" href="/settings">Settings</a></header>
+<header><div class="logo"></div><h1>SubCounter</h1><span class="meta" id="meta"></span><a class="btn" id="upd" href="/update" style="display:none;border-color:#30d158;color:#30d158"></a><a class="btn" href="/settings">Settings</a></header>
 <main id="app"><div class="card">Loading…</div></main>
 <script>
 const $=s=>document.querySelector(s);
@@ -177,7 +177,7 @@ ser.forEach(s=>{let v=s.pts[0][1];for(const p of s.pts){if(p[0]>t)break;v=p[1]}t
 tip.style.display='block';const px=ev.clientX-r.left;tip.style.left=Math.min(px+12,r.width-tip.offsetWidth-4)+'px';tip.style.top='10px'};
 svg.onmouseleave=()=>{cross.setAttribute('visibility','hidden');tip.style.display='none'}}
 function render(){const app=$('#app');app.textContent='';const C=D.channels;
-$('#meta').textContent=(D.err?D.err:(D.updatedAgo>=0?'Updated '+(D.updatedAgo<60?'just now':(D.updatedAgo/60|0)+' min ago'):''))+(D.ver?'  ·  v'+D.ver:'');
+$('#meta').textContent=(D.err?D.err:(D.updatedAgo>=0?'Updated '+(D.updatedAgo<60?'just now':(D.updatedAgo/60|0)+' min ago'):''))+(D.ver?'  ·  v'+D.ver:'');{const u=$('#upd');if(D.upd){u.textContent='Update v'+D.upd;u.style.display=''}else u.style.display='none'}
 const row=h('aside',{class:'side'});
 // summary
 const ok=C.filter(c=>c.statsOk).sort((a,b)=>b.d1-a.d1);const nv=C.filter(c=>c.vid&&!c.tw&&Date.now()/1000-c.vid.pub<86400);
@@ -211,6 +211,7 @@ void handleApiData() {
   doc["est"] = cfgEst;
   doc["ip"] = WiFi.localIP().toString();
   doc["ver"] = FW_VERSION;
+  if (updAvail) doc["upd"] = updVer;
   doc["m0"] = (long)monthStart(0); doc["m1"] = (long)monthStart(1);
   if (raceSet()) { JsonArray r = doc["race"].to<JsonArray>(); r.add(cfgRaceA); r.add(cfgRaceB); }
   else doc["race"] = nullptr;
@@ -420,7 +421,7 @@ void handleSettings() {
   if (!portalMode) h += " &middot; <a href='/'>&larr; Dashboard</a>";
   h += "</p><nav class='jump'><a href='#channels'>YouTube</a><a href='#twitch'>Twitch</a><a href='#display'>Display</a><a href='#alerts'>Alerts</a>"
        "<a href='#weather'>Weather</a><a href='#spotify'>Spotify</a><a href='#motion'>Motion</a><a href='#wifi'>Wi-Fi</a>"
-       "<a href='#security'>Security</a>" + String(portalMode ? "" : "<a href='#firmware'>Firmware</a>") + "</nav>";
+       "<a href='#updates'>Updates</a><a href='#security'>Security</a>" + String(portalMode ? "" : "<a href='#firmware'>Firmware</a>") + "</nav>";
   if (wifiFailReason.length()) {
     h += "<div style='background:#3a1210;border:1px solid #e62117;border-radius:10px;padding:12px;margin-bottom:8px;font-size:14px'>"
          "<b>Couldn't connect to Wi-Fi:</b><br>" + htmlEscape(wifiFailReason) + "</div>";
@@ -582,6 +583,14 @@ void handleSettings() {
   h += "</details>";
 
   // ── Security ──
+  h += sec("updates", "Updates");
+  h += checkbox("autoupd", cfgAutoUpd, "Install new versions from GitHub automatically (at 3 am)");
+  h += "<small>Either way the board checks once a day and shows when a new version is out; "
+       "install it from the <a href='/update'>Update page</a>.</small>";
+  h += "<details><summary>Update source (advanced)</summary><label>Address of the builds folder</label>"
+       "<input name='updurl' autocapitalize='off' value='" + htmlEscape(cfgUpdUrl) + "'>"
+       "<small>Only change this if you build your own copy (a fork) on GitHub.</small></details>";
+
   h += sec("security", "Security");
   if (cfgPin.length()) h += "<p class='ok'>PIN is on &#10003;</p>";
   else h += "<small>No PIN set: anyone on your Wi-Fi can open this page and change things.</small>";
@@ -601,7 +610,8 @@ void handleSettings() {
   // ── Firmware (links only) ──
   if (!portalMode) {
     h += sec("firmware", "Firmware");
-    h += "<p style='margin:0'>Running <b>v" FW_VERSION "</b> &middot; <a href='/update'>&#11014; Update wirelessly</a></p>";
+    h += "<p style='margin:0'>Running <b>v" FW_VERSION "</b> &middot; <a href='/update'>&#11014; Update</a>" +
+         String(updAvail ? " &middot; <b style='color:#30d158'>v" + htmlEscape(updVer) + " available</b>" : "") + "</p>";
   }
   h += "<small style='margin-top:16px'>Board Wi-Fi MAC address: " + boardMac() + "</small></div>";
   h += FPSTR(SCAN_JS);
@@ -684,6 +694,8 @@ void handleSave() {
   cfgEst = server.arg("est") == "1";
   cfgCelebrate = server.arg("celebrate") == "1";
   cfgLiveAlert = server.arg("livealert") == "1";
+  cfgAutoUpd = server.arg("autoupd") == "1";
+  { String u = server.arg("updurl"); u.trim(); if (u.startsWith("https://")) { if (!u.endsWith("/")) u += "/"; cfgUpdUrl = u; } }
   { String v = server.arg("twid"); v.trim(); if (server.hasArg("twid")) cfgTwId = v;
     v = server.arg("twsec"); v.trim(); if (v.length()) { cfgTwSecret = v; } }
   { String pin = server.arg("pin"), pin2 = server.arg("pin2"); pin.trim(); pin2.trim();
@@ -777,6 +789,8 @@ void registerRoutes() {
   server.on("/api/scan", HTTP_GET, handleApiScan);
   server.on("/wifi/connect", HTTP_POST, handleWifiConnect);
   server.on("/update", HTTP_GET, handleUpdatePage);
+  server.on("/update/check", HTTP_POST, handleUpdateCheck);
+  server.on("/update/github", HTTP_POST, handleUpdateGithub);
   server.on("/update", HTTP_POST, handleUpdateDone, handleUpdateUpload);
   server.on("/spotify/code", HTTP_POST, handleSpotifyCode);
   server.on("/spotify/callback", HTTP_GET, handleSpotifyCallback);

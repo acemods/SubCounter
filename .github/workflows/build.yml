@@ -1,0 +1,75 @@
+# Builds the firmware on every change, and (when you run it by hand with
+# "Make a release" ticked) publishes a GitHub Release with the three .bin files.
+name: Build firmware
+
+on:
+  push:
+    branches: [main]
+    paths: ["firmware/**", ".github/workflows/build.yml"]
+  pull_request:
+    paths: ["firmware/**"]
+  workflow_dispatch:
+    inputs:
+      release:
+        description: "Make a release for the version in SubCounter.ino"
+        type: boolean
+        default: false
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: arduino/setup-arduino-cli@v2
+
+      - name: Install ESP32 core and libraries
+        run: |
+          arduino-cli config init --additional-urls https://espressif.github.io/arduino-esp32/package_esp32_index.json
+          arduino-cli core update-index
+          arduino-cli core install esp32:esp32@3.3.12
+          arduino-cli lib install "GFX Library for Arduino@1.6.8" "ArduinoJson@7.4.2" "JPEGDEC@1.8.4" "PNGdec@1.1.7" "U8g2@2.37.1"
+
+      - name: Compile
+        run: |
+          # The sketch declares its own functions in order, so Arduino's automatic
+          # prototype generator is switched off with an empty ctags.
+          mkdir -p "$RUNNER_TEMP/ctags" && printf '#!/bin/sh\nexit 0\n' > "$RUNNER_TEMP/ctags/ctags" && chmod +x "$RUNNER_TEMP/ctags/ctags"
+          arduino-cli compile \
+            --fqbn esp32:esp32:esp32c6:CDCOnBoot=cdc,FlashSize=8M,PartitionScheme=default_8MB \
+            --build-property runtime.tools.ctags.path="$RUNNER_TEMP/ctags" \
+            --output-dir build firmware/SubCounter
+
+      - name: Make the three flash files
+        id: files
+        run: |
+          VER=$(grep -oP '#define FW_VERSION "\K[0-9.]+' firmware/SubCounter/SubCounter.ino)
+          echo "version=$VER" >> "$GITHUB_OUTPUT"
+          mkdir -p out
+          python3 - "$VER" <<'PY'
+          import sys, shutil
+          v = sys.argv[1]; b = 'build/SubCounter.ino.'
+          shutil.copy(b + 'bin', f'out/SubCounter-v{v}-APP-ONLY.bin')
+          app = open(b + 'bin', 'rb').read()
+          open(f'out/SubCounter-v{v}-USB-UPDATE-flash-at-0xE000.bin', 'wb').write(b'\xff' * 0x2000 + app)
+          m = open(b + 'merged.bin', 'rb').read().rstrip(b'\xff'); m += b'\xff' * ((-len(m)) % 16)
+          open(f'out/SubCounter-v{v}-FULL-new-board-flash-at-0x0.bin', 'wb').write(m)
+          PY
+          ls -l out
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: SubCounter-v${{ steps.files.outputs.version }}
+          path: out/*.bin
+
+      - name: Publish a release
+        if: ${{ github.event_name == 'workflow_dispatch' && inputs.release }}
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v${{ steps.files.outputs.version }}
+          name: SubCounter v${{ steps.files.outputs.version }}
+          body: See docs/CHANGELOG.md. For a wireless update use the APP-ONLY file; for a new board, the FULL file at 0x0.
+          files: out/*.bin

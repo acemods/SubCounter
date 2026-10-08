@@ -115,6 +115,8 @@ void loadSettings() {
   cfgTwId = prefs.getString("twid", "");
   cfgTwSecret = prefs.getString("twsec", "");
   cfgLiveAlert = prefs.getBool("livealert", true);
+  cfgAutoUpd = prefs.getBool("autoupd", false);
+  cfgUpdUrl = prefs.getString("updurl", cfgUpdUrl);
   cfgSummary  = prefs.getBool("summary", true);
   cfgShake    = prefs.getBool("shake", true);
   cfgFaceDown = prefs.getBool("facedown", true);
@@ -167,6 +169,8 @@ void saveSettings() {
   prefs.putString("twid", cfgTwId);
   prefs.putString("twsec", cfgTwSecret);
   prefs.putBool("livealert", cfgLiveAlert);
+  prefs.putBool("autoupd", cfgAutoUpd);
+  prefs.putString("updurl", cfgUpdUrl);
   prefs.putBool("summary", cfgSummary);
   prefs.putBool("shake", cfgShake);
   prefs.putBool("facedown", cfgFaceDown);

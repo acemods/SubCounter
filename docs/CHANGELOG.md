@@ -2,6 +2,10 @@
 
 All builds are in [`builds/`](../builds). Source snapshots for most versions are in the git history.
 
+## v11.1
+- **Updates from GitHub:** the board checks `builds/latest/version.json` once a day. When there's a newer version it shows on the home menu, the dashboard header and the Update page, with a one-tap **Install** (downloaded straight from GitHub, size and MD5 checked). Optional: install automatically at 3 am (Settings → Updates).
+- **Automatic builds:** a GitHub Actions workflow compiles the firmware on every change and can publish a Release with the three .bin files (Actions → Build firmware → Run workflow → tick "Make a release")
+
 ## v11.0
 - **Background networking:** all internet requests now run in their own task, so touch, swipes, long-press, animations and the web pages stay smooth however slow the network is (no more freezes while Spotify, YouTube or Twitch answer)
 - **Faster refreshes:** secure connections to YouTube, Twitch and Spotify are kept open and re-used for a short while instead of being set up for every request

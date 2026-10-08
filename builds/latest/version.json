@@ -1,0 +1,7 @@
+{
+ "version": "11.1",
+ "app": "SubCounter-v11.1-APP-ONLY.bin",
+ "size": 1727520,
+ "md5": "9fc4c5a0849019b13f9603a8f9cf2446",
+ "notes": "Updates from GitHub: the board checks daily and can install new versions itself"
+}

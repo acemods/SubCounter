@@ -36,11 +36,143 @@ bool authed() {
   return false;
 }
 
+void drawOtaProgress(const String &line2);
+void sendMessage(int code, const String &title, const String &body);
+// ── Updates from GitHub ─────────────────────────────────────────────────────
+// builds/latest/version.json in the repository says which version is newest:
+//   { "version": "11.1", "app": "SubCounter-v11.1-APP-ONLY.bin", "size": 1717504, "md5": "…", "notes": "…" }
+// The network task checks it once a day; installing happens on the main task.
+String updVer, updFile, updMd5, updNotes, updErr;
+long updSize = 0;
+bool updAvail = false;
+unsigned long lastUpdCheck = 0;
+time_t updCheckedAt = 0;
+volatile bool updCheckReq = false, updInstallReq = false;
+Conn connGH;
+
+// "11.10" > "11.9" > "11.1"
+bool versionNewer(const String &a, const String &b) {
+  int ai = 0, bi = 0;
+  while (ai < (int)a.length() || bi < (int)b.length()) {
+    long x = 0, y = 0;
+    while (ai < (int)a.length() && isdigit((unsigned char)a[ai])) x = x * 10 + (a[ai++] - '0');
+    while (bi < (int)b.length() && isdigit((unsigned char)b[bi])) y = y * 10 + (b[bi++] - '0');
+    if (x != y) return x > y;
+    if (ai < (int)a.length()) ai++;
+    if (bi < (int)b.length()) bi++;
+  }
+  return false;
+}
+
+// Runs on the network task
+void checkForUpdate() {
+  if (!cfgUpdUrl.startsWith("https://")) return;
+  String url = cfgUpdUrl + "version.json", body;
+  int code = httpsCall(connGH, "GET", url, nullptr, 0, &body);
+  connClose(connGH);
+  updCheckedAt = timeValid() ? nowT() : 0;
+  if (code != 200) { updErr = "Couldn't check for updates (" + String(code) + ")"; return; }
+  JsonDocument doc;
+  if (deserializeJson(doc, body)) { updErr = "Update info unreadable"; return; }
+  updErr = "";
+  updVer = doc["version"] | ""; updFile = doc["app"] | ""; updMd5 = doc["md5"] | ""; updNotes = doc["notes"] | "";
+  updSize = doc["size"] | 0L;
+  updAvail = updVer.length() && updFile.length() && versionNewer(updVer, FW_VERSION);
+}
+
+// Runs on the main task: download straight into the spare app slot, then restart
+void installGithubUpdate() {
+  if (!updAvail) return;
+  netQuiesce();
+  setBacklight(BL_NORMAL);
+  if (mode == M_PORTRAIT) gfx->setRotation(1);
+  drawStatus("Updating...", "to v" + updVer, C_GOLD);
+  String err;
+  {
+    NetIO io;                                   // let go of the data: nothing else runs while we install
+    WiFiClientSecure client; client.setInsecure();
+    HTTPClient http; http.setTimeout(15000);
+    http.setFollowRedirects(HTTPC_STRICT_FOLLOW_REDIRECTS);
+    if (!http.begin(client, cfgUpdUrl + updFile)) err = "Bad update address";
+    else {
+      int code = http.GET();
+      int len = http.getSize();
+      if (code != 200) err = "Download failed (" + String(code) + ")";
+      else if (len <= 0 || (updSize > 0 && len != updSize)) err = "Unexpected file size";
+      else if (!Update.begin(len, U_FLASH)) err = String("Can't start: ") + Update.errorString();
+      else {
+        if (updMd5.length() == 32) Update.setMD5(updMd5.c_str());
+        WiFiClient *st = http.getStreamPtr();
+        static uint8_t buf[2048];
+        int got = 0, lastPct = -1; unsigned long lastData = millis();
+        while (got < len && millis() - lastData < 15000) {
+          int a = st->available();
+          if (a <= 0) { if (!st->connected()) break; delay(2); continue; }
+          int n = st->readBytes(buf, min(a, (int)sizeof(buf)));
+          if (got == 0 && !(n > 36 && buf[0] == 0xE9 && buf[32] == 0x32 && buf[33] == 0x54 && buf[34] == 0xCD && buf[35] == 0xAB)) {
+            err = "That isn't an APP-ONLY firmware file"; break;
+          }
+          if (Update.write(buf, n) != (size_t)n) { err = String("Write failed: ") + Update.errorString(); break; }
+          got += n; lastData = millis();
+          int pct = (int)((long long)got * 100 / len);
+          if (pct != lastPct && pct % 5 == 0) { lastPct = pct; drawOtaProgress(String(pct) + "%"); }
+        }
+        if (!err.length() && got != len) err = "Download stopped at " + String(got * 100 / len) + "%";
+        if (!err.length() && !Update.end(true)) err = String("Check failed: ") + Update.errorString();
+        if (err.length()) Update.abort();
+      }
+    }
+    http.end();
+  }
+  if (!err.length()) {
+    drawStatus("Updated!", "Restarting...", C_GREEN);
+    delay(1500);
+    ESP.restart();
+  }
+  updErr = err;
+  drawStatus("Update failed", err, C_RED);
+  delay(4000);
+  netPause = false;
+  gfx->fillScreen(C_BG);
+  drawMode();
+}
+
+String updStatusHtml() {
+  String h = "<div style='background:#111;border:1px solid #333;border-radius:12px;padding:14px;margin:12px 0'>";
+  h += "<b>From GitHub</b><br>";
+  if (updAvail) {
+    h += "<span style='color:#30d158'>Version <b>v" + htmlEscape(updVer) + "</b> is available.</span>";
+    if (updNotes.length()) h += "<small>" + htmlEscape(updNotes) + "</small>";
+    h += "<form method='POST' action='/update/github'><button type='submit' style='background:#30d158;margin-top:12px'>Install v" + htmlEscape(updVer) + " now</button></form>";
+  } else {
+    h += String(updCheckedAt ? "You're up to date." : "Not checked yet.");
+    if (updCheckedAt) h += " <small style='display:inline'>(checked " + ago(updCheckedAt) + ")</small>";
+  }
+  if (updErr.length()) h += "<small style='color:#e62117'>" + htmlEscape(updErr) + "</small>";
+  h += "<form method='POST' action='/update/check'><button type='submit' style='background:#2a2a2e;margin-top:10px;font-size:15px;padding:10px'>Check now</button></form>";
+  h += "</div><p style='margin-top:18px'><b>Or upload a file</b></p>";
+  return h;
+}
+
 void handleUpdatePage() {
   if (!authed()) return;
   String b = FPSTR(UPDATE_BODY);
-  b.replace("<h1>&#11014; Update firmware</h1>", "<h1>&#11014; Update firmware</h1><p>Currently running <b>v" FW_VERSION "</b></p>");
+  b.replace("<h1>&#11014; Update firmware</h1>", "<h1>&#11014; Update firmware</h1><p>Currently running <b>v" FW_VERSION "</b></p>" + updStatusHtml());
   server.send(200, "text/html", String(FPSTR(PAGE_HEAD)) + b);
+}
+void handleUpdateCheck() {
+  if (!authed()) return;
+  updCheckReq = true;
+  server.send(200, "text/html", String(FPSTR(PAGE_HEAD)) + "<h1>Checking&hellip;</h1><p>Looking for a new version on GitHub.</p>"
+              "<script>setTimeout(()=>location.href='/update',5000)</script></div></body></html>");
+}
+void handleUpdateGithub() {
+  if (!authed()) return;
+  if (!updAvail) { sendMessage(400, "No update available", "You're already on the newest version."); return; }
+  server.send(200, "text/html", String(FPSTR(PAGE_HEAD)) + "<h1>Installing v" + htmlEscape(updVer) + "&hellip;</h1>"
+              "<p>Watch the board's screen. It restarts by itself in about a minute, and this page then goes back to the dashboard.</p>"
+              "<script>setTimeout(()=>location.href='/',75000)</script></div></body></html>");
+  updInstallReq = true;
 }
 
 void drawOtaProgress(const String &line2) {

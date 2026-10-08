@@ -119,6 +119,11 @@ void netCycle() {
     if (changed || wasPlaying != sp.playing || had != sp.hasTrack) netSpRedraw = true;
   }
 
+  // new firmware on GitHub? once a day (first check 2 minutes after start-up), or when asked
+  if (updCheckReq || (lastUpdCheck == 0 ? millis() > 120000UL : millis() - lastUpdCheck > 24UL * 3600000UL)) {
+    updCheckReq = false; lastUpdCheck = millis();
+    checkForUpdate();
+  }
   connCloseIdle(connYT); connCloseIdle(connTW); connCloseIdle(connSP, 30000);
   netBusy = false;
 }
@@ -330,6 +335,14 @@ void loopBody() {
     static unsigned long lastReconnect = 0;
     if (millis() - lastReconnect > 5000) { lastReconnect = millis(); WiFi.reconnect(); }   // no waiting here: the screen keeps working
   } else wifiLostAt = 0;
+
+  // firmware update from GitHub: asked for on the Update page, or automatically at 3 am
+  if (updInstallReq) { updInstallReq = false; installGithubUpdate(); return; }
+  if (cfgAutoUpd && updAvail && timeValid()) {
+    static int autoDay = -1;
+    time_t n = nowT(); struct tm lt; localtime_r(&n, &lt);
+    if (lt.tm_hour == 3 && lt.tm_yday != autoDay) { autoDay = lt.tm_yday; installGithubUpdate(); return; }
+  }
 
   // results from the network task
   bool refreshed = netRefreshed; netRefreshed = false;

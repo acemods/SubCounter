@@ -6,6 +6,7 @@ A desk gadget built on the **Waveshare ESP32-C6-Touch-LCD-1.47** that shows live
 
 ## What's new
 
+- **v11.1:** updates itself from GitHub (one tap, or automatically), automatic builds
 - **v11.0:** background networking (no more freezes), faster refreshes, code split into files
 - **v10.2:** Twitch gets its own settings section – just type the channel name
 - **v10.1:** settings PIN fixed, settings page reorganised
@@ -58,12 +59,12 @@ Full history: [docs/CHANGELOG.md](docs/CHANGELOG.md)
 - 9 am daily summary, plus a dim night clock overnight
 - Several saved Wi-Fi networks (e.g. work and home) with automatic roaming, a network scanner, "Connect now" and a preferred network
 - Works on fussy networks: fixed IP, custom DNS, Wi-Fi 4 compatibility mode, and plain-English connection errors
-- **Wireless firmware updates** from the settings page
+- **Updates from GitHub:** the board tells you when a new version is out and installs it with one tap (or automatically at 3 am); manual upload still works
 - Optional **settings PIN**, so others on your Wi-Fi can view the dashboard but not change anything
 
 ## Quick start
 
-1. **Flash the board.** Open <https://espressif.github.io/esptool-js/> in Chrome, connect the board, and flash `builds/latest/SubCounter-v11.0-FULL-new-board-flash-at-0x0.bin` at address **0x0**.
+1. **Flash the board.** Open <https://espressif.github.io/esptool-js/> in Chrome, connect the board, and flash `builds/latest/SubCounter-v11.1-FULL-new-board-flash-at-0x0.bin` at address **0x0**.
 2. **Set it up.** The board shows *SETUP MODE*. Join the Wi-Fi network **SubCounter-Setup** from your phone, and the setup page opens by itself (or go to <http://192.168.4.1>). Pick your Wi-Fi, add your YouTube channels and a YouTube Data API key, then save.
 3. **Use it.** The board shows its address for a few seconds, then your subscriber count. Open **<http://subcounter.local>** (or the IP address) in a browser for the dashboard.
 

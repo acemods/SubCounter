@@ -1,5 +1,5 @@
 /*
- * SubCounter v11.0 — YouTube / Twitch subscriber counter and desk hub for the
+ * SubCounter v11.1 — YouTube / Twitch subscriber counter and desk hub for the
  * Waveshare ESP32-C6-Touch-LCD-1.47.  https://github.com/acemods/SubCounter
  *
  *  ON THE BOARD
@@ -50,7 +50,7 @@
 #include <Update.h>    // wireless firmware updates
 #include <ESPmDNS.h>   // http://subcounter.local
 #define HOSTNAME "subcounter"
-#define FW_VERSION "11.0"     // shown on start-up, home menu, settings, update page and dashboard
+#define FW_VERSION "11.1"     // shown on start-up, home menu, settings, update page and dashboard
 
 // ── Pins (ESP32-C6 version of the board) ────────────────────────────────────
 #define LCD_SCK   1
@@ -328,6 +328,8 @@ String cfgPin;
 String cfgTwitch;                                // Twitch channel names, one per line
 String cfgTwId, cfgTwSecret;                     // Twitch app (dev.twitch.tv/console)                                   // settings PIN (blank = none)
 bool   cfgLiveAlert = true;                      // alert when a channel goes live
+bool   cfgAutoUpd = false;                       // install new versions from GitHub by itself (3 am)
+String cfgUpdUrl = "https://raw.githubusercontent.com/acemods/SubCounter/main/builds/latest/";   // where to look for updates
 String cfgSpRedirect;                            // https address registered with Spotify (e.g. GitHub Pages relay)
 
 #define VT_MAX 110

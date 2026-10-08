@@ -41,6 +41,12 @@ To make the USB update file (0xE000): 8 KB of `0xFF` bytes followed by the app `
 python3 -c "import sys;open('usb.bin','wb').write(b'\xff'*0x2000+open('build/SubCounter.ino.bin','rb').read())"
 ```
 
+## GitHub Actions
+
+`.github/workflows/build.yml` compiles the firmware on every push that changes `firmware/`, and keeps the three .bin files as a downloadable artifact of the run. To publish a **Release**: *Actions → Build firmware → Run workflow*, tick **Make a release**. It uses the version in `FW_VERSION`.
+
+`builds/latest/version.json` is what boards read to see whether there's an update: version, APP-ONLY file name, size and MD5.
+
 ## Board pins (ESP32-C6 version)
 
 | Function | GPIO |
