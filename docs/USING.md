@@ -124,6 +124,21 @@ Open **`http://subcounter.local`** (or `http://<board-ip>/`) on any device on th
 
 Settings are at `/settings` (sections: YouTube, Twitch, Display, Alerts, Phone notifications, Weather, Spotify, Motion, Wi-Fi, Updates, Security, Firmware, Backup & restore), and updates at `/update`.
 
+## Colour themes
+
+Settings → **Display** → **Colour theme** changes the accent colour on the board (headings, your channel, highlights, the milestone countdown) and on the dashboard. The brightness sliders are in the same section.
+
+| Theme | |
+|---|---|
+| **Classic (gold)**, the default | ![Classic](images/themes/theme-classic.png) |
+| **YouTube red** | ![YouTube red](images/themes/theme-youtube-red.png) |
+| **Twitch purple** | ![Twitch purple](images/themes/theme-twitch-purple.png) |
+| **Ocean** | ![Ocean](images/themes/theme-ocean.png) |
+| **Mint** | ![Mint](images/themes/theme-mint.png) |
+| **High contrast**: brighter grey text as well, easier to read from across the room | ![High contrast](images/themes/theme-high-contrast.png) |
+
+All six side by side: [themes.png](images/themes.png). The pictures are drawn with the board's own fonts and screen layouts, so they match what you'll see.
+
 ## Settings backup
 
 Settings → **Backup & restore** → *Download settings* saves everything to a `.json` file. The second link includes passwords, API keys and sign-ins; keep that file private. To restore, choose the file and press *Restore & restart*, for example after a full re-flash or on a second board. Subscriber history and records stay on the board and aren't in the file.

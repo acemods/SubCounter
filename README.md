@@ -54,7 +54,7 @@ Full history: [docs/CHANGELOG.md](docs/CHANGELOG.md)
 - 9 am daily summary, plus a dim night clock overnight
 - **Device screen** (home menu, swipe left): QR code for the dashboard, and check for / install updates right on the touch screen
 - **Phone notifications** via the free ntfy app: milestones, going live, records, overtakes
-- **Colour themes** and brightness settings
+- **Colour themes** ([see them all](docs/images/themes.png)) and brightness settings
 - **Settings backup & restore** to a file
 - Several saved Wi-Fi networks (e.g. work and home) with automatic roaming, a network scanner, "Connect now" and a preferred network
 - Works on fussy networks: fixed IP, custom DNS, Wi-Fi 4 compatibility mode, and plain-English connection errors
