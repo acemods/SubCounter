@@ -2,7 +2,7 @@
 
 ## Touch gestures
 
-| Gesture | YouTube | Weather | Spotify |
+| Gesture | Creators | Weather | Spotify |
 |---|---|---|---|
 | Swipe left / right | Next / previous channel | – | Next / previous track |
 | Swipe up | Next detail card | Next card | Volume +10% |
@@ -10,11 +10,11 @@
 | Tap | – | – | Play / pause |
 | **Long-press (≈1 s)** | **Home menu** | **Home menu** | **Home menu** |
 
-**Home menu:** three big tiles (YouTube, Weather, Spotify). **Swipe left** for the next page with **Device** (QR code, version, updates). Swipe, long-press or BOOT closes it.
+**Home menu:** three big tiles: **Creators** (your YouTube and Twitch channels), **Weather** and **Spotify**. **Swipe left** for the next page with **Device** (QR code, version, updates). Swipe, long-press or BOOT closes it.
 
 ![Home menu](images/home-menu.png)
 
-**BOOT button:** short press = next channel (YouTube) / next card (Weather) / play-pause (Spotify). **Hold for about 1 s = home menu** (handy if the screen isn't responding). Hold for 3 s = setup mode.
+**BOOT button:** short press = next channel (Creators) / next card (Weather) / play-pause (Spotify). **Hold for about 1 s = home menu** (handy if the screen isn't responding). Hold for 3 s = setup mode.
 
 After 2 minutes untouched, each app returns to its main screen.
 

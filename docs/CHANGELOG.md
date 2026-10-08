@@ -2,6 +2,10 @@
 
 All builds are in [`builds/`](../builds). Source snapshots for most versions are in the git history.
 
+## v11.7
+- The main home-menu tile is now **Creators**, with a half YouTube red, half Twitch purple badge (it used to say YouTube, which undersold Twitch)
+- Docs: home menu and Device screen pictures updated
+
 ## v11.6
 - Home menu: the page dots no longer overlap the IP address line at the bottom
 - Docs: new screenshots of the dashboard (desktop and phone), compare chart, settings page, Wi-Fi scan, home menu and Device screen

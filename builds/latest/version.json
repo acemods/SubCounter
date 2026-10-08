@@ -1,7 +1,7 @@
 {
- "version": "11.6",
- "app": "SubCounter-v11.6-APP-ONLY.bin",
- "size": 1772256,
- "md5": "153c7923c27bed7aafff5d26b14c35a9",
- "notes": "Home menu page dots no longer overlap the address line"
+ "version": "11.7",
+ "app": "SubCounter-v11.7-APP-ONLY.bin",
+ "size": 1772400,
+ "md5": "eea87b0ee7b2e441d3095ff777f00109",
+ "notes": "The main home-menu tile is now Creators, with a half YouTube, half Twitch badge"
 }

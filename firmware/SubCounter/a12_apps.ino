@@ -497,7 +497,13 @@ void drawClock() {
 
 // ── Home menu ───────────────────────────────────────────────────────────────
 void drawAppIcon(int a, int cx, int cy) {
-  if (a == APP_YT) { gfx->fillRoundRect(cx - 30, cy - 21, 60, 42, 12, C_RED); gfx->fillTriangle(cx - 8, cy - 11, cx - 8, cy + 11, cx + 12, cy, C_WHITE); }
+  if (a == APP_YT) {                                                   // "Creators": half YouTube, half Twitch
+    gfx->fillRoundRect(cx - 30, cy - 21, 60, 42, 12, C_TWITCH);           // purple badge, rounded all round
+    gfx->fillRoundRect(cx - 30, cy - 21, 44, 42, 12, C_RED);              // red over the left side...
+    gfx->fillRect(cx, cy - 21, 15, 42, C_TWITCH);                         // ...cut straight down the middle
+    gfx->fillTriangle(cx - 17, cy - 9, cx - 17, cy + 9, cx - 4, cy, C_WHITE);   // play
+    gfx->fillRect(cx + 8, cy - 8, 4, 11, C_WHITE); gfx->fillRect(cx + 16, cy - 8, 4, 11, C_WHITE); // Twitch bars
+  }
   if (a == APP_WX) { drawWxIcon(2, cx, cy, 30, true); }
   if (a == APP_SP) {
     gfx->fillCircle(cx, cy, 26, 0x1EE9);
@@ -522,7 +528,7 @@ void drawMenu() {
   gfx->fillScreen(C_BG);
   ftR(gfx->width() - 6, 14, "v" FW_VERSION, F_XS, C_DKGREY);
   if (updAvail) ft(6, 14, "v" + updVer + " available - swipe to Device", F_XS, C_GOLD);
-  const char *names[MENU_TILES] = { "YouTube", "Weather", "Spotify", "Device" };
+  const char *names[MENU_TILES] = { "Creators", "Weather", "Spotify", "Device" };
   menuPage = constrain(menuPage, 0, menuPages() - 1);
   int w = gfx->width() / MENU_PER_PAGE;
   for (int s = 0; s < MENU_PER_PAGE; s++) {
