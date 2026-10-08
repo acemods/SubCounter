@@ -2,19 +2,25 @@
 
 ## From GitHub (v11.1 and later), easiest
 
-The board checks GitHub once a day. When a new version is out you'll see **"v… available"** on the home menu (long-press), a green **Update** button in the dashboard header, and an **Install** button on the Update page (`http://subcounter.local/update`). Press it, watch the screen, and the board restarts on the new version in about a minute. Settings and history are kept. The file's size and MD5 checksum are checked before anything is installed.
+The board checks GitHub once a day. When a new version is out you'll see:
+
+- **on the board:** "v… available" at the top of the home menu and a red dot on the Device page. Long-press → swipe left → **Device** → **Install v…**. Or tap **Check for update** to look straight away.
+- **on the dashboard:** a green **Update** button in the header
+- **on the Update page** (`http://subcounter.local/update`): an **Install** button, and **Check now**
+
+Press Install, watch the screen (a percentage counts up), and the board restarts on the new version in about a minute. Settings and history are kept. The file's size and MD5 checksum are checked before anything is installed.
 
 To have it install by itself: Settings → **Updates** → *Install new versions from GitHub automatically (at 3 am)*.
 
 ## Wireless update (recommended, v9 and later)
 
-1. Open `http://<board-ip>/update` (or Settings → *Update firmware wirelessly*).
+1. Open `http://<board-ip>/update` (or Settings → *Firmware* → *Update*).
 2. Choose the **APP-ONLY** file, e.g. `SubCounter-v11.3-APP-ONLY.bin`.
 3. Wait about 30 seconds; the board installs and restarts.
 
 Settings, Wi-Fi networks, Spotify login and subscriber history are all kept. The page refuses FULL images. If an update fails, the board keeps running the old version.
 
-**Which version am I on?** It's shown on the update page ("Currently running …"), at the bottom of the settings page, in the dashboard header, at the top right of the home menu (long-press) and for a few seconds at start-up.
+**Which version am I on?** It's shown on the update page ("Currently running …"), at the bottom of the settings page, in the dashboard header, at the top right of the home menu, on the Device screen and for a few seconds at start-up.
 
 ## USB update (any time)
 

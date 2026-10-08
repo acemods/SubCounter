@@ -29,12 +29,12 @@ The sign-in code is useless without your **Client secret**, which only lives on 
 
 ## 3. Connect the board
 
-1. Board settings → **Spotify**: paste the Client ID, Client secret and the **same** Redirect URI → **Save & restart**.
-2. Open settings again → press the green **Connect Spotify** button → **Agree**.
+1. Board settings → **Spotify** → open **Spotify app details**: paste the **same** Redirect URI, the Client ID and the Client secret → **Save & restart**.
+2. Open settings again → **Spotify** → press the green **Connect Spotify** button (it appears once the app details are saved) → **Agree**.
 3. You're sent back to the board: **"Spotify connected ✓"**.
 4. Long-press the board's screen → **Spotify**.
 
-If the relay page shows a code instead (for example, your phone was on mobile data), copy it into the *code or full address* box under Connect Spotify.
+If the relay page shows a code instead (for example, your phone was on mobile data), open *The relay page showed a code instead?* under Connect Spotify, paste the code (or the page's full address) and press **Use this code**.
 
 ## Troubleshooting
 
@@ -43,6 +43,8 @@ If the relay page shows a code instead (for example, your phone was on mobile da
 | `redirect_uri: Not matching configuration` | The address must match exactly (trailing `/`, capitals, https). Make sure you clicked **Save** at the bottom of the Spotify page, and that the Client ID is from the same app. |
 | "Needs Spotify Premium" | Playback control requires Premium |
 | "No active device" | Start playing on a phone or computer first |
-| Want to disconnect | Board settings → *Disconnect Spotify*, and/or spotify.com → Account → Apps → Remove access |
+| Red error on the Spotify screen | Sign-in failed: check the Client secret in Settings → Spotify → Spotify app details, save, and **Connect Spotify** again. The board retries less often after errors, so the screen stays responsive. |
+| Stuck on the Spotify screen | Long-press, or hold **BOOT** for about 1 second, for the home menu |
+| Want to disconnect | Board settings → Spotify → **Disconnect Spotify**, and/or spotify.com → Account → Apps → Remove access |
 
 The board asks only for these permissions: `user-read-playback-state`, `user-modify-playback-state` and `user-read-currently-playing`.

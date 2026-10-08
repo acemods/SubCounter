@@ -10,6 +10,8 @@
 | Tap | – | – | Play / pause |
 | **Long-press (≈1 s)** | **Home menu** | **Home menu** | **Home menu** |
 
+**Home menu:** three big tiles (YouTube, Weather, Spotify). **Swipe left** for the next page with **Device** (QR code, version, updates). Swipe, long-press or BOOT closes it.
+
 **BOOT button:** short press = next channel (YouTube) / next card (Weather) / play-pause (Spotify). **Hold for about 1 s = home menu** (handy if the screen isn't responding). Hold for 3 s = setup mode.
 
 After 2 minutes untouched, each app returns to its main screen.
@@ -107,7 +109,7 @@ After **3 minutes** with no touch, button press or movement (change it, or turn 
 
 ## Web dashboard
 
-Open **`http://subcounter.local`** (or `http://<board-ip>/`) on any device on the same network. The IP address is shown for a few seconds after the board joins Wi-Fi, and at the bottom of the home menu (long-press):
+Open **`http://subcounter.local`** (or `http://<board-ip>/`) on any device on the same network, or scan the QR code on the Device screen. The IP address is also at the bottom of the home menu:
 
 - a side column with top growers in the last 24 hours, weather, race and leaderboard (above the channels on tablets and phones)
 - a card for every channel: live (estimated) count, growth chips, milestone and ETA, a 7 or 30-day graph, and the latest video with thumbnail
@@ -116,8 +118,15 @@ Open **`http://subcounter.local`** (or `http://<board-ip>/`) on any device on th
 - a **Monthly** table (last month and this month so far)
 - a **Compare** chart: pick up to 4 channels and see gains (or % growth) over 7 or 30 days on one chart; hover for exact numbers
 - **CSV downloads** of the history (each card, or everything from the Compare card)
+- **Recent uploads** on each YouTube card: the last 10 videos, sortable by views, views per day or likes %
+- a green **Update** button in the header when a new version is out
+- the colour of your chosen theme
 
-Settings are at `/settings`, and wireless updates at `/update`.
+Settings are at `/settings` (sections: YouTube, Twitch, Display, Alerts, Phone notifications, Weather, Spotify, Motion, Wi-Fi, Updates, Security, Firmware, Backup & restore), and updates at `/update`.
+
+## Settings backup
+
+Settings → **Backup & restore** → *Download settings* saves everything to a `.json` file. The second link includes passwords, API keys and sign-ins; keep that file private. To restore, choose the file and press *Restore & restart*, for example after a full re-flash or on a second board. Subscriber history and records stay on the board and aren't in the file.
 
 ## API quota
 
