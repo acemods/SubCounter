@@ -1,5 +1,5 @@
 /*
- * SubCounter v9.9 — YouTube subscriber counter for Waveshare ESP32-C6-Touch-LCD-1.47
+ * SubCounter v10.0 — YouTube subscriber counter for Waveshare ESP32-C6-Touch-LCD-1.47
  *
  *  ON THE BOARD
  *    Swipe left / right ... next / previous channel   (BOOT short press = next)
@@ -48,6 +48,7 @@
 #include <Update.h>    // wireless firmware updates
 #include <ESPmDNS.h>   // http://subcounter.local
 #define HOSTNAME "subcounter"
+#define FW_VERSION "10.0"     // shown on start-up, home menu, settings, update page and dashboard
 
 // ── Pins (ESP32-C6 version of the board) ────────────────────────────────────
 #define LCD_SCK   1
@@ -1614,7 +1615,8 @@ void showAddress() {
   ftC(40, "Connected to " + WiFi.SSID(), F_S, C_GREEN, gfx->width());
   ftC(84, WiFi.localIP().toString(), F_M, C_WHITE, gfx->width());
   ftC(118, "http://" HOSTNAME ".local", F_S, C_GOLD, gfx->width());
-  ftC(160, "Open either in a browser", F_S, C_DKGREY, gfx->width());
+  ftC(150, "Open either in a browser", F_S, C_DKGREY, gfx->width());
+  ftC(168, "SubCounter v" FW_VERSION, F_S, C_DKGREY, gfx->width());
   waitShowing(5000);
 }
 
@@ -1903,7 +1905,9 @@ bool authed() {
 
 void handleUpdatePage() {
   if (!authed()) return;
-  server.send(200, "text/html", String(FPSTR(PAGE_HEAD)) + FPSTR(UPDATE_BODY));
+  String b = FPSTR(UPDATE_BODY);
+  b.replace("<h1>&#11014; Update firmware</h1>", "<h1>&#11014; Update firmware</h1><p>Currently running <b>v" FW_VERSION "</b></p>");
+  server.send(200, "text/html", String(FPSTR(PAGE_HEAD)) + b);
 }
 
 void drawOtaProgress(const String &line2) {
@@ -2664,6 +2668,7 @@ void drawAppIcon(int a, int cx, int cy) {
 
 void drawMenu() {
   gfx->fillScreen(C_BG);
+  ftR(gfx->width() - 6, 14, "v" FW_VERSION, F_XS, C_DKGREY);
   const char *names[NUM_APPS] = { "YouTube", "Weather", "Spotify" };
   int w = gfx->width() / NUM_APPS;
   for (int a = 0; a < NUM_APPS; a++) {
@@ -2860,7 +2865,7 @@ ser.forEach(s=>{let v=s.pts[0][1];for(const p of s.pts){if(p[0]>t)break;v=p[1]}t
 tip.style.display='block';const px=ev.clientX-r.left;tip.style.left=Math.min(px+12,r.width-tip.offsetWidth-4)+'px';tip.style.top='10px'};
 svg.onmouseleave=()=>{cross.setAttribute('visibility','hidden');tip.style.display='none'}}
 function render(){const app=$('#app');app.textContent='';const C=D.channels;
-$('#meta').textContent=D.err?D.err:(D.updatedAgo>=0?'Updated '+(D.updatedAgo<60?'just now':(D.updatedAgo/60|0)+' min ago'):'');
+$('#meta').textContent=(D.err?D.err:(D.updatedAgo>=0?'Updated '+(D.updatedAgo<60?'just now':(D.updatedAgo/60|0)+' min ago'):''))+(D.ver?'  ·  v'+D.ver:'');
 const row=h('aside',{class:'side'});
 // summary
 const ok=C.filter(c=>c.statsOk).sort((a,b)=>b.d1-a.d1);const nv=C.filter(c=>c.vid&&!c.tw&&Date.now()/1000-c.vid.pub<86400);
@@ -2893,6 +2898,7 @@ void handleApiData() {
   doc["err"] = netError;
   doc["est"] = cfgEst;
   doc["ip"] = WiFi.localIP().toString();
+  doc["ver"] = FW_VERSION;
   doc["m0"] = (long)monthStart(0); doc["m1"] = (long)monthStart(1);
   if (raceSet()) { JsonArray r = doc["race"].to<JsonArray>(); r.add(cfgRaceA); r.add(cfgRaceB); }
   else doc["race"] = nullptr;
@@ -3243,6 +3249,7 @@ void handleSettings() {
   h += "<small style='margin-top:16px'>Board Wi-Fi MAC address: " + boardMac() + "</small></div>";
   h += FPSTR(SCAN_JS);
   if (portalMode) h += "<script>scan()</script>";
+  h += "<p style='margin-top:28px;color:#8d8d95;font-size:13px;text-align:center'>SubCounter v" FW_VERSION "</p>";
   h += "</body></html>";
   server.send(200, "text/html", h);
 }
@@ -4033,7 +4040,7 @@ int portraitRot = 0;
 void setup() {
   Serial.begin(115200);
   delay(300);
-  Serial.println("SubCounter v9.9 starting");
+  Serial.println("SubCounter v" FW_VERSION " starting");
   setenv("TZ", TZ_UK, 1); tzset();
 
   pinMode(SD_CS, OUTPUT);  digitalWrite(SD_CS, HIGH);
