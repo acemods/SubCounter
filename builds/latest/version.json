@@ -1,7 +1,7 @@
 {
- "version": "11.3",
- "app": "SubCounter-v11.3-APP-ONLY.bin",
- "size": 1768432,
- "md5": "5624ad8422368da1c2ed536cc929f008",
- "notes": "Home menu back to three big tiles; swipe left for Device"
+ "version": "11.4",
+ "app": "SubCounter-v11.4-APP-ONLY.bin",
+ "size": 1769680,
+ "md5": "c5c19ed0fc9b1ce8fc643b34af0c96ac",
+ "notes": "Dashboard filter: All / YouTube / Twitch"
 }

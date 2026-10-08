@@ -2,6 +2,9 @@
 
 All builds are in [`builds/`](../builds). Source snapshots for most versions are in the git history.
 
+## v11.4
+- **Dashboard filter:** *All · YouTube · Twitch* buttons at the top (shown when you follow both). Everything follows the filter: last 24 hours, leaderboard, monthly table, channel cards and the compare chart; the race shows when both of its channels are in view. Your choice is remembered in that browser.
+
 ## v11.3
 - Home menu back to **three big tiles** (YouTube, Weather, Spotify); **swipe left** for a second page with **Device** (room for more later). Page dots show where you are; a red dot means an update is waiting on the Device page.
 

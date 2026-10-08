@@ -77,6 +77,9 @@ td .av{width:28px;height:28px;display:block}td{padding:6px 4px}td.nm2{overflow:h
 .tug{display:flex;height:14px;border-radius:7px;overflow:hidden;margin:10px 0}.tug .a{background:var(--red)}.tug .b{background:var(--blue)}
 .list div{display:flex;justify-content:space-between;padding:5px 0}
 .wide{grid-column:1/-1}
+.pf{max-width:1500px;margin:0 auto;padding:14px 20px 0;display:flex;gap:8px}.pf button{border:1px solid var(--line);background:var(--card);color:var(--muted);border-radius:999px;padding:7px 14px;font-size:14px;cursor:pointer}
+.pf button.on{color:var(--text);border-color:var(--gold);background:#222226}.pf button span{opacity:.6;margin-left:2px;font-size:12px}
+@media(max-width:600px){.pf{padding:12px 12px 0}}
 .twb{background:#9146ff;color:#fff;border-radius:5px;font-size:10px;font-weight:800;padding:1px 5px;margin-left:8px;vertical-align:3px;letter-spacing:.03em}
 .ctl{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-bottom:12px}
 .tg{display:inline-flex;align-items:center;gap:6px;border:1px solid var(--line);border-radius:999px;padding:4px 10px;font-size:13px;background:none;color:var(--muted);cursor:pointer}
@@ -92,7 +95,7 @@ td .av{width:28px;height:28px;display:block}td{padding:6px 4px}td.nm2{overflow:h
 .pb{display:flex;flex-wrap:wrap;gap:6px 14px;font-size:13px;color:var(--muted);margin-top:10px}.pb b{color:var(--gold)}
 </style></head><body>
 <header><div class="logo"></div><h1>SubCounter</h1><span class="meta" id="meta"></span><a class="btn" id="upd" href="/update" style="display:none;border-color:#30d158;color:#30d158"></a><a class="btn" href="/settings">Settings</a></header>
-<main id="app"><div class="card">Loading…</div></main>
+<nav id="pf" class="pf" style="display:none"></nav><main id="app"><div class="card">Loading…</div></main>
 <script>
 const $=s=>document.querySelector(s);
 function h(t,a,...k){const e=document.createElement(t);for(const x in a||{}){if(x=='class')e.className=a[x];else if(x=='text')e.textContent=a[x];else if(x.startsWith('on'))e[x]=a[x];else e.setAttribute(x,a[x])}for(const c of k.flat())if(c!=null)e.append(c.nodeType?c:document.createTextNode(c));return e}
@@ -149,8 +152,8 @@ const COLS=['#3987e5','#d95926','#199e70','#c98500','#d55181','#008300','#9085e9
 const colFor=i=>i<COLS.length?COLS[i]:'#8d8d95';
 let CMP={sel:null,days:7,mode:'gain'},HC={},RVS={};
 async function hist(i,days){const k=i+':'+days;if(!HC[k]||Date.now()-HC[k].at>120000){const r=await fetch('/api/history?i='+i+'&days='+days);HC[k]={at:Date.now(),p:await r.json()}}return HC[k].p}
-function compareCard(){const C=D.channels.filter(c=>c.subs>=0);
-if(!CMP.sel){const o=[...C].filter(c=>c.i!=0).sort((a,b)=>(b.d7||0)-(a.d7||0));CMP.sel=[0,...o.slice(0,2).map(c=>c.i)].filter(i=>C.some(c=>c.i==i))}
+function compareCard(){const C=D.channels.filter(c=>c.subs>=0&&kindOk(c));
+if(!CMP.sel){const o=[...C].filter(c=>c.i!=0).sort((a,b)=>(b.d7||0)-(a.d7||0));const base=C.some(c=>c.i==0)?[0]:[];CMP.sel=[...base,...o.slice(0,3-base.length).map(c=>c.i)]}
 const card=h('div',{class:'card wide'}),box=h('div',{class:'cmp'}),ctl=h('div',{class:'ctl'});
 card.append(h('h2',{text:'Compare'}),h('div',{class:'sub',style:'margin:-8px 0 12px',text:'Subscribers gained over the period, so big and small channels fit on one chart. Pick up to 4.'}),ctl,box,h('div',{style:'display:flex;margin-top:8px'},h('a',{class:'small',href:'/api/csv',text:'Download all history (CSV)'})));
 const draw=()=>{ctl.textContent='';
@@ -183,7 +186,12 @@ tip.textContent='';tip.append(h('div',{class:'sub',text:new Date(t*1000).toLocal
 ser.forEach(s=>{let v=s.pts[0][1];for(const p of s.pts){if(p[0]>t)break;v=p[1]}tip.append(h('div',{},h('i',{style:'background:'+colFor(s.c.i)}),name(s.c)+' ',h('b',{text:fv(v)})))});
 tip.style.display='block';const px=ev.clientX-r.left;tip.style.left=Math.min(px+12,r.width-tip.offsetWidth-4)+'px';tip.style.top='10px'};
 svg.onmouseleave=()=>{cross.setAttribute('visibility','hidden');tip.style.display='none'}}
-function render(){const app=$('#app');app.textContent='';const C=D.channels;if(D.accent)document.documentElement.style.setProperty('--gold',D.accent);
+let PF='all';try{PF=localStorage.getItem('pf')||'all'}catch(e){}
+const kindOk=c=>PF=='all'||(PF=='tw'?!!c.tw:!c.tw);
+function filterBar(){const all=D.channels,hasTw=all.some(c=>c.tw),hasYt=all.some(c=>!c.tw);const bar=$('#pf');bar.textContent='';
+if(!(hasTw&&hasYt)){bar.style.display='none';if(PF!='all')PF='all';return}bar.style.display='';
+[['all','All',all.length],['yt','YouTube',all.filter(c=>!c.tw).length],['tw','Twitch',all.filter(c=>c.tw).length]].forEach(([k,t,n])=>bar.append(h('button',{class:PF==k?'on':'',onclick:()=>{PF=k;try{localStorage.setItem('pf',k)}catch(e){}CMP.sel=null;render()}},t+' ',h('span',{text:n}))))}
+function render(){const app=$('#app');app.textContent='';filterBar();const C=D.channels.filter(kindOk);if(D.accent)document.documentElement.style.setProperty('--gold',D.accent);
 $('#meta').textContent=(D.err?D.err:(D.updatedAgo>=0?'Updated '+(D.updatedAgo<60?'just now':(D.updatedAgo/60|0)+' min ago'):''))+(D.ver?'  ·  v'+D.ver:'');{const u=$('#upd');if(D.upd){u.textContent='Update v'+D.upd;u.style.display=''}else u.style.display='none'}
 const row=h('aside',{class:'side'});
 // summary
@@ -192,7 +200,7 @@ row.append(h('div',{class:'card'},h('h2',{text:'Last 24 hours'}),h('div',{class:
 // weather
 if(D.wx){const w=D.wx;row.append(h('div',{class:'card'},h('h2',{text:'Weather · '+w.place}),h('div',{class:'big',text:w.temp+'°'}),h('div',{text:w.text+' · feels '+w.feels+'°'}),h('div',{class:'sub',text:`High ${w.hi}° · Low ${w.lo}° · Wind ${w.wind} mph`}),w.rainHour>=0?h('div',{style:'margin-top:8px;color:var(--blue)',text:`Rain likely around ${String(w.rainHour).padStart(2,'0')}:00 (${w.rainPct}%)`}):null))}
 // race
-if(D.race){const A=C[D.race[0]],B=C[D.race[1]],ea=est(A),eb=est(B),fa=ea+eb?ea/(ea+eb):.5;const lead=ea>=eb?A:B,ch=lead===A?B:A,closing=(ch.rate||0)-(lead.rate||0),gap=Math.abs(ea-eb);
+if(D.race&&kindOk(D.channels[D.race[0]])&&kindOk(D.channels[D.race[1]])){const A=D.channels[D.race[0]],B=D.channels[D.race[1]],ea=est(A),eb=est(B),fa=ea+eb?ea/(ea+eb):.5;const lead=ea>=eb?A:B,ch=lead===A?B:A,closing=(ch.rate||0)-(lead.rate||0),gap=Math.abs(ea-eb);
 row.append(h('div',{class:'card race'},h('h2',{text:'Race'}),h('div',{class:'rs'},h('span',{},av(A),h('b',{style:'color:var(--red)',text:name(A)})),h('b',{text:fmt(ea)})),h('div',{class:'rs'},h('span',{},av(B),h('b',{style:'color:var(--blue)',text:name(B)})),h('b',{text:fmt(eb)})),h('div',{class:'tug'},h('div',{class:'a',style:`width:${fa*100}%`}),h('div',{class:'b',style:`width:${(1-fa)*100}%`})),h('div',{text:`Gap ${fmt(gap)}`}),h('div',{class:'sub',text:closing>0.01?`${name(ch)} is catching up by ${fmt(Math.round(closing))}/day – could pass in about ${Math.max(1,Math.round(gap/closing))} days`:(lead.rate||ch.rate)?`${name(lead)} is pulling away`:'Trend: need more data'})))}
 // leaderboard
 const lb=[...C].filter(c=>c.subs>=0).sort((a,b)=>b.subs-a.subs);
