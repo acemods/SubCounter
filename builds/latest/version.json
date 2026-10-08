@@ -1,7 +1,7 @@
 {
- "version": "11.5",
- "app": "SubCounter-v11.5-APP-ONLY.bin",
+ "version": "11.6",
+ "app": "SubCounter-v11.6-APP-ONLY.bin",
  "size": 1772256,
- "md5": "d0380869213fe4cf218a71fd0fadcf53",
- "notes": "YouTube / Twitch logos in the race (board, dashboard, settings) and on the mixed leaderboard"
+ "md5": "153c7923c27bed7aafff5d26b14c35a9",
+ "notes": "Home menu page dots no longer overlap the address line"
 }

@@ -13,7 +13,7 @@
 2. Open **<https://espressif.github.io/esptool-js/>** in Chrome.
 3. Click **Connect** and pick the board (it shows up as *USB JTAG/serial debug unit*).
 4. Set **Flash Address** to **`0x0`** and choose
-   `builds/latest/SubCounter-v11.5-FULL-new-board-flash-at-0x0.bin`.
+   `builds/latest/SubCounter-v11.6-FULL-new-board-flash-at-0x0.bin`.
 5. Click **Program**. When it finishes, press **RESET** on the board.
 
 > If it won't connect: hold **BOOT**, tap **RESET**, release **BOOT**, then try again.
@@ -42,6 +42,8 @@ The free quota is 10,000 units a day; SubCounter uses roughly 3,000–3,500 with
    - **Wi-Fi networks** section → tap **Scan for networks**, choose yours, and enter the password.
 
    Everything else can be changed later. The links at the top of the page jump to each section.
+
+   <img src="images/wifi-scan.png" width="320" alt="Scanning for Wi-Fi networks">
 5. Press **Save & restart**.
 
 The board joins your Wi-Fi and shows a **QR code** with its address for a few seconds, then your subscriber count. Scan the code with your phone's camera, or open **<http://subcounter.local>** in a browser, for the dashboard. If `.local` doesn't work (some Android phones), use the IP address shown next to the QR code. You can bring the QR screen back any time: long-press → swipe left → **Device**. Tip: set a DHCP reservation for **subcounter** in your router so the IP never changes.

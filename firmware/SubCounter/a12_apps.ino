@@ -529,7 +529,7 @@ void drawMenu() {
     int a = menuPage * MENU_PER_PAGE + s;
     if (a >= MENU_TILES) break;
     int cx = s * w + w / 2;
-    if (a == app) gfx->drawRoundRect(s * w + 6, 22, w - 12, 120, 12, C_DKGREY);
+    if (a == app) gfx->drawRoundRect(s * w + 6, 22, w - 12, 116, 12, C_DKGREY);
     if (a < NUM_APPS) drawAppIcon(a, cx, 70);
     else { drawDeviceIcon(cx, 70, updAvail ? C_GOLD : C_WHITE); if (updAvail) gfx->fillCircle(cx + 18, 44, 6, C_RED); }
     ft(cx - tw(names[a], F_S) / 2, 130, names[a], F_S, a == app ? C_WHITE : C_GREY);
@@ -540,8 +540,8 @@ void drawMenu() {
     int x0 = gfx->width() / 2 - (np - 1) * 7;
     for (int p = 0; p < np; p++) {
       bool hasUpd = updAvail && p != menuPage && p == (NUM_APPS / MENU_PER_PAGE);
-      if (p == menuPage) gfx->fillCircle(x0 + p * 14, 151, 3, C_WHITE);
-      else gfx->fillCircle(x0 + p * 14, 151, 3, hasUpd ? C_RED : C_DKGREY);
+      if (p == menuPage) gfx->fillCircle(x0 + p * 14, 146, 3, C_WHITE);
+      else gfx->fillCircle(x0 + p * 14, 146, 3, hasUpd ? C_RED : C_DKGREY);
     }
   }
   if (WiFi.status() == WL_CONNECTED) ftC(168, WiFi.localIP().toString() + "  ·  " HOSTNAME ".local", F_S, C_GREY, gfx->width());

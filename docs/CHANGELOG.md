@@ -2,6 +2,10 @@
 
 All builds are in [`builds/`](../builds). Source snapshots for most versions are in the git history.
 
+## v11.6
+- Home menu: the page dots no longer overlap the IP address line at the bottom
+- Docs: new screenshots of the dashboard (desktop and phone), compare chart, settings page, Wi-Fi scan, home menu and Device screen
+
 ## v11.5
 - **YouTube / Twitch logos** next to the names in the subscriber race: on the board's Race screen, on the dashboard, and in the race settings (with a preview under the pickers, which are now grouped YouTube / Twitch)
 - The dashboard leaderboard shows the logos too when it mixes YouTube and Twitch channels

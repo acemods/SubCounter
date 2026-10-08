@@ -12,6 +12,8 @@
 
 **Home menu:** three big tiles (YouTube, Weather, Spotify). **Swipe left** for the next page with **Device** (QR code, version, updates). Swipe, long-press or BOOT closes it.
 
+![Home menu](images/home-menu.png)
+
 **BOOT button:** short press = next channel (YouTube) / next card (Weather) / play-pause (Spotify). **Hold for about 1 s = home menu** (handy if the screen isn't responding). Hold for 3 s = setup mode.
 
 After 2 minutes untouched, each app returns to its main screen.
@@ -65,6 +67,8 @@ Long-press for the home menu, **swipe left** to the second page and tap **Device
 
 Swipe, long-press or press BOOT to go back.
 
+![Device screen](images/device-screen.png)
+
 ## Phone notifications
 
 1. Install the free **ntfy** app (App Store / Google Play).
@@ -111,6 +115,8 @@ After **3 minutes** with no touch, button press or movement (change it, or turn 
 
 ## Web dashboard
 
+![Dashboard](images/dashboard.png)
+
 Open **`http://subcounter.local`** (or `http://<board-ip>/`) on any device on the same network, or scan the QR code on the Device screen. The IP address is also at the bottom of the home menu:
 
 - **All · YouTube · Twitch** buttons at the top (when you follow both): the side column, leaderboard, monthly table, channel cards and compare chart all follow the filter
@@ -121,11 +127,20 @@ Open **`http://subcounter.local`** (or `http://<board-ip>/`) on any device on th
 - a **Monthly** table (last month and this month so far)
 - a **Compare** chart: pick up to 4 channels and see gains (or % growth) over 7 or 30 days on one chart; hover for exact numbers
 - **CSV downloads** of the history (each card, or everything from the Compare card)
+
+  ![Compare chart](images/compare.png)
+
 - **Recent uploads** on each YouTube card: the last 10 videos, sortable by views, views per day or likes %
 - a green **Update** button in the header when a new version is out
 - the colour of your chosen theme
 
-Settings are at `/settings` (sections: YouTube, Twitch, Display, Alerts, Phone notifications, Weather, Spotify, Motion, Wi-Fi, Updates, Security, Firmware, Backup & restore), and updates at `/update`.
+On a phone everything stacks into one column:
+
+<img src="images/dashboard-phone.png" width="320" alt="Dashboard on a phone">
+
+Settings are at `/settings` (sections: YouTube, Twitch, Display, Alerts, Phone notifications, Weather, Spotify, Motion, Wi-Fi, Updates, Security, Firmware, Backup & restore), and updates at `/update`. The links at the top jump to each section:
+
+<img src="images/settings.png" width="360" alt="Settings page">
 
 ## Colour themes
 

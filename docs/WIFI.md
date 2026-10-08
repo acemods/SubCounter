@@ -7,6 +7,9 @@ You can save up to **5 networks** (e.g. work, home, phone hotspot). Each has its
 - **On start-up**, and after losing Wi-Fi for more than a minute, the board scans and joins your **Preferred** network if it's in range, otherwise the **strongest** saved one.
 - **Connect now** (settings → Wi-Fi networks) switches straight away. The settings page stops responding, because the board has left that network; use its new IP.
 - **Scan for networks** lists everything nearby. Tap one to fill in its name exactly, which handles names with curly apostrophes, like *Alex’s iPhone*.
+
+  <img src="images/wifi-scan.png" width="360" alt="Saved networks and a scan">
+
 - If none of your networks are around, the board goes into setup mode, and checks every 3 minutes for one to come back.
 
 ## iPhone hotspot
