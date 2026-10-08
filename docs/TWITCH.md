@@ -2,20 +2,26 @@
 
 SubCounter can track Twitch channels alongside YouTube ones: follower count, live status, viewers and stream title. Twitch follower counts are **exact** (no rounding, so no "est.").
 
-## 1. Create a free Twitch app (5 minutes, once)
+## 1. Create a free Twitch app (about 5 minutes, once)
 
-1. Sign in at <https://dev.twitch.tv/console/apps>. Twitch requires **two-factor authentication** on your account to create apps.
-2. Click **Register Your Application**:
-   - **Name:** anything unique, e.g. `SubCounter-yourname`
-   - **OAuth Redirect URLs:** `http://localhost` (not used, but the form needs one)
-   - **Category:** Other
-   - **Client type:** **Confidential**
-3. Click **Create**, then **Manage** on the new app.
-4. Copy the **Client ID**, click **New Secret** and copy the **Client Secret**.
+**Before you start:** your Twitch account needs a **verified email** and **two-factor authentication** (Twitch → Settings → Security and Privacy → *Set Up Two-Factor Authentication*). Twitch won't let you create apps without it.
+
+1. Go to <https://dev.twitch.tv/console> and **Log in with Twitch** (refresh the page if you've just turned on 2FA).
+2. Open the **Applications** tab → **Register Your Application**.
+3. Fill in:
+   - **Name:** must be unique across all of Twitch, e.g. `SubCounter-yourname`
+   - **OAuth Redirect URLs:** `http://localhost` → click **Add** (SubCounter doesn't use it, but the form needs one)
+   - **Category:** *Other*
+   - **Client Type** (if shown): *Confidential*
+   - Tick **I'm not a robot**
+4. Click **Create**.
+5. Back on **Applications**, click **Manage** next to your app.
+6. Copy the **Client ID**.
+7. Click **New Secret**, confirm, and copy the **Client Secret** straight away (it's only shown once; making another one cancels the old one).
 
 ## 2. Add them to SubCounter
 
-Settings → **Twitch (optional)** → paste the Client ID and Client Secret → **Save & restart**.
+Open `http://subcounter.local/settings` (or the board's IP + `/settings`) → **Channels** section → open **Twitch app (only for Twitch channels)** → paste the **Client ID** and **Client Secret** → **Save & restart**.
 
 ## 3. Add Twitch channels
 
