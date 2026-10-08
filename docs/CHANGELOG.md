@@ -2,6 +2,12 @@
 
 All builds are in [`builds/`](../builds). Source snapshots for most versions are in the git history.
 
+## v10.4
+- **Fixed: stuck in the Spotify app.** When Spotify sign-in failed, the board retried every 3 s and froze briefly each time, so long-presses were missed. It now backs off (15 s, 30 s, 1 min … up to 5 min), polls every 6 s when paused, and uses shorter timeouts.
+- **Hold BOOT for about 1 second** to open the home menu from anywhere (3 seconds is still setup mode)
+- The Spotify screen shows the error with "Check Spotify in settings / Hold BOOT 1 s for the menu"
+- Spotify and Twitch secret boxes no longer get a saved password auto-filled into them by the browser
+
 ## v10.3
 - Fixed a stray "Â" in the home menu between the IP address and subcounter.local (now a proper · dot)
 

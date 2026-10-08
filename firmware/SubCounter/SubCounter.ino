@@ -1,5 +1,5 @@
 /*
- * SubCounter v10.3 — YouTube subscriber counter for Waveshare ESP32-C6-Touch-LCD-1.47
+ * SubCounter v10.4 — YouTube subscriber counter for Waveshare ESP32-C6-Touch-LCD-1.47
  *
  *  ON THE BOARD
  *    Swipe left / right ... next / previous channel   (BOOT short press = next)
@@ -48,7 +48,7 @@
 #include <Update.h>    // wireless firmware updates
 #include <ESPmDNS.h>   // http://subcounter.local
 #define HOSTNAME "subcounter"
-#define FW_VERSION "10.3"     // shown on start-up, home menu, settings, update page and dashboard
+#define FW_VERSION "10.4"     // shown on start-up, home menu, settings, update page and dashboard
 
 // ── Pins (ESP32-C6 version of the board) ────────────────────────────────────
 #define LCD_SCK   1
@@ -2407,6 +2407,8 @@ struct SpotifyState {
   uint8_t *art = nullptr; int artLen = 0;
 } sp;
 unsigned long lastSpPoll = 0;
+unsigned long spWait = 3000;        // time until the next poll: 3 s playing, 6 s paused, longer after errors
+int spFails = 0;
 
 String b64(const String &s) {
   static const char *tbl = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
@@ -2429,7 +2431,7 @@ String spAuthUrl() {
 // POST to Spotify's token endpoint; stores the access token (and a new refresh token if given)
 bool spToken(const String &body, String &err) {
   WiFiClientSecure client; client.setInsecure();
-  HTTPClient http; http.setTimeout(10000);
+  HTTPClient http; http.setTimeout(6000); http.setConnectTimeout(5000);
   if (!http.begin(client, "https://accounts.spotify.com/api/token")) { err = "Can't reach Spotify"; return false; }
   http.addHeader("Content-Type", "application/x-www-form-urlencoded");
   http.addHeader("Authorization", "Basic " + b64(cfgSpId + ":" + cfgSpSecret));
@@ -2474,7 +2476,7 @@ bool spConnectWithCode(String pasted, String &err) {
 int spCall(const char *method, const String &path, String *resp = nullptr) {
   if (!spEnsureToken()) return -1;
   WiFiClientSecure client; client.setInsecure();
-  HTTPClient http; http.setTimeout(8000);
+  HTTPClient http; http.setTimeout(5000); http.setConnectTimeout(5000);
   if (!http.begin(client, "https://api.spotify.com/v1" + path)) return -2;
   http.addHeader("Authorization", "Bearer " + sp.access);
   int code;
@@ -2642,7 +2644,8 @@ void drawSpotify() {
   }
   if (!sp.hasTrack) {
     ftC(80, "Nothing playing", F_M, C_GREY, gfx->width());
-    ftC(108, sp.err.length() ? sp.err : String("Start something on Spotify"), F_S, sp.err.length() ? C_RED : C_DKGREY, gfx->width());
+    ftC(108, fit(sp.err.length() ? sp.err : String("Start something on Spotify"), F_S, gfx->width() - 10), F_S, sp.err.length() ? C_RED : C_DKGREY, gfx->width());
+    if (sp.err.length()) { ftC(136, "Check Spotify in settings", F_S, C_GREY, gfx->width()); ftC(158, "Hold BOOT 1 s for the menu", F_S, C_DKGREY, gfx->width()); }
     return;
   }
   if (!drawArt(8, 11)) gfx->fillRoundRect(8, 11, 150, 150, 8, C_DKGREY);
@@ -2735,7 +2738,7 @@ void drawApp() {
 void openApp(int a) {
   app = a; menuOpen = false;
   prefs.begin("subcounter", false); prefs.putInt("app", app); prefs.end();
-  if (app == APP_SP) { lastSpPoll = 0; }
+  if (app == APP_SP) { lastSpPoll = 0; spFails = 0; spWait = 3000; }
   if (app == APP_WX && !wx.ok) lastWxFetch = 0;
   gfx->fillScreen(C_BG);
   drawApp();
@@ -2765,6 +2768,7 @@ summary{margin-top:14px;cursor:pointer;color:#aaa;font-size:14px}
 .btnlink{display:block;text-align:center;margin-top:10px;padding:12px;border-radius:10px;background:#1db954;color:#fff;font-weight:600;text-decoration:none}
 .saved{display:flex;flex-wrap:wrap;gap:6px 14px;align-items:center;padding:8px 0;border-top:1px solid #333}.saved b{flex:1 1 100%;word-break:break-word;color:#fff}
 .ok{color:#30d158;margin:6px 0}
+.secret{-webkit-text-security:disc;text-security:disc}
 .savebar{position:sticky;bottom:0;background:#1c1c1e;padding:6px 0 10px;margin-top:22px;box-shadow:0 -10px 14px #1c1c1e}.savebar button{margin-top:6px}
 </style></head><body><div class="card">)HTML";
 
@@ -3197,7 +3201,7 @@ void handleSettings() {
        "&rarr; Category: Other &rarr; Client type: Confidential &rarr; Create &rarr; Manage &rarr; copy the Client ID and a <b>New Secret</b>. "
        "Your Twitch account needs two-factor sign-in turned on.</small>";
   h += "<label>Client ID</label><input name='twid' autocapitalize='off' autocomplete='off' value='" + htmlEscape(cfgTwId) + "'>";
-  h += "<label>Client Secret</label><input name='twsec' type='password' autocapitalize='off' autocomplete='new-password' placeholder='";
+  h += "<label>Client Secret</label><input name='twsec' type='text' class='secret' autocapitalize='off' autocomplete='off' spellcheck='false' placeholder='";
   h += cfgTwSecret.length() ? "(saved — leave blank to keep)" : "";
   h += "'>";
   h += "</details>";
@@ -3242,7 +3246,7 @@ void handleSettings() {
   h += "<label>Redirect URI (exactly as entered at Spotify)</label><input name='spredir' value='" + htmlEscape(cfgSpRedirect) +
        "' autocapitalize='off' placeholder='https://yourname.github.io/spotify-callback/'>";
   h += "<label>Client ID</label><input name='spid' value='" + htmlEscape(cfgSpId) + "' autocapitalize='off' autocomplete='off'>";
-  h += "<label>Client secret</label><input name='spsecret' type='password' autocapitalize='off' autocomplete='new-password' placeholder='" +
+  h += "<label>Client secret</label><input name='spsecret' type='text' class='secret' autocapitalize='off' autocomplete='off' spellcheck='false' placeholder='" +
        String(cfgSpSecret.length() ? "(saved — leave blank to keep)" : "") + "'>";
   h += "</details>";
   if (!portalMode && cfgSpId.length() && cfgSpSecret.length() && cfgSpRedirect.length()) {
@@ -4267,12 +4271,14 @@ void loop() {
   char swipe = pollSwipe();
   if (touching) lastTouchActivity = millis();
 
-  bool bootShort = false;
+  bool bootShort = false, bootMenu = false;
   if (digitalRead(BOOT_BTN) == LOW) {
     if (!btnDownAt) btnDownAt = millis();
     if (millis() - btnDownAt > HOLD_FOR_SETUP_MS) { server.stop(); startPortal(); btnDownAt = 0; return; }
   } else if (btnDownAt) {
-    if (millis() - btnDownAt > 40) bootShort = true;
+    unsigned long held = millis() - btnDownAt;
+    if (held > 900) bootMenu = true;            // held about 1 s (but not 3 s): home menu
+    else if (held > 40) bootShort = true;
     btnDownAt = 0;
   }
 
@@ -4287,6 +4293,7 @@ void loop() {
   if (summaryActive && millis() - summaryShownAt > SUMMARY_SHOW_MS) summaryActive = false;
 
   // ── decide the mode ───────────────────────────────────────────────────────
+  if (bootMenu) swipe = 'H';                    // same as a long-press on the screen
   bool anyInput = swipe || tap || shake || bootShort || touching || moved;
   if (anyInput && (mode == M_AMBIENT || mode == M_SUMMARY || mode == M_CLOCK)) {
     userActivity();
@@ -4425,10 +4432,14 @@ void loop() {
   }
   // Spotify: every 3 s while it's on screen
   if (mode == M_NORMAL && !menuOpen && app == APP_SP && cfgSpRefresh.length() &&
-      (lastSpPoll == 0 || millis() - lastSpPoll > 3000UL)) {
-    lastSpPoll = millis();
+      (lastSpPoll == 0 || millis() - lastSpPoll > spWait)) {
     bool wasPlaying = sp.playing, had = sp.hasTrack;
     bool changed = spPoll();
+    lastSpPoll = millis();
+    // A failing sign-in used to be retried every 3 s, and each try freezes the board for a
+    // moment, so long-presses were missed. Back off: 15 s, 30 s, 1 min ... up to 5 min.
+    if (sp.err.length()) { spFails = min(spFails + 1, 6); spWait = min(300000UL, 15000UL << (spFails - 1)); }
+    else { spFails = 0; spWait = sp.playing ? 3000UL : 6000UL; }
     if (changed || wasPlaying != sp.playing || had != sp.hasTrack) drawSpotify();
   }
 

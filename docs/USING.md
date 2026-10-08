@@ -10,7 +10,7 @@
 | Tap | – | – | Play / pause |
 | **Long-press (≈1 s)** | **Home menu** | **Home menu** | **Home menu** |
 
-**BOOT button:** short press = next channel (YouTube) / next card (Weather) / play-pause (Spotify). Hold for 3 s = setup mode.
+**BOOT button:** short press = next channel (YouTube) / next card (Weather) / play-pause (Spotify). **Hold for about 1 s = home menu** (handy if the screen isn't responding). Hold for 3 s = setup mode.
 
 After 2 minutes untouched, each app returns to its main screen.
 
