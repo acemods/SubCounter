@@ -22,6 +22,7 @@ summary{margin-top:14px;cursor:pointer;color:#aaa;font-size:14px}
 .btnlink{display:block;text-align:center;margin-top:10px;padding:12px;border-radius:10px;background:#1db954;color:#fff;font-weight:600;text-decoration:none}
 .saved{display:flex;flex-wrap:wrap;gap:6px 14px;align-items:center;padding:8px 0;border-top:1px solid #333}.saved b{flex:1 1 100%;word-break:break-word;color:#fff}
 .ok{color:#30d158;margin:6px 0}
+.rpv{display:flex;flex-wrap:wrap;gap:8px 12px;align-items:center;margin-top:10px;font-size:15px}.rpv span{display:inline-flex;align-items:center;gap:6px;background:#111;border:1px solid #333;border-radius:999px;padding:5px 12px}.rpv em{color:#777;font-style:normal}
 .secret{-webkit-text-security:disc;text-security:disc}
 .savebar{position:sticky;bottom:0;background:#1c1c1e;padding:6px 0 10px;margin-top:22px;box-shadow:0 -10px 14px #1c1c1e}.savebar button{margin-top:6px}
 </style></head><body><div class="card">)HTML";
@@ -77,6 +78,7 @@ td .av{width:28px;height:28px;display:block}td{padding:6px 4px}td.nm2{overflow:h
 .tug{display:flex;height:14px;border-radius:7px;overflow:hidden;margin:10px 0}.tug .a{background:var(--red)}.tug .b{background:var(--blue)}
 .list div{display:flex;justify-content:space-between;padding:5px 0}
 .wide{grid-column:1/-1}
+.pi{display:inline-flex;vertical-align:-2px;margin-right:6px}.pi svg{display:block}
 .pf{max-width:1500px;margin:0 auto;padding:14px 20px 0;display:flex;gap:8px}.pf button{border:1px solid var(--line);background:var(--card);color:var(--muted);border-radius:999px;padding:7px 14px;font-size:14px;cursor:pointer}
 .pf button.on{color:var(--text);border-color:var(--gold);background:#222226}.pf button span{opacity:.6;margin-left:2px;font-size:12px}
 @media(max-width:600px){.pf{padding:12px 12px 0}}
@@ -187,6 +189,8 @@ ser.forEach(s=>{let v=s.pts[0][1];for(const p of s.pts){if(p[0]>t)break;v=p[1]}t
 tip.style.display='block';const px=ev.clientX-r.left;tip.style.left=Math.min(px+12,r.width-tip.offsetWidth-4)+'px';tip.style.top='10px'};
 svg.onmouseleave=()=>{cross.setAttribute('visibility','hidden');tip.style.display='none'}}
 let PF='all';try{PF=localStorage.getItem('pf')||'all'}catch(e){}
+const PIC={yt:'<svg width="18" height="13" viewBox="0 0 20 14"><rect width="20" height="14" rx="4" fill="#ff0033"/><path d="M8 4v6l5-3z" fill="#fff"/></svg>',tw:'<svg width="15" height="15" viewBox="0 0 16 16"><path d="M2 1h13v9l-4 4H8l-2 2H4v-2H1V4z" fill="#9146ff"/><path d="M7 4h1.5v4H7zM10.5 4H12v4h-1.5z" fill="#fff"/></svg>'};
+function pIcon(c){const s=document.createElement('span');s.className='pi';s.title=c.tw?'Twitch':'YouTube';s.innerHTML=PIC[c.tw?'tw':'yt'];return s}
 const kindOk=c=>PF=='all'||(PF=='tw'?!!c.tw:!c.tw);
 function filterBar(){const all=D.channels,hasTw=all.some(c=>c.tw),hasYt=all.some(c=>!c.tw);const bar=$('#pf');bar.textContent='';
 if(!(hasTw&&hasYt)){bar.style.display='none';if(PF!='all')PF='all';return}bar.style.display='';
@@ -201,10 +205,10 @@ row.append(h('div',{class:'card'},h('h2',{text:'Last 24 hours'}),h('div',{class:
 if(D.wx){const w=D.wx;row.append(h('div',{class:'card'},h('h2',{text:'Weather · '+w.place}),h('div',{class:'big',text:w.temp+'°'}),h('div',{text:w.text+' · feels '+w.feels+'°'}),h('div',{class:'sub',text:`High ${w.hi}° · Low ${w.lo}° · Wind ${w.wind} mph`}),w.rainHour>=0?h('div',{style:'margin-top:8px;color:var(--blue)',text:`Rain likely around ${String(w.rainHour).padStart(2,'0')}:00 (${w.rainPct}%)`}):null))}
 // race
 if(D.race&&kindOk(D.channels[D.race[0]])&&kindOk(D.channels[D.race[1]])){const A=D.channels[D.race[0]],B=D.channels[D.race[1]],ea=est(A),eb=est(B),fa=ea+eb?ea/(ea+eb):.5;const lead=ea>=eb?A:B,ch=lead===A?B:A,closing=(ch.rate||0)-(lead.rate||0),gap=Math.abs(ea-eb);
-row.append(h('div',{class:'card race'},h('h2',{text:'Race'}),h('div',{class:'rs'},h('span',{},av(A),h('b',{style:'color:var(--red)',text:name(A)})),h('b',{text:fmt(ea)})),h('div',{class:'rs'},h('span',{},av(B),h('b',{style:'color:var(--blue)',text:name(B)})),h('b',{text:fmt(eb)})),h('div',{class:'tug'},h('div',{class:'a',style:`width:${fa*100}%`}),h('div',{class:'b',style:`width:${(1-fa)*100}%`})),h('div',{text:`Gap ${fmt(gap)}`}),h('div',{class:'sub',text:closing>0.01?`${name(ch)} is catching up by ${fmt(Math.round(closing))}/day – could pass in about ${Math.max(1,Math.round(gap/closing))} days`:(lead.rate||ch.rate)?`${name(lead)} is pulling away`:'Trend: need more data'})))}
+row.append(h('div',{class:'card race'},h('h2',{text:'Race'}),h('div',{class:'rs'},h('span',{},av(A),pIcon(A),h('b',{style:'color:var(--red)',text:name(A)})),h('b',{text:fmt(ea)})),h('div',{class:'rs'},h('span',{},av(B),pIcon(B),h('b',{style:'color:var(--blue)',text:name(B)})),h('b',{text:fmt(eb)})),h('div',{class:'tug'},h('div',{class:'a',style:`width:${fa*100}%`}),h('div',{class:'b',style:`width:${(1-fa)*100}%`})),h('div',{text:`Gap ${fmt(gap)}`}),h('div',{class:'sub',text:closing>0.01?`${name(ch)} is catching up by ${fmt(Math.round(closing))}/day – could pass in about ${Math.max(1,Math.round(gap/closing))} days`:(lead.rate||ch.rate)?`${name(lead)} is pulling away`:'Trend: need more data'})))}
 // leaderboard
-const lb=[...C].filter(c=>c.subs>=0).sort((a,b)=>b.subs-a.subs);
-row.append(h('div',{class:'card'},h('h2',{text:'Leaderboard'}),h('table',{},h('tr',{class:'hd'},h('th',{colspan:'3'}),h('th',{class:'n',text:C.some(c=>c.tw)?'Total':'Subs'}),h('th',{class:'n',text:'Today',title:'Since midnight'})),lb.map((c,k)=>h('tr',{class:c.i==0?'me':''},h('td',{text:k+1+'.'}),h('td',{},av(c)),h('td',{class:'nm2',text:name(c)}),h('td',{class:'n',text:cmp(c.subs)}),h('td',{class:'n '+cls(c.today),text:c.statsOk?sg(c.today):''}))))));
+const lb=[...C].filter(c=>c.subs>=0).sort((a,b)=>b.subs-a.subs);const mixed=C.some(c=>c.tw)&&C.some(c=>!c.tw);
+row.append(h('div',{class:'card'},h('h2',{text:'Leaderboard'}),h('table',{},h('tr',{class:'hd'},h('th',{colspan:'3'}),h('th',{class:'n',text:C.some(c=>c.tw)?'Total':'Subs'}),h('th',{class:'n',text:'Today',title:'Since midnight'})),lb.map((c,k)=>h('tr',{class:c.i==0?'me':''},h('td',{text:k+1+'.'}),h('td',{},av(c)),h('td',{class:'nm2'},mixed?pIcon(c):null,name(c)),h('td',{class:'n',text:cmp(c.subs)}),h('td',{class:'n '+cls(c.today),text:c.statsOk?sg(c.today):''}))))));
 {const mon=t=>new Date(t*1000).toLocaleDateString('en-GB',{month:'short'});const ms=[...C].filter(c=>c.subs>=0).sort((a,b)=>(b.mo||0)-(a.mo||0));
 if(ms.length&&C.some(c=>c.statsOk))row.append(h('div',{class:'card'},h('h2',{text:'Monthly'}),h('table',{},h('tr',{class:'hd'},h('th',{}),h('th',{class:'n',text:mon(D.m1)}),h('th',{class:'n',text:mon(D.m0)+' so far'})),ms.map(c=>h('tr',{class:c.i==0?'me':''},h('td',{class:'nm2',text:name(c)}),h('td',{class:'n '+(c.lm!=null?cls(c.lm):''),text:c.lm!=null?sg(c.lm):'–'}),h('td',{class:'n '+cls(c.mo),text:c.statsOk?sg(c.mo):'–'}))))))}
 const grid=h('section',{class:'grid'});C.forEach(c=>grid.append(channelCard(c)));if(C.filter(c=>c.subs>=0).length>1)grid.append(compareCard());app.append(h('div',{class:'layout'},row,grid))}
@@ -509,10 +513,22 @@ String hourSelect(const char *name, int val) {
   return s + "</select>";
 }
 
+// Race pickers: YouTube and Twitch channels in their own groups when you follow both
 String channelSelect(const char *name, int val) {
-  String s = String("<select name='") + name + "'><option value='-1'>None</option>";
-  for (int i = 0; i < numCh; i++)
-    s += "<option value='" + String(i) + "'" + (val == i ? " selected" : "") + ">" + htmlEscape(ch[i].title.length() ? ch[i].title : ch[i].handle) + "</option>";
+  String s = String("<select name='") + name + "' onchange='racePv()'><option value='-1'>None</option>";
+  bool hasTw = false, hasYt = false;
+  for (int i = 0; i < numCh; i++) { if (ch[i].tw) hasTw = true; else hasYt = true; }
+  for (int g = 0; g < 2; g++) {
+    bool tw = g == 1;
+    if ((tw && !hasTw) || (!tw && !hasYt)) continue;
+    if (hasTw && hasYt) s += String("<optgroup label='") + (tw ? "Twitch" : "YouTube") + "'>";
+    for (int i = 0; i < numCh; i++) {
+      if (ch[i].tw != tw) continue;
+      s += "<option value='" + String(i) + "' data-p='" + (tw ? "tw" : "yt") + "'" + (val == i ? " selected" : "") + ">" +
+           htmlEscape(ch[i].title.length() ? ch[i].title : ch[i].handle) + "</option>";
+    }
+    if (hasTw && hasYt) s += "</optgroup>";
+  }
   return s + "</select>";
 }
 
@@ -589,6 +605,11 @@ void handleSettings() {
   if (numCh >= 2) {
     h += "<label>Subscriber race</label><div class='row'>" + channelSelect("raceA", cfgRaceA) +
          "<span>vs</span>" + channelSelect("raceB", cfgRaceB) + "</div>";
+    h += "<div id='rpv' class='rpv'></div><script>"
+         "const PI={yt:\"<svg width='20' height='14' viewBox='0 0 20 14'><rect width='20' height='14' rx='4' fill='#ff0033'/><path d='M8 4v6l5-3z' fill='#fff'/></svg>\",tw:\"<svg width='16' height='16' viewBox='0 0 16 16'><path d='M2 1h13v9l-4 4H8l-2 2H4v-2H1V4z' fill='#9146ff'/><path d='M7 4h1.5v4H7zM10.5 4H12v4h-1.5z' fill='#fff'/></svg>\"};"
+         "function racePv(){const f=n=>{const o=document.querySelector(\"select[name=\"+n+\"]\").selectedOptions[0];"
+         "return o&&o.value!='-1'?'<span>'+PI[o.dataset.p]+' '+o.textContent.replace(/</g,'&lt;')+'</span>':'<span style=\\'color:#777\\'>None</span>'};"
+         "document.getElementById('rpv').innerHTML=f('raceA')+'<em>vs</em>'+f('raceB')}racePv()</script>";
     h += "<small>Swipe down twice from the main count to see it.</small>";
   }
 

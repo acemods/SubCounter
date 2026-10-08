@@ -2,6 +2,10 @@
 
 All builds are in [`builds/`](../builds). Source snapshots for most versions are in the git history.
 
+## v11.5
+- **YouTube / Twitch logos** next to the names in the subscriber race: on the board's Race screen, on the dashboard, and in the race settings (with a preview under the pickers, which are now grouped YouTube / Twitch)
+- The dashboard leaderboard shows the logos too when it mixes YouTube and Twitch channels
+
 ## v11.4
 - **Dashboard filter:** *All · YouTube · Twitch* buttons at the top (shown when you follow both). Everything follows the filter: last 24 hours, leaderboard, monthly table, channel cards and the compare chart; the race shows when both of its channels are in view. Your choice is remembered in that browser.
 

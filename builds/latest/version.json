@@ -1,7 +1,7 @@
 {
- "version": "11.4",
- "app": "SubCounter-v11.4-APP-ONLY.bin",
- "size": 1769680,
- "md5": "c5c19ed0fc9b1ce8fc643b34af0c96ac",
- "notes": "Dashboard filter: All / YouTube / Twitch"
+ "version": "11.5",
+ "app": "SubCounter-v11.5-APP-ONLY.bin",
+ "size": 1772256,
+ "md5": "d0380869213fe4cf218a71fd0fadcf53",
+ "notes": "YouTube / Twitch logos in the race (board, dashboard, settings) and on the mixed leaderboard"
 }

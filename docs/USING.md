@@ -29,6 +29,8 @@ Swipe up from the main count:
 7. **7-day graph**
 8. **Next milestone:** progress bar, how many to go, predicted date
 
+The race can pit any two channels against each other, including YouTube vs Twitch; small YouTube / Twitch logos show which is which. (With the dashboard filter on *YouTube* or *Twitch*, the race only shows if both racers match.)
+
 Swipe down from the main count for the **Leaderboard** (5 per page; swipe left or right for more), and again for the **Race**. Choose the two race channels in settings.
 
 ### About the numbers

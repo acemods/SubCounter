@@ -188,6 +188,18 @@ void sendNotes() {
 }
 
 // ── Subscriber race ─────────────────────────────────────────────────────────
+// Small YouTube / Twitch logo (top-left at x,y; about 17x12)
+void platformIcon(int x, int y, bool twitch) {
+  if (!twitch) {
+    gfx->fillRoundRect(x, y, 17, 12, 3, C_RED);
+    gfx->fillTriangle(x + 6, y + 3, x + 6, y + 9, x + 12, y + 6, C_WHITE);
+  } else {
+    gfx->fillRect(x + 1, y, 14, 10, C_TWITCH);
+    gfx->fillTriangle(x + 15, y + 6, x + 15, y + 10, x + 11, y + 10, C_BG);   // cut corner
+    gfx->fillTriangle(x + 4, y + 10, x + 8, y + 10, x + 4, y + 13, C_TWITCH); // speech tail
+    gfx->fillRect(x + 6, y + 3, 2, 4, C_WHITE); gfx->fillRect(x + 10, y + 3, 2, 4, C_WHITE);
+  }
+}
 bool raceSet() { return cfgRaceA >= 0 && cfgRaceB >= 0 && cfgRaceA < numCh && cfgRaceB < numCh && cfgRaceA != cfgRaceB; }
 
 // Days until the chaser catches the leader (0 = not catching up)
@@ -211,9 +223,11 @@ void drawRace() {
   int A = cfgRaceA, B = cfgRaceB;
   long sa = max(0L, estimateFor(A)), sb = max(0L, estimateFor(B));
   String ca = compact(sa), cb = compact(sb);
-  ft(8, 56, fit(nameOf(A), F_S, gfx->width() - tw(ca, F_M) - 26), F_S, C_RED);
+  platformIcon(8, 45, ch[A].tw);
+  ft(30, 56, fit(nameOf(A), F_S, gfx->width() - tw(ca, F_M) - 48), F_S, C_RED);
   ftR(gfx->width() - 8, 56, ca, F_M, C_WHITE);
-  ft(8, 82, fit(nameOf(B), F_S, gfx->width() - tw(cb, F_M) - 26), F_S, C_BLUE);
+  platformIcon(8, 71, ch[B].tw);
+  ft(30, 82, fit(nameOf(B), F_S, gfx->width() - tw(cb, F_M) - 48), F_S, C_BLUE);
   ftR(gfx->width() - 8, 82, cb, F_M, C_WHITE);
   // tug-of-war bar
   int bx = 8, by = 92, bw = gfx->width() - 16, bh = 14;
