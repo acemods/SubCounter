@@ -119,6 +119,8 @@ After **3 minutes** with no touch, button press or movement (change it, or turn 
 
 Open **`http://subcounter.local`** (or `http://<board-ip>/`) on any device on the same network, or scan the QR code on the Device screen. The IP address is also at the bottom of the home menu:
 
+The pages show the SubCounter badge as their browser tab icon, so they're easy to spot among your tabs and bookmarks. On a phone, use **Add to Home Screen** (Safari) or **Add to home screen / Install** (Chrome) and you'll get the same badge as an app icon.
+
 - **All · YouTube · Twitch** buttons at the top (when you follow both): the side column, leaderboard, monthly table, channel cards and compare chart all follow the filter
 - a side column with top growers in the last 24 hours, weather, race and leaderboard (above the channels on tablets and phones)
 - a card for every channel: live (estimated) count, growth chips, milestone and ETA, a 7 or 30-day graph, and the latest video with thumbnail

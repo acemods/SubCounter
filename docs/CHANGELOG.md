@@ -2,6 +2,11 @@
 
 All builds are in [`builds/`](../builds). Source snapshots for most versions are in the git history.
 
+## v11.8
+- Dashboard header uses the same **Creators** badge as the home-menu tile
+- **Browser icon:** the dashboard, settings and update pages now have a tab/bookmark icon (SVG for modern browsers, PNG fallback at `/favicon.ico`), plus an `apple-touch-icon` for Add to Home Screen on phones
+- Docs: dashboard screenshots updated
+
 ## v11.7
 - The main home-menu tile is now **Creators**, with a half YouTube red, half Twitch purple badge (it used to say YouTube, which undersold Twitch)
 - Docs: home menu and Device screen pictures updated

@@ -1,7 +1,7 @@
 {
- "version": "11.7",
- "app": "SubCounter-v11.7-APP-ONLY.bin",
- "size": 1772400,
- "md5": "eea87b0ee7b2e441d3095ff777f00109",
- "notes": "The main home-menu tile is now Creators, with a half YouTube, half Twitch badge"
+ "version": "11.8",
+ "app": "SubCounter-v11.8-APP-ONLY.bin",
+ "size": 1779504,
+ "md5": "54238ad337cae0c14c55851b76a42c62",
+ "notes": "Dashboard uses the new Creators logo, and the board's web pages now have a browser tab icon"
 }
