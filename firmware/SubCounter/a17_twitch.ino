@@ -126,7 +126,7 @@ void twitchFetch() {
     if (n != c.subs) c.stepChangedAt = timeValid() ? nowT() : 0;
     if (c.subs >= 0 && n > c.subs && numAlerts < MAX_CH * 2) {
       long m = nextMilestone(c.subs);
-      alerts[numAlerts++] = n >= m ? Alert{ A_MILESTONE, i, -1, n - c.subs, m } : Alert{ A_GAIN, i, -1, n - c.subs, n };
+      addAlert(n >= m ? Alert{ A_MILESTONE, i, -1, n - c.subs, m } : Alert{ A_GAIN, i, -1, n - c.subs, n });
     }
     c.subs = n; c.err = "";
     recordSample(i); computeStats(i); updateRecords(i);
@@ -150,7 +150,7 @@ void twitchFetch() {
           String th = st["thumbnail_url"] | ""; th.replace("{width}", "320"); th.replace("{height}", "180"); c.twThumb = th;
         }
         if (c.live && !wasLive && twLoaded && cfgLiveAlert && numAlerts < MAX_CH * 2)
-          alerts[numAlerts++] = { A_LIVE, i, -1, 0, c.liveViewers };
+          addAlert(Alert{ A_LIVE, i, -1, 0, c.liveViewers });
       }
       twLoaded = true;
     }
@@ -175,7 +175,7 @@ void applyVideo(Channel &c, JsonObject it) {
   c.vidComments = String(it["statistics"]["commentCount"] | "-1").toInt();
   c.liveViewers = String(it["liveStreamingDetails"]["concurrentViewers"] | "-1").toInt();
   if (c.live && !wasLive && videosLoaded && cfgLiveAlert && numAlerts < MAX_CH * 2)
-    alerts[numAlerts++] = { A_LIVE, (int)(&c - ch), -1, 0, c.liveViewers };
+    addAlert(Alert{ A_LIVE, (int)(&c - ch), -1, 0, c.liveViewers });
 }
 const char *VID_FIELDS = "part=snippet,statistics,contentDetails,liveStreamingDetails"
   "&fields=items(id,snippet(title,publishedAt,liveBroadcastContent),statistics(viewCount,likeCount,commentCount),"
@@ -231,6 +231,41 @@ void refreshLiveVideos() {
 }
 
 // Newest 3 comments on each channel's latest video: 1 unit per channel
+// Each channel's last 10 uploads with their numbers: 2 units per channel, every 6 hours
+void fetchRecent() {
+  for (int i = 0; i < numCh; i++) {
+    Channel &c = ch[i];
+    if (c.tw || !c.uploads.length()) continue;
+    JsonDocument pl;
+    if (ytGet("playlistItems", "part=contentDetails&maxResults=" + String(RECENT_N) +
+              "&fields=items/contentDetails(videoId,videoPublishedAt)&playlistId=" + c.uploads, pl) != 200) continue;
+    String ids;
+    for (JsonObject it : pl["items"].as<JsonArray>()) { String v = it["contentDetails"]["videoId"] | ""; if (v.length()) ids += (ids.length() ? "," : "") + v; }
+    if (!ids.length()) continue;
+    JsonDocument vd;
+    if (ytGet("videos", "part=snippet,statistics&fields=items(id,snippet(title,publishedAt,liveBroadcastContent),statistics(viewCount,likeCount,commentCount))&id=" + ids, vd) != 200) continue;
+    int n = 0;
+    for (JsonObject it : vd["items"].as<JsonArray>()) {
+      if (n >= RECENT_N) break;
+      if (String(it["snippet"]["liveBroadcastContent"] | "none") != "none") continue;   // skip live / upcoming
+      Channel::Recent &r = c.rv[n++];
+      r.id = it["id"] | ""; r.title = it["snippet"]["title"] | "";
+      r.pub = parseIso(it["snippet"]["publishedAt"] | "");
+      r.views = atoll(it["statistics"]["viewCount"] | "-1");
+      r.likes = String(it["statistics"]["likeCount"] | "-1").toInt();
+      r.comments = String(it["statistics"]["commentCount"] | "-1").toInt();
+    }
+    c.rvN = n;
+    pump();
+  }
+}
+// views per day since upload (at least one day, so brand-new videos don't jump to the top)
+float perDay(const Channel::Recent &r) {
+  if (r.views < 0 || !r.pub || !timeValid()) return 0;
+  float d = max(1.0f, (float)(nowT() - r.pub) / 86400.0f);
+  return r.views / d;
+}
+
 void fetchComments() {
   for (int i = 0; i < numCh; i++) {
     Channel &c = ch[i];

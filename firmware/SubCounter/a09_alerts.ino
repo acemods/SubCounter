@@ -55,14 +55,10 @@ void waitShowing(unsigned long ms) {
 }
 
 // After joining Wi-Fi: show where the dashboard is for a few seconds
+void drawDevice();
 void showAddress() {
-  gfx->fillScreen(C_BG);
-  ftC(40, "Connected to " + WiFi.SSID(), F_S, C_GREEN, gfx->width());
-  ftC(84, WiFi.localIP().toString(), F_M, C_WHITE, gfx->width());
-  ftC(118, "http://" HOSTNAME ".local", F_S, C_GOLD, gfx->width());
-  ftC(150, "Open either in a browser", F_S, C_DKGREY, gfx->width());
-  ftC(168, "SubCounter v" FW_VERSION, F_S, C_DKGREY, gfx->width());
-  waitShowing(5000);
+  drawDevice();            // QR code, address and version (same as Device in the home menu)
+  waitShowing(6000);
 }
 
 void showAlert(const Alert &a) {
@@ -132,6 +128,63 @@ void showAlert(const Alert &a) {
     ftC(158, "now " + withCommas(a.total), F_M, C_GREY, gfx->width());
   }
   waitShowing(ALERT_MS);
+}
+
+// ── Phone notifications (ntfy) ──────────────────────────────────────────────
+String chLink(int i) {
+  Channel &c = ch[i];
+  if (c.tw) return "https://www.twitch.tv/" + c.twLogin;
+  return c.id.length() ? "https://www.youtube.com/channel/" + c.id : String("");
+}
+void notifyAlert(const Alert &a) {
+  String nm = ch[a.idx].title.length() ? ch[a.idx].title : ch[a.idx].handle;
+  switch (a.type) {
+    case A_MILESTONE:
+      if (cfgNtfyMask & 1) queueNote(nm + " hit " + withCommas(a.total) + " " + noun(a.idx) + "!", "Milestone reached on " + nm + ".", "tada", chLink(a.idx));
+      break;
+    case A_GAIN:
+      if ((cfgNtfyMask & 32) && a.idx == 0) queueNote(nm + " " + signedNum(a.delta), "Now " + withCommas(a.total) + " " + noun(a.idx) + ".", "chart_with_upwards_trend", chLink(a.idx));
+      break;
+    case A_LIVE: {
+      Channel &c = ch[a.idx];
+      String url = c.tw ? "https://www.twitch.tv/" + c.twLogin : (c.vidId.length() ? "https://youtu.be/" + c.vidId : chLink(a.idx));
+      if (cfgNtfyMask & 2) queueNote(nm + " is live", c.vidTitle + (a.total >= 0 ? "\n" + withCommas(a.total) + " watching" : String("")), "red_circle", url);
+      break; }
+    case A_RECORD: {
+      const char *what[] = { "Best day ever", "Best week ever", "Best video ever (first day)" };
+      int k = constrain(a.idx2, 0, 2);
+      String v = k == 2 ? withCommas(a.total) + " views" : signedNum(a.total);
+      String p = k == 2 ? withCommas(a.delta) + " views" : signedNum(a.delta);
+      if (cfgNtfyMask & 4) queueNote("New record: " + String(what[k]), nm + ": " + v + " (previous best " + p + ")", "trophy", chLink(a.idx));
+      break; }
+    case A_OVERTAKE: {
+      String other = ch[a.idx2].title.length() ? ch[a.idx2].title : ch[a.idx2].handle;
+      if (cfgNtfyMask & 8) queueNote(nm + " overtook " + other, withCommas(ch[a.idx].subs) + " vs " + withCommas(ch[a.idx2].subs), "checkered_flag", chLink(a.idx));
+      break; }
+    case A_VIEWS:
+      if (cfgNtfyMask & 16) queueNote("Your video hit " + withCommas(a.total) + " views", ch[0].vidTitle, "eyes", ch[0].vidId.length() ? "https://youtu.be/" + ch[0].vidId : String(""));
+      break;
+  }
+}
+// Network task: send whatever is queued
+void sendNotes() {
+  while (noteN > 0 && cfgNtfy.length()) {
+    Note n = noteQ[0];
+    for (int k = 1; k < noteN; k++) noteQ[k - 1] = noteQ[k];
+    noteN--;
+    String url = cfgNtfyServer + "/" + cfgNtfy;
+    int code;
+    { NetIO io;
+      WiFiClientSecure client; client.setInsecure();
+      HTTPClient http; http.setTimeout(8000);
+      if (!http.begin(client, url)) continue;
+      http.addHeader("Title", asciiOnly(n.title));     // headers must be plain text; the message itself can be anything
+      http.addHeader("Tags", n.tags);
+      if (n.click.length()) http.addHeader("Click", n.click);
+      code = http.POST(n.msg.length() ? n.msg : n.title);
+      http.end(); }
+    Serial.printf("ntfy %d\n", code);
+  }
 }
 
 // ── Subscriber race ─────────────────────────────────────────────────────────

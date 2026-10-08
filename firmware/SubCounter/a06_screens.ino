@@ -287,6 +287,29 @@ void drawComments() {
   }
 }
 
+// ── Top videos card: the last 10 uploads ranked by views per day ────────────
+float perDay(const Channel::Recent &r);
+void drawTopVideos() {
+  Channel &c = ch[page];
+  drawDetailHeader("Top videos");
+  if (c.tw) { ftC(92, "Not available", F_M, C_GREY); ftC(118, "for Twitch channels", F_S, C_GREY); return; }
+  if (!c.rvN) { ftC(92, lastRecentFetch ? "No videos yet" : "Loading...", F_M, C_GREY); ftC(118, "Checked every 6 hours", F_S, C_GREY); return; }
+  int idx[RECENT_N]; for (int k = 0; k < c.rvN; k++) idx[k] = k;
+  for (int a = 0; a < c.rvN; a++) for (int b = a + 1; b < c.rvN; b++)
+    if (perDay(c.rv[idx[b]]) > perDay(c.rv[idx[a]])) { int t = idx[a]; idx[a] = idx[b]; idx[b] = t; }
+  ft(8, 48, "Last " + String(c.rvN) + " uploads, by views per day", F_XS2, C_GREY);
+  int y = 72;
+  for (int r = 0; r < min(4, c.rvN); r++) {
+    Channel::Recent &v = c.rv[idx[r]];
+    String pd = compact(lroundf(perDay(v))) + "/day";
+    int pw = tw(pd, F_S);
+    ft(8, y, String(r + 1) + ".", F_S, C_GOLD);
+    ft(26, y, fit(asciiOnly(v.title), F_S, RIGHT_EDGE - 26 - pw - 10), F_S, C_WHITE);
+    ftR(RIGHT_EDGE, y, pd, F_S, C_GREEN);
+    y += 26;
+  }
+}
+
 // ── Records card: personal bests ───────────────────────────────────────────
 void drawRecords() {
   Channel &c = ch[page];
@@ -456,8 +479,9 @@ void drawView() {
     case 3: drawComments(); break;
     case 4: drawGrowth(); break;
     case 5: drawRecords(); break;
-    case 6: drawGraph(); break;
-    case 7: drawMilestone(); break;
+    case 6: drawTopVideos(); break;
+    case 7: drawGraph(); break;
+    case 8: drawMilestone(); break;
     default: drawMain(); break;
   }
 }

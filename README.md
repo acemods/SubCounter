@@ -6,6 +6,7 @@ A desk gadget built on the **Waveshare ESP32-C6-Touch-LCD-1.47** that shows live
 
 ## What's new
 
+- **v11.2:** Device screen with QR code and on-screen updates, phone notifications, top videos, colour themes, settings backup
 - **v11.1:** updates itself from GitHub (one tap, or automatically), automatic builds
 - **v11.0:** background networking (no more freezes), faster refreshes, code split into files
 - **v10.2:** Twitch gets its own settings section – just type the channel name
@@ -27,7 +28,7 @@ Full history: [docs/CHANGELOG.md](docs/CHANGELOG.md)
 
 **YouTube**
 - Track up to 10 channels: swipe left and right between them on the touch screen
-- Swipe up for detail cards: Overview (profile picture, views, videos), Latest video (with a LIVE badge), Comments, Growth (today / 7 / 30 days), Records (best day / week / video), a 7-day graph and Next milestone (with a predicted date)
+- Swipe up for detail cards: Overview (profile picture, views, videos), Latest video (with a LIVE badge), Comments, Growth (today / 7 / 30 days), Records (best day / week / video), Top videos (last 10 uploads by views per day), a 7-day graph and Next milestone (with a predicted date)
 - Monthly recap on the 1st of each month
 - Swipe down for the Leaderboard, then the Subscriber race (two channels head to head, with an "OVERTAKE!" alert)
 - Alerts for new subscribers, with confetti for milestones (bigger milestone, bigger party), plus a countdown when you're close
@@ -57,6 +58,10 @@ Full history: [docs/CHANGELOG.md](docs/CHANGELOG.md)
 **Everyday**
 - **Idle clock:** after 3 minutes without use (adjustable), a large clock with date, weather and your count; pick the board up to go back
 - 9 am daily summary, plus a dim night clock overnight
+- **Device screen** (home menu): QR code for the dashboard, and check for / install updates right on the touch screen
+- **Phone notifications** via the free ntfy app: milestones, going live, records, overtakes
+- **Colour themes** and brightness settings
+- **Settings backup & restore** to a file
 - Several saved Wi-Fi networks (e.g. work and home) with automatic roaming, a network scanner, "Connect now" and a preferred network
 - Works on fussy networks: fixed IP, custom DNS, Wi-Fi 4 compatibility mode, and plain-English connection errors
 - **Updates from GitHub:** the board tells you when a new version is out and installs it with one tap (or automatically at 3 am); manual upload still works
@@ -64,7 +69,7 @@ Full history: [docs/CHANGELOG.md](docs/CHANGELOG.md)
 
 ## Quick start
 
-1. **Flash the board.** Open <https://espressif.github.io/esptool-js/> in Chrome, connect the board, and flash `builds/latest/SubCounter-v11.1-FULL-new-board-flash-at-0x0.bin` at address **0x0**.
+1. **Flash the board.** Open <https://espressif.github.io/esptool-js/> in Chrome, connect the board, and flash `builds/latest/SubCounter-v11.2-FULL-new-board-flash-at-0x0.bin` at address **0x0**.
 2. **Set it up.** The board shows *SETUP MODE*. Join the Wi-Fi network **SubCounter-Setup** from your phone, and the setup page opens by itself (or go to <http://192.168.4.1>). Pick your Wi-Fi, add your YouTube channels and a YouTube Data API key, then save.
 3. **Use it.** The board shows its address for a few seconds, then your subscriber count. Open **<http://subcounter.local>** (or the IP address) in a browser for the dashboard.
 

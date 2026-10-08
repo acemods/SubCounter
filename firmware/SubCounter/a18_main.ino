@@ -124,6 +124,11 @@ void netCycle() {
     updCheckReq = false; lastUpdCheck = millis();
     checkForUpdate();
   }
+  if (lastRecentFetch == 0 ? millis() > 180000UL : millis() - lastRecentFetch > RECENT_REFRESH_MS) {
+    lastRecentFetch = millis();
+    fetchRecent();
+  }
+  if (noteN) sendNotes();
   connCloseIdle(connYT); connCloseIdle(connTW); connCloseIdle(connSP, 30000);
   netBusy = false;
 }
@@ -258,15 +263,27 @@ void loopBody() {
   // ── actions in the normal view ────────────────────────────────────────────
   if (mode == M_NORMAL) {
     if (swipe) lastInteract = millis();
+    if (deviceOpen && (swipe == 'H' || swipe == 'L' || swipe == 'R' || swipe == 'U' || swipe == 'D' || bootShort)) {
+      deviceOpen = false; menuOpen = true;                  // back to the home menu
+      gfx->fillScreen(C_BG); drawMenu(); swipe = 0; bootShort = false;
+    }
     if (swipe == 'H') {                                     // long-press: home menu (or close it)
       menuOpen = !menuOpen;
       gfx->fillScreen(C_BG); drawApp();
       swipe = 0;
     }
-    if (menuOpen) {
+    if (deviceOpen) {
+      if (swipe == 'T' && tapX >= 166 && tapY >= 120) {      // the button
+        if (updAvail) { updInstallReq = true; }
+        else { devChecking = true; updCheckReq = true; drawDevice(); }
+      }
+      if (devChecking && updCheckedAt != devShownCheck) { devChecking = false; devShownCheck = updCheckedAt; drawDevice(); }
+      if (millis() - lastInteract > 60000UL) openApp(app);  // left open: go back
+    }
+    else if (menuOpen) {
       if (swipe == 'T') {
-        int a = constrain(tapX * NUM_APPS / gfx->width(), 0, NUM_APPS - 1);
-        openApp(a);
+        int a = constrain(tapX * MENU_TILES / gfx->width(), 0, MENU_TILES - 1);
+        if (a >= NUM_APPS) openDevice(); else openApp(a);
       } else if (bootShort) openApp(app);
       if (millis() - lastInteract > 20000UL) openApp(app);  // menu left open: go back
     }

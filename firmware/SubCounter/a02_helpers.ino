@@ -1,6 +1,24 @@
 // ════════════════════════════════════════════════════════════════════════════
 //  Small helpers
 // ════════════════════════════════════════════════════════════════════════════
+
+// ── Colour themes and brightness ────────────────────────────────────────────
+struct Theme { const char *name; uint16_t accent, grey, dkgrey; const char *css; };
+const Theme THEMES[] = {
+  { "Classic (gold)",  0xFEA0, 0x8410, 0x39E7, "#ffc53d" },
+  { "YouTube red",     0xF8E3, 0x8410, 0x39E7, "#ff3b30" },
+  { "Twitch purple",   0x9C1F, 0x8410, 0x39E7, "#a48aff" },
+  { "Ocean",           0x367F, 0x8410, 0x39E7, "#33ccff" },
+  { "Mint",            0x3EF2, 0x8410, 0x39E7, "#3ddc97" },
+  { "High contrast",   0xFFE0, 0xC618, 0x8410, "#ffe600" },
+};
+const int NUM_THEMES = sizeof(THEMES) / sizeof(THEMES[0]);
+void applyTheme() {
+  cfgTheme = constrain(cfgTheme, 0, NUM_THEMES - 1);
+  C_GOLD = THEMES[cfgTheme].accent; C_GREY = THEMES[cfgTheme].grey; C_DKGREY = THEMES[cfgTheme].dkgrey;
+  cfgBright = constrain(cfgBright, 10, 100); cfgNightBright = constrain(cfgNightBright, 1, 40);
+  BL_NORMAL = cfgBright * 255 / 100; BL_NIGHT = max(3, cfgNightBright * 255 / 100);
+}
 void centreText(const String &txt, int y, uint8_t size, uint16_t colour) {
   gfx->setFont((const GFXfont *)nullptr);
   gfx->setTextSize(size);

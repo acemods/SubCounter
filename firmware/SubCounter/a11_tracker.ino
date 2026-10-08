@@ -127,7 +127,7 @@ void vtPoll() {
   if (vt.at1h < 0 && age >= 3600) { vt.at1h = vtViewsAt(3600); if (vt.at1h < 0 && age < 3 * 3600) vt.at1h = views; if (vt.at1h >= 0) vtSaveResult(false, vt.at1h); }
   if (vt.at24h < 0 && age >= 86400) { vt.at24h = vtViewsAt(86400); if (vt.at24h < 0 && age < 30 * 3600) vt.at24h = views; if (vt.at24h >= 0) { vtSaveResult(true, vt.at24h); recordVideo24h(vt.at24h, ch[0].vidTitle); } }
   if (vt.nextMilestone && views >= vt.nextMilestone && numAlerts < MAX_CH * 2) {
-    alerts[numAlerts++] = { A_VIEWS, 0, -1, 0, vt.nextMilestone };
+    addAlert(Alert{ A_VIEWS, 0, -1, 0, vt.nextMilestone });
     vtMilestoneStart(views);
   }
   if (age >= 48L * 3600) vt.active = false;

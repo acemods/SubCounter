@@ -116,6 +116,13 @@ void loadSettings() {
   cfgTwSecret = prefs.getString("twsec", "");
   cfgLiveAlert = prefs.getBool("livealert", true);
   cfgAutoUpd = prefs.getBool("autoupd", false);
+  cfgNtfy = prefs.getString("ntfy", "");
+  cfgNtfyServer = prefs.getString("ntfysrv", cfgNtfyServer);
+  cfgNtfyMask = prefs.getInt("ntfymask", cfgNtfyMask);
+  cfgTheme = prefs.getInt("theme", 0);
+  cfgBright = prefs.getInt("bright", 63);
+  cfgNightBright = prefs.getInt("nbright", 7);
+  applyTheme();
   cfgUpdUrl = prefs.getString("updurl", cfgUpdUrl);
   cfgSummary  = prefs.getBool("summary", true);
   cfgShake    = prefs.getBool("shake", true);
@@ -170,6 +177,12 @@ void saveSettings() {
   prefs.putString("twsec", cfgTwSecret);
   prefs.putBool("livealert", cfgLiveAlert);
   prefs.putBool("autoupd", cfgAutoUpd);
+  prefs.putString("ntfy", cfgNtfy);
+  prefs.putString("ntfysrv", cfgNtfyServer);
+  prefs.putInt("ntfymask", cfgNtfyMask);
+  prefs.putInt("theme", cfgTheme);
+  prefs.putInt("bright", cfgBright);
+  prefs.putInt("nbright", cfgNightBright);
   prefs.putString("updurl", cfgUpdUrl);
   prefs.putBool("summary", cfgSummary);
   prefs.putBool("shake", cfgShake);

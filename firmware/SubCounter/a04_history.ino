@@ -125,7 +125,7 @@ void pbAlert(int i, int kind, long prev, long now) {
   time_t n = nowT(); struct tm lt; localtime_r(&n, &lt);
   if (pbAlertDay[kind] == lt.tm_yday) return;
   pbAlertDay[kind] = lt.tm_yday;
-  if (numAlerts < MAX_CH * 2) alerts[numAlerts++] = { A_RECORD, i, kind, prev, now };
+  if (numAlerts < MAX_CH * 2) addAlert(Alert{ A_RECORD, i, kind, prev, now });
 }
 // Called after computeStats: best day (since midnight) and best 7 days
 void updateRecords(int i) {

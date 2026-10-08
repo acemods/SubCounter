@@ -23,8 +23,9 @@ Swipe up from the main count:
 3. **Comments:** the 3 newest comments on the latest video (checked every 30 minutes)
 4. **Growth:** gains today, over 7 days and over 30 days, plus the average per day
 5. **Records:** best day and best week ever, and for your channel the best video's first-day views. When your channel beats one you get a **NEW RECORD!** alert (once a day at most).
-6. **7-day graph**
-7. **Next milestone:** progress bar, how many to go, predicted date
+6. **Top videos:** the last 10 uploads ranked by views per day (checked every 6 hours)
+7. **7-day graph**
+8. **Next milestone:** progress bar, how many to go, predicted date
 
 Swipe down from the main count for the **Leaderboard** (5 per page; swipe left or right for more), and again for the **Race**. Choose the two race channels in settings.
 
@@ -50,6 +51,22 @@ So at 9 am a channel can show +10 today but +30 in the last 24 hours. All gains 
 ## Settings PIN
 
 Settings → *Security* → type a PIN (4–12 characters) in both boxes → **Save & restart**. From then on your browser asks for it when you open Settings or Update: user name **admin**, password = your PIN (your browser can remember it). To change it, type a new one in both boxes; to turn it off, tick *Remove the PIN*. The dashboard stays open for anyone on your network to view. Forgotten it? Hold BOOT for 3 seconds: setup mode doesn't ask for the PIN, so you can clear or change it there.
+
+## Device screen
+
+Long-press for the home menu and tap **Device**:
+- a **QR code**: point your phone's camera at it to open the dashboard
+- the board's IP address, `subcounter.local` and the version it's running
+- **Check for update**, or **Install vX.Y** when a new version is out (a red dot on the Device tile means one is waiting)
+
+Swipe, long-press or press BOOT to go back.
+
+## Phone notifications
+
+1. Install the free **ntfy** app (App Store / Google Play).
+2. Settings → **Phone notifications**: type a topic name that's hard to guess (e.g. `subcounter-k3jx9q`) and pick which alerts you want.
+3. In the ntfy app tap **+** and subscribe to the same topic.
+4. Press **Send a test notification**, then **Save & restart**.
 
 ## Alerts
 
@@ -110,6 +127,7 @@ Settings are at `/settings`, and wireless updates at `/update`.
 | Latest videos | every 10 min | channels + 1 |
 | Live streams (only while someone is live) | every 2 min | 1 |
 | Latest comments | every 30 min | 1 per channel |
+| Top videos | every 6 h | 2 per channel |
 | Your new video | every 5 min for 48 h | 1 |
 | Your typical views | once a day while tracking | 2 |
 

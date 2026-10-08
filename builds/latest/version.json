@@ -1,7 +1,7 @@
 {
- "version": "11.1",
- "app": "SubCounter-v11.1-APP-ONLY.bin",
- "size": 1727520,
- "md5": "9fc4c5a0849019b13f9603a8f9cf2446",
- "notes": "Updates from GitHub: the board checks daily and can install new versions itself"
+ "version": "11.2",
+ "app": "SubCounter-v11.2-APP-ONLY.bin",
+ "size": 1768272,
+ "md5": "6ebf070e56afb324a833e4d95d10380c",
+ "notes": "Device screen with QR code and update button, phone notifications (ntfy), top videos, colour themes and brightness, settings backup/restore"
 }

@@ -2,6 +2,13 @@
 
 All builds are in [`builds/`](../builds). Source snapshots for most versions are in the git history.
 
+## v11.2
+- **Device screen** (long-press → Device): QR code to open the dashboard on your phone, IP address, version, and a **Check for update / Install** button right on the touch screen. The QR screen also shows for a few seconds at start-up.
+- **Phone notifications** with the free ntfy app: milestones, went live, new records, overtakes, your video's view milestones (and optionally every new subscriber). Settings → Phone notifications, with a *Send a test notification* button.
+- **Top videos:** new card (swipe up) ranking each channel's last 10 uploads by views per day; the dashboard has a sortable *Recent uploads* table (views, per day, likes %). Uses about 2 quota units per channel every 6 hours.
+- **Colour themes** (Classic gold, YouTube red, Twitch purple, Ocean, Mint, High contrast) for the board and dashboard, plus **screen and night-clock brightness** sliders
+- **Settings backup & restore:** download all settings as a file (optionally with passwords and keys) and restore them on a re-flashed or second board
+
 ## v11.1
 - **Updates from GitHub:** the board checks `builds/latest/version.json` once a day. When there's a newer version it shows on the home menu, the dashboard header and the Update page, with a one-tap **Install** (downloaded straight from GitHub, size and MD5 checked). Optional: install automatically at 3 am (Settings → Updates).
 - **Automatic builds:** a GitHub Actions workflow compiles the firmware on every change and can publish a Release with the three .bin files (Actions → Build firmware → Run workflow → tick "Make a release")

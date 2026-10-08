@@ -1,5 +1,5 @@
 /*
- * SubCounter v11.1 — YouTube / Twitch subscriber counter and desk hub for the
+ * SubCounter v11.2 — YouTube / Twitch subscriber counter and desk hub for the
  * Waveshare ESP32-C6-Touch-LCD-1.47.  https://github.com/acemods/SubCounter
  *
  *  ON THE BOARD
@@ -48,9 +48,11 @@
 #include <sys/time.h>
 #include <U8g2lib.h>   // readable fonts (U8g2 library)
 #include <Update.h>    // wireless firmware updates
+#include <qrcode.h>    // built into the ESP32 core (esp_qrcode_*)
+#include <nvs.h>       // settings backup: list every saved setting
 #include <ESPmDNS.h>   // http://subcounter.local
 #define HOSTNAME "subcounter"
-#define FW_VERSION "11.1"     // shown on start-up, home menu, settings, update page and dashboard
+#define FW_VERSION "11.2"     // shown on start-up, home menu, settings, update page and dashboard
 
 // ── Pins (ESP32-C6 version of the board) ────────────────────────────────────
 #define LCD_SCK   1
@@ -80,12 +82,14 @@
 #define DHCP_EXTRA_MS      15000UL
 #define HOLD_FOR_SETUP_MS  3000UL
 #define SWIPE_MIN_PX       35
-#define NUM_CARDS          8          // 0 main, 1 overview, 2 latest video, 3 comments, 4 growth, 5 records, 6 graph, 7 milestone
+#define NUM_CARDS          9          // 0 main, 1 overview, 2 latest video, 3 comments, 4 growth, 5 records, 6 top videos, 7 graph, 8 milestone
+#define RECENT_N           10         // recent uploads ranked on the Top videos card
+#define RECENT_REFRESH_MS  (6UL * 3600000UL)   // 2 units per channel
 #define COMMENT_REFRESH_MS (30UL * 60UL * 1000UL)   // newest comments: 1 unit per channel
 #define HIST_MAX_AGE       (40L * 86400L)        // a little over a month, for the monthly recap
 #define TZ_UK              "GMT0BST,M3.5.0/1,M10.5.0/2"
-#define BL_NORMAL          160
-#define BL_NIGHT           18
+int BL_NORMAL = 160;                 // screen brightness (0-255), set from the brightness setting
+int BL_NIGHT  = 18;                  // night clock brightness
 
 // ── Display ─────────────────────────────────────────────────────────────────
 Arduino_DataBus *bus = new Arduino_HWSPI(LCD_DC, LCD_CS, LCD_SCK, LCD_MOSI);
@@ -95,9 +99,9 @@ JPEGDEC jpeg;
 #define C_BG      0x0000
 #define C_RED     0xF800
 #define C_WHITE   0xFFFF
-#define C_GREY    0x8410
-#define C_DKGREY  0x39E7
-#define C_GOLD    0xFEA0
+uint16_t C_GREY   = 0x8410;          // these three change with the colour theme
+uint16_t C_DKGREY = 0x39E7;
+uint16_t C_GOLD   = 0xFEA0;          // accent colour (headings, highlights)
 #define C_PURPLE  0x901F
 #define C_TWITCH  0x923F   // Twitch purple #9146FF
 #define C_GREEN   0x07E0
@@ -132,6 +136,9 @@ struct Channel {
   // personal bests (saved on the board)
   int32_t pbDay = 0, pbWeek = 0, pbVid = 0; uint32_t pbDayT = 0, pbWeekT = 0, pbVidT = 0; String pbVidTitle;
   bool pbLoaded = false;
+  // recent uploads, for the Top videos card / dashboard table
+  struct Recent { String id, title; time_t pub = 0; long long views = -1; long likes = -1, comments = -1; } rv[RECENT_N];
+  int rvN = 0;
   // Twitch channels ("twitch.tv/name" in the list)
   bool tw = false; String twLogin, twId, twGame, twThumb;
   uint16_t *av565 = nullptr;          // decoded 88x88 picture (Twitch)
@@ -149,6 +156,20 @@ struct Alert { AlertType type; int idx; int idx2; long delta; long total; };
 Alert alerts[MAX_CH * 2];
 int numAlerts = 0;
 int jumpToCh = -1;
+// Phone notifications (ntfy): alerts are also queued here and sent by the network task
+String cfgNtfy;                                   // ntfy topic ("" = off)
+String cfgNtfyServer = "https://ntfy.sh";
+int    cfgNtfyMask = 1 | 2 | 4 | 8 | 16;          // 1 milestones, 2 went live, 4 records, 8 overtakes, 16 video views, 32 every new subscriber (your channel)
+struct Note { String title, msg, tags, click; };
+Note noteQ[8]; int noteN = 0;
+void queueNote(const String &title, const String &msg, const char *tags, const String &click = "") {
+  if (noteN < 8) noteQ[noteN++] = { title, msg, tags, click };
+}
+void notifyAlert(const Alert &a);
+void addAlert(const Alert &a) {
+  if (numAlerts < MAX_CH * 2) alerts[numAlerts++] = a;
+  if (cfgNtfy.length()) notifyAlert(a);
+}
 int raceLeader = -1;
 
 // ── State ───────────────────────────────────────────────────────────────────
@@ -328,6 +349,8 @@ String cfgPin;
 String cfgTwitch;                                // Twitch channel names, one per line
 String cfgTwId, cfgTwSecret;                     // Twitch app (dev.twitch.tv/console)                                   // settings PIN (blank = none)
 bool   cfgLiveAlert = true;                      // alert when a channel goes live
+int    cfgTheme = 0;                              // colour theme (see THEMES)
+int    cfgBright = 63, cfgNightBright = 7;        // brightness in %
 bool   cfgAutoUpd = false;                       // install new versions from GitHub by itself (3 am)
 String cfgUpdUrl = "https://raw.githubusercontent.com/acemods/SubCounter/main/builds/latest/";   // where to look for updates
 String cfgSpRedirect;                            // https address registered with Spotify (e.g. GitHub Pages relay)
@@ -341,7 +364,7 @@ struct VideoTrack {
   long at1h = -1, at24h = -1;      // this video
   long nextMilestone = 100;
 } vt;
-unsigned long lastVtFetch = 0, lastTypicalFetch = 0, lastCommentFetch = 0;
+unsigned long lastVtFetch = 0, lastTypicalFetch = 0, lastCommentFetch = 0, lastRecentFetch = 0;
 
 // Forward declarations (functions used before they're defined)
 void drawMode();

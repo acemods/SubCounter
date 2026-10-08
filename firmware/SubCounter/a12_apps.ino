@@ -505,23 +505,76 @@ void drawAppIcon(int a, int cx, int cy) {
   }
 }
 
+#define MENU_TILES 4            // the three apps + Device
+void drawDeviceIcon(int cx, int cy, uint16_t col) {
+  gfx->drawRoundRect(cx - 17, cy - 26, 34, 52, 6, col);              // a phone...
+  gfx->drawRoundRect(cx - 16, cy - 25, 32, 50, 5, col);
+  for (int k = 0; k < 3; k++) {                                       // ...showing a QR code
+    int x = cx - 11 + (k == 1 ? 13 : 0), y = cy - 17 + (k == 2 ? 13 : 0);
+    gfx->drawRect(x, y, 9, 9, col); gfx->fillRect(x + 3, y + 3, 3, 3, col);
+  }
+  gfx->fillRect(cx + 3, cy - 3, 3, 3, col); gfx->fillRect(cx + 7, cy + 1, 3, 3, col); gfx->fillRect(cx + 3, cy + 5, 3, 3, col);
+}
 void drawMenu() {
   gfx->fillScreen(C_BG);
   ftR(gfx->width() - 6, 14, "v" FW_VERSION, F_XS, C_DKGREY);
-  if (updAvail) ft(6, 14, "v" + updVer + " available - see the Update page", F_XS, C_GOLD);
-  const char *names[NUM_APPS] = { "YouTube", "Weather", "Spotify" };
-  int w = gfx->width() / NUM_APPS;
-  for (int a = 0; a < NUM_APPS; a++) {
+  if (updAvail) ft(6, 14, "v" + updVer + " available - tap Device", F_XS, C_GOLD);
+  const char *names[MENU_TILES] = { "YouTube", "Weather", "Spotify", "Device" };
+  int w = gfx->width() / MENU_TILES;
+  for (int a = 0; a < MENU_TILES; a++) {
     int cx = a * w + w / 2;
-    if (a == app) gfx->drawRoundRect(a * w + 6, 22, w - 12, 128, 12, C_DKGREY);
-    drawAppIcon(a, cx, 70);
+    if (a == app) gfx->drawRoundRect(a * w + 4, 22, w - 8, 128, 12, C_DKGREY);
+    if (a < NUM_APPS) drawAppIcon(a, cx, 70);
+    else { drawDeviceIcon(cx, 70, updAvail ? C_GOLD : C_WHITE); if (updAvail) gfx->fillCircle(cx + 18, 44, 6, C_RED); }
     ft(cx - tw(names[a], F_S) / 2, 130, names[a], F_S, a == app ? C_WHITE : C_GREY);
   }
   if (WiFi.status() == WL_CONNECTED) ftC(168, WiFi.localIP().toString() + "  ·  " HOSTNAME ".local", F_S, C_GREY, gfx->width());
   else ftC(168, "Tap an app", F_S, C_DKGREY, gfx->width());
 }
 
+// ── Device screen: QR code for the dashboard, address, version, updates ─────
+bool deviceOpen = false, devChecking = false;
+time_t devShownCheck = 0;
+int qrX, qrY, qrScale;
+void qrDraw(esp_qrcode_handle_t q) {
+  int n = esp_qrcode_get_size(q);
+  qrScale = max(2, min(5, 150 / (n + 4)));
+  int box = (n + 4) * qrScale;
+  gfx->fillRoundRect(qrX, qrY, box, box, 6, C_WHITE);
+  for (int y = 0; y < n; y++)
+    for (int x = 0; x < n; x++)
+      if (esp_qrcode_get_module(q, x, y)) gfx->fillRect(qrX + (x + 2) * qrScale, qrY + (y + 2) * qrScale, qrScale, qrScale, C_BG);
+}
+void drawDevice() {
+  gfx->fillScreen(C_BG);
+  bool online = WiFi.status() == WL_CONNECTED;
+  String url = "http://" + WiFi.localIP().toString() + "/";
+  qrX = 8; qrY = 11;
+  if (online) {
+    esp_qrcode_config_t cfg = { qrDraw, 5, ESP_QRCODE_ECC_MED };
+    esp_qrcode_generate(&cfg, url.c_str());
+  } else { gfx->drawRoundRect(8, 11, 150, 150, 6, C_DKGREY); ftC(92, "Offline", F_S, C_GREY, 166); }
+  int x = 172, w = gfx->width() - x - 6;
+  ft(x, 22, "Scan to open", F_S, C_GREY);
+  ft(x, 40, "the dashboard", F_S, C_GREY);
+  ft(x, 66, online ? WiFi.localIP().toString() : String("No Wi-Fi"), F_S, C_WHITE);
+  ft(x, 84, HOSTNAME ".local", F_XS2, C_GREY);
+  ft(x, 104, "Running v" FW_VERSION, F_XS2, C_GREY);
+  String st; uint16_t sc = C_GREY;
+  if (devChecking) st = "Checking...";
+  else if (updAvail) { st = "v" + updVer + " available!"; sc = C_GREEN; }
+  else if (updErr.length()) { st = updErr; sc = C_RED; }
+  else if (updCheckedAt) st = "Up to date";
+  ft(x, 122, fit(st, F_XS2, w), F_XS2, sc);
+  // the button
+  String b = updAvail ? "Install v" + updVer : String("Check for update");
+  gfx->fillRoundRect(x, 130, w, 34, 8, updAvail ? 0x2589 : 0x2104);
+  ft(x + (w - tw(b, F_XS2)) / 2, 152, b, F_XS2, C_WHITE);
+}
+void openDevice() { deviceOpen = true; menuOpen = true; devShownCheck = updCheckedAt; gfx->fillScreen(C_BG); drawDevice(); }
+
 void drawApp() {
+  if (deviceOpen) { drawDevice(); return; }
   if (menuOpen) { drawMenu(); return; }
   if (app == APP_WX) drawWeather();
   else if (app == APP_SP) drawSpotify();
@@ -529,7 +582,7 @@ void drawApp() {
 }
 
 void openApp(int a) {
-  app = a; menuOpen = false;
+  app = a; menuOpen = false; deviceOpen = false;
   prefs.begin("subcounter", false); prefs.putInt("app", app); prefs.end();
   if (app == APP_SP) { lastSpPoll = 0; spFails = 0; spWait = 3000; }
   if (app == APP_WX && !wx.ok) lastWxFetch = 0;

@@ -43,8 +43,8 @@ void applyItem(JsonObject item, int i, bool alertOnGain) {
   if (n != c.subs) c.stepChangedAt = timeValid() ? nowT() : 0;
   if (alertOnGain && c.subs >= 0 && n > c.subs && numAlerts < MAX_CH * 2) {
     long m = nextMilestone(c.subs);
-    if (n >= m) alerts[numAlerts++] = { A_MILESTONE, i, -1, n - c.subs, m };   // crossed a milestone: party
-    else        alerts[numAlerts++] = { A_GAIN, i, -1, n - c.subs, n };
+    if (n >= m) addAlert(Alert{ A_MILESTONE, i, -1, n - c.subs, m });   // crossed a milestone: party
+    else        addAlert(Alert{ A_GAIN, i, -1, n - c.subs, n });
   }
   c.subs = n;
   c.err = "";
@@ -99,7 +99,7 @@ void raceCheck() {
   if (raceSet() && ch[cfgRaceA].subs >= 0 && ch[cfgRaceB].subs >= 0) {
     int lead = ch[cfgRaceA].subs >= ch[cfgRaceB].subs ? cfgRaceA : cfgRaceB;
     if (raceLeader >= 0 && lead != raceLeader && ch[cfgRaceA].subs != ch[cfgRaceB].subs && numAlerts < MAX_CH * 2)
-      alerts[numAlerts++] = { A_OVERTAKE, lead, raceLeader, 0, ch[lead].subs };
+      addAlert(Alert{ A_OVERTAKE, lead, raceLeader, 0, ch[lead].subs });
     raceLeader = lead;
   }
 }

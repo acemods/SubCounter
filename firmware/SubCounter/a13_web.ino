@@ -88,6 +88,7 @@ td .av{width:28px;height:28px;display:block}td{padding:6px 4px}td.nm2{overflow:h
 .small{font-size:12px;color:var(--muted);text-decoration:underline;margin-left:auto}
 .cm{margin-top:14px;padding-top:12px;border-top:1px solid var(--line)}.cm h3{font-size:12px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);margin:0 0 6px}
 .cm .c{padding:6px 0}.cm .c b{font-size:13px}.cm .c p{margin:2px 0 0;font-size:14px;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.rvt td.nm2{max-width:200px}.rvt th:first-child{text-align:left}.rvt th a{color:inherit;text-decoration:none}details.cm summary{cursor:pointer;list-style:revert}
 .pb{display:flex;flex-wrap:wrap;gap:6px 14px;font-size:13px;color:var(--muted);margin-top:10px}.pb b{color:var(--gold)}
 </style></head><body>
 <header><div class="logo"></div><h1>SubCounter</h1><span class="meta" id="meta"></span><a class="btn" id="upd" href="/update" style="display:none;border-color:#30d158;color:#30d158"></a><a class="btn" href="/settings">Settings</a></header>
@@ -134,13 +135,19 @@ if(c.vid){const v=c.vid;card.append(h('a',{class:'vid',href:c.tw?'https://www.tw
 if(c.pb){const b=c.pb,dd=t=>t?new Date(t*1000).toLocaleDateString('en-GB',{day:'numeric',month:'short'}):'';const it=[];
 if(b.day)it.push(h('span',{},'Best day ',h('b',{text:sg(b.day)}),' '+dd(b.dayT)));if(b.week)it.push(h('span',{},'Best week ',h('b',{text:sg(b.week)}),' '+dd(b.weekT)));if(b.vid)it.push(h('span',{title:b.vidTitle||''},'Best video, 1st day ',h('b',{text:cmp(b.vid)+' views'})));
 if(it.length)card.append(h('div',{class:'pb'},h('span',{text:'Records:'}),it))}
+if(c.rv&&c.rv.length){const box=h('details',{class:'cm'}),tb=h('table',{class:'rvt'});let sk=RVS[c.i]||'pd';
+const rows=c.rv.map(r=>{const d=Math.max(1,(Date.now()/1000-r[2])/86400);return{id:r[0],t:r[1],pub:r[2],v:r[3],pd:r[3]/d,lk:r[3]>0&&r[4]>=0?r[4]/r[3]*100:-1}});
+const keys=[['v','Views'],['pd','Per day'],['lk','Likes %']];
+const draw=()=>{tb.textContent='';tb.append(h('tr',{class:'hd'},h('th',{text:'Video'}),keys.map(([k,t])=>h('th',{class:'n'},h('a',{href:'#',text:t+(sk==k?' ▾':''),onclick:e=>{e.preventDefault();sk=k;RVS[c.i]=k;draw()}})))));
+[...rows].sort((a,b)=>b[sk]-a[sk]).forEach(r=>tb.append(h('tr',{},h('td',{class:'nm2'},h('a',{href:'https://youtu.be/'+r.id,target:'_blank',text:r.t,title:r.t})),h('td',{class:'n',text:cmp(r.v)}),h('td',{class:'n',text:cmp(Math.round(r.pd))}),h('td',{class:'n',text:r.lk>=0?r.lk.toFixed(1)+'%':'–'}))))};
+draw();box.append(h('summary',{},h('h3',{style:'display:inline',text:'Recent uploads ('+rows.length+')'})),tb);card.append(box)}
 if(c.vid&&(c.cm||c.cmOff)){const box=h('div',{class:'cm'},h('h3',{text:'Latest comments'}));
 if(c.cmOff)box.append(h('div',{class:'sub',text:'Comments are off on this video'}));
 else c.cm.forEach(m=>box.append(h('div',{class:'c'},h('b',{text:m.a}),h('span',{class:'sub',text:'  '+ago(m.ts)+(m.l>0?' · '+cmp(m.l)+' likes':'')}),h('p',{text:m.t}))));card.append(box)}
 return card}
 const COLS=['#3987e5','#d95926','#199e70','#c98500','#d55181','#008300','#9085e9','#e66767'];
 const colFor=i=>i<COLS.length?COLS[i]:'#8d8d95';
-let CMP={sel:null,days:7,mode:'gain'},HC={};
+let CMP={sel:null,days:7,mode:'gain'},HC={},RVS={};
 async function hist(i,days){const k=i+':'+days;if(!HC[k]||Date.now()-HC[k].at>120000){const r=await fetch('/api/history?i='+i+'&days='+days);HC[k]={at:Date.now(),p:await r.json()}}return HC[k].p}
 function compareCard(){const C=D.channels.filter(c=>c.subs>=0);
 if(!CMP.sel){const o=[...C].filter(c=>c.i!=0).sort((a,b)=>(b.d7||0)-(a.d7||0));CMP.sel=[0,...o.slice(0,2).map(c=>c.i)].filter(i=>C.some(c=>c.i==i))}
@@ -176,7 +183,7 @@ tip.textContent='';tip.append(h('div',{class:'sub',text:new Date(t*1000).toLocal
 ser.forEach(s=>{let v=s.pts[0][1];for(const p of s.pts){if(p[0]>t)break;v=p[1]}tip.append(h('div',{},h('i',{style:'background:'+colFor(s.c.i)}),name(s.c)+' ',h('b',{text:fv(v)})))});
 tip.style.display='block';const px=ev.clientX-r.left;tip.style.left=Math.min(px+12,r.width-tip.offsetWidth-4)+'px';tip.style.top='10px'};
 svg.onmouseleave=()=>{cross.setAttribute('visibility','hidden');tip.style.display='none'}}
-function render(){const app=$('#app');app.textContent='';const C=D.channels;
+function render(){const app=$('#app');app.textContent='';const C=D.channels;if(D.accent)document.documentElement.style.setProperty('--gold',D.accent);
 $('#meta').textContent=(D.err?D.err:(D.updatedAgo>=0?'Updated '+(D.updatedAgo<60?'just now':(D.updatedAgo/60|0)+' min ago'):''))+(D.ver?'  ·  v'+D.ver:'');{const u=$('#upd');if(D.upd){u.textContent='Update v'+D.upd;u.style.display=''}else u.style.display='none'}
 const row=h('aside',{class:'side'});
 // summary
@@ -211,6 +218,7 @@ void handleApiData() {
   doc["est"] = cfgEst;
   doc["ip"] = WiFi.localIP().toString();
   doc["ver"] = FW_VERSION;
+  doc["accent"] = THEMES[cfgTheme].css;
   if (updAvail) doc["upd"] = updVer;
   doc["m0"] = (long)monthStart(0); doc["m1"] = (long)monthStart(1);
   if (raceSet()) { JsonArray r = doc["race"].to<JsonArray>(); r.add(cfgRaceA); r.add(cfgRaceB); }
@@ -255,6 +263,13 @@ void handleApiData() {
       if (c.pbVid) { b["vid"] = c.pbVid; b["vidT"] = c.pbVidT; b["vidTitle"] = c.pbVidTitle; }
     }
     if (c.cmOff) o["cmOff"] = true;
+    if (c.rvN) {
+      JsonArray rv = o["rv"].to<JsonArray>();
+      for (int k = 0; k < c.rvN; k++) {
+        JsonArray x = rv.add<JsonArray>();
+        x.add(c.rv[k].id); x.add(c.rv[k].title); x.add((long)c.rv[k].pub); x.add(c.rv[k].views); x.add(c.rv[k].likes); x.add(c.rv[k].comments);
+      }
+    }
     if (c.cmN) {
       JsonArray cm = o["cm"].to<JsonArray>();
       for (int k = 0; k < c.cmN; k++) {
@@ -326,6 +341,90 @@ void handleApiCsv() {
     if (chunk.length()) server.sendContent(chunk);
   }
   server.sendContent("");
+}
+
+// ── Settings backup / restore ───────────────────────────────────────────────
+// Every saved setting (NVS namespace "subcounter") as JSON. Passwords, keys and
+// sign-ins are left out unless asked for. History and records aren't included.
+bool secretKey(const char *k) {
+  String s = k;
+  return s == "apikey" || s == "pin" || s == "spsec" || s == "spref" || s == "twsec" || s.endsWith("pass");
+}
+void handleNtfyTest() {
+  if (!authed()) return;
+  String t = server.arg("ntfy"); t.trim(); t.replace(" ", "-");
+  if (!t.length()) { sendMessage(400, "No topic", "Type an ntfy topic first."); return; }
+  cfgNtfy = t;                          // use what's typed (saved properly when you press Save)
+  queueNote("SubCounter test", "Notifications are working! v" FW_VERSION, "white_check_mark", "http://" + WiFi.localIP().toString() + "/");
+  sendMessage(200, "Test sent", "Check your phone in a few seconds. If nothing arrives, make sure the ntfy app is subscribed to <b>" + htmlEscape(t) + "</b>. Don't forget to press Save.");
+}
+void handleBackup() {
+  if (!authed()) return;
+  bool secrets = server.arg("secrets") == "1";
+  JsonDocument doc;
+  doc["subcounter_backup"] = 1; doc["firmware"] = FW_VERSION; doc["with_secrets"] = secrets;
+  JsonObject keys = doc["keys"].to<JsonObject>();
+  prefs.begin("subcounter", true);
+  nvs_iterator_t it = nullptr;
+  esp_err_t r = nvs_entry_find("nvs", "subcounter", NVS_TYPE_ANY, &it);
+  while (r == ESP_OK) {
+    nvs_entry_info_t info; nvs_entry_info(it, &info);
+    if (secrets || !secretKey(info.key)) {
+      JsonObject o = keys[info.key].to<JsonObject>();
+      switch (info.type) {
+        case NVS_TYPE_U8:  o["t"] = "u8";  o["v"] = prefs.getUChar(info.key); break;
+        case NVS_TYPE_I8:  o["t"] = "i8";  o["v"] = prefs.getChar(info.key); break;
+        case NVS_TYPE_U16: o["t"] = "u16"; o["v"] = prefs.getUShort(info.key); break;
+        case NVS_TYPE_I16: o["t"] = "i16"; o["v"] = prefs.getShort(info.key); break;
+        case NVS_TYPE_U32: o["t"] = "u32"; o["v"] = prefs.getUInt(info.key); break;
+        case NVS_TYPE_I32: o["t"] = "i32"; o["v"] = prefs.getInt(info.key); break;
+        case NVS_TYPE_STR: o["t"] = "str"; o["v"] = prefs.getString(info.key); break;
+        case NVS_TYPE_BLOB: {
+          size_t n = prefs.getBytesLength(info.key); uint8_t b[64];
+          if (n <= sizeof(b)) { prefs.getBytes(info.key, b, n); String hx; char t[3];
+            for (size_t k = 0; k < n; k++) { snprintf(t, 3, "%02x", b[k]); hx += t; }
+            o["t"] = "blob"; o["v"] = hx; }
+          break; }
+        default: keys.remove(info.key); break;
+      }
+    }
+    r = nvs_entry_next(&it);
+  }
+  nvs_release_iterator(it);
+  prefs.end();
+  String out; serializeJsonPretty(doc, out);
+  server.sendHeader("Content-Disposition", String("attachment; filename=\"subcounter-settings") + (secrets ? "-with-keys" : "") + ".json\"");
+  server.send(200, "application/json", out);
+}
+void handleRestore() {
+  if (!authed()) return;
+  JsonDocument doc;
+  if (deserializeJson(doc, server.arg("plain")) || !(doc["subcounter_backup"] | 0)) {
+    server.send(400, "text/plain", "That isn't a SubCounter settings file."); return;
+  }
+  int n = 0;
+  prefs.begin("subcounter", false);
+  for (JsonPair kv : doc["keys"].as<JsonObject>()) {
+    const char *k = kv.key().c_str(); String t = kv.value()["t"] | "";
+    JsonVariant v = kv.value()["v"];
+    if (strlen(k) > 15) continue;
+    if (t == "u8") prefs.putUChar(k, v.as<uint8_t>());
+    else if (t == "i8") prefs.putChar(k, v.as<int8_t>());
+    else if (t == "u16") prefs.putUShort(k, v.as<uint16_t>());
+    else if (t == "i16") prefs.putShort(k, v.as<int16_t>());
+    else if (t == "u32") prefs.putUInt(k, v.as<uint32_t>());
+    else if (t == "i32") prefs.putInt(k, v.as<int32_t>());
+    else if (t == "str") prefs.putString(k, v.as<String>());
+    else if (t == "blob") { String hx = v.as<String>(); uint8_t b[64]; size_t m = min((size_t)64, hx.length() / 2);
+      for (size_t i = 0; i < m; i++) b[i] = strtoul(hx.substring(i * 2, i * 2 + 2).c_str(), nullptr, 16);
+      prefs.putBytes(k, b, m); }
+    else continue;
+    n++;
+  }
+  prefs.end();
+  server.send(200, "text/plain", "Restored " + String(n) + " settings. Restarting...");
+  delay(800);
+  ESP.restart();
 }
 
 const char SCAN_JS[] PROGMEM = R"JS(<style>
@@ -420,7 +519,7 @@ void handleSettings() {
   h += "<h1>&#9654; SubCounter settings</h1><p>Saved on the board only. v" FW_VERSION;
   if (!portalMode) h += " &middot; <a href='/'>&larr; Dashboard</a>";
   h += "</p><nav class='jump'><a href='#channels'>YouTube</a><a href='#twitch'>Twitch</a><a href='#display'>Display</a><a href='#alerts'>Alerts</a>"
-       "<a href='#weather'>Weather</a><a href='#spotify'>Spotify</a><a href='#motion'>Motion</a><a href='#wifi'>Wi-Fi</a>"
+       "<a href='#phone'>Phone</a><a href='#weather'>Weather</a><a href='#spotify'>Spotify</a><a href='#motion'>Motion</a><a href='#wifi'>Wi-Fi</a>"
        "<a href='#updates'>Updates</a><a href='#security'>Security</a>" + String(portalMode ? "" : "<a href='#firmware'>Firmware</a>") + "</nav>";
   if (wifiFailReason.length()) {
     h += "<div style='background:#3a1210;border:1px solid #e62117;border-radius:10px;padding:12px;margin-bottom:8px;font-size:14px'>"
@@ -463,6 +562,13 @@ void handleSettings() {
 
   // ── Display ──
   h += sec("display", "Display");
+  h += "<label>Colour theme</label><select name='theme'>";
+  for (int t = 0; t < NUM_THEMES; t++) h += "<option value='" + String(t) + "'" + (cfgTheme == t ? " selected" : "") + ">" + THEMES[t].name + "</option>";
+  h += "</select><small>Accent colour on the board and the dashboard.</small>";
+  h += "<label>Screen brightness: <b id='bv'>" + String(cfgBright) + "%</b></label>"
+       "<input type='range' name='bright' min='10' max='100' step='5' value='" + String(cfgBright) + "' oninput=\"bv.textContent=this.value+'%'\" style='padding:0'>";
+  h += "<label>Night clock brightness: <b id='nv'>" + String(cfgNightBright) + "%</b></label>"
+       "<input type='range' name='nbright' min='1' max='40' value='" + String(cfgNightBright) + "' oninput=\"nv.textContent=this.value+'%'\" style='padding:0'>";
   h += checkbox("auto", cfgAuto, "Switch channels automatically every 10 seconds");
   h += checkbox("est", cfgEst, "Estimated live counts between YouTube's rounded steps (“est.”)");
   h += "<label>Show the big clock after this long without use</label><select name='idleclk'>";
@@ -485,6 +591,22 @@ void handleSettings() {
   h += checkbox("summary", cfgSummary, "Daily summary at 9 am (a monthly recap on the 1st)");
   h += "<small>New-subscriber, overtake and record alerts are always on. Alerts are skipped at night, "
        "when the board is face-down, and while Spotify is playing.</small>";
+
+  // ── Phone notifications ──
+  h += sec("phone", "Phone notifications");
+  h += "<small>Get alerts on your phone with the free <b>ntfy</b> app (iPhone and Android, no account needed). "
+       "Install it, tap <b>+</b>, subscribe to the topic below, then save.</small>";
+  { String sug = "subcounter-"; for (int k = 0; k < 6; k++) sug += (char)('a' + esp_random() % 26);
+    h += "<label>ntfy topic (blank = off)</label><input name='ntfy' autocapitalize='off' autocomplete='off' spellcheck='false' value='" +
+         htmlEscape(cfgNtfy) + "' placeholder='e.g. " + sug + "'>";
+    h += "<small>Anyone who knows the topic name can read it, so make it hard to guess.</small>"; }
+  const char *nk[] = { "Milestones", "Channel goes live", "New records (your channel)", "Overtakes in the race", "Your new video's view milestones", "Every new subscriber (your channel)" };
+  for (int k = 0; k < 6; k++) {
+    String nmk = "nt" + String(k);
+    h += "<label><input type='checkbox' name='" + nmk + "' value='1' style='width:auto'" + String((cfgNtfyMask >> k) & 1 ? " checked" : "") + "> " + nk[k] + "</label>";
+  }
+  h += "<details><summary>Own ntfy server (advanced)</summary><label>Server address</label><input name='ntfysrv' autocapitalize='off' value='" + htmlEscape(cfgNtfyServer) + "'></details>";
+  if (!portalMode) h += "<button type='submit' class='b2' formaction='/ntfy/test' formnovalidate>Send a test notification</button>";
 
   // ── Weather ──
   h += sec("weather", "Weather");
@@ -612,6 +734,16 @@ void handleSettings() {
     h += sec("firmware", "Firmware");
     h += "<p style='margin:0'>Running <b>v" FW_VERSION "</b> &middot; <a href='/update'>&#11014; Update</a>" +
          String(updAvail ? " &middot; <b style='color:#30d158'>v" + htmlEscape(updVer) + " available</b>" : "") + "</p>";
+    h += sec("backup", "Backup &amp; restore");
+    h += "<small>Save all your settings to a file, e.g. before a full re-flash or to set up a second board. "
+         "History and records stay on the board.</small>"
+         "<a class='btnlink' style='background:#2a2a2e' href='/backup'>&#11015; Download settings</a>"
+         "<small><a href='/backup?secrets=1'>Download including passwords, keys and sign-ins</a> – keep that file private.</small>"
+         "<label>Restore from a file</label><input type='file' id='rf' accept='.json'>"
+         "<button type='button' class='b2' onclick='restore()'>Restore &amp; restart</button><small id='rm'></small>"
+         "<script>function restore(){const f=document.getElementById('rf').files[0],m=document.getElementById('rm');"
+         "if(!f){m.textContent='Choose the .json file first.';return}f.text().then(t=>fetch('/restore',{method:'POST',headers:{'Content-Type':'application/json'},body:t}))"
+         ".then(r=>r.text()).then(t=>{m.textContent=t;setTimeout(()=>location.href='/',12000)}).catch(()=>m.textContent='Restore failed.')}</script>";
   }
   h += "<small style='margin-top:16px'>Board Wi-Fi MAC address: " + boardMac() + "</small></div>";
   h += FPSTR(SCAN_JS);
@@ -695,6 +827,14 @@ void handleSave() {
   cfgCelebrate = server.arg("celebrate") == "1";
   cfgLiveAlert = server.arg("livealert") == "1";
   cfgAutoUpd = server.arg("autoupd") == "1";
+  { String t = server.arg("ntfy"); t.trim(); t.replace(" ", "-"); cfgNtfy = t;
+    String sv = server.arg("ntfysrv"); sv.trim(); if (sv.endsWith("/")) sv.remove(sv.length() - 1);
+    if (sv.startsWith("http")) cfgNtfyServer = sv;
+    cfgNtfyMask = 0; for (int k = 0; k < 6; k++) if (server.arg("nt" + String(k)) == "1") cfgNtfyMask |= 1 << k; }
+  if (server.hasArg("theme")) cfgTheme = server.arg("theme").toInt();
+  if (server.hasArg("bright")) cfgBright = server.arg("bright").toInt();
+  if (server.hasArg("nbright")) cfgNightBright = server.arg("nbright").toInt();
+  applyTheme();
   { String u = server.arg("updurl"); u.trim(); if (u.startsWith("https://")) { if (!u.endsWith("/")) u += "/"; cfgUpdUrl = u; } }
   { String v = server.arg("twid"); v.trim(); if (server.hasArg("twid")) cfgTwId = v;
     v = server.arg("twsec"); v.trim(); if (v.length()) { cfgTwSecret = v; } }
@@ -786,6 +926,9 @@ void registerRoutes() {
   server.on("/api/data", HTTP_GET, handleApiData);
   server.on("/api/history", HTTP_GET, handleApiHistory);
   server.on("/api/csv", HTTP_GET, handleApiCsv);
+  server.on("/backup", HTTP_GET, handleBackup);
+  server.on("/ntfy/test", HTTP_POST, handleNtfyTest);
+  server.on("/restore", HTTP_POST, handleRestore);
   server.on("/api/scan", HTTP_GET, handleApiScan);
   server.on("/wifi/connect", HTTP_POST, handleWifiConnect);
   server.on("/update", HTTP_GET, handleUpdatePage);
