@@ -1,7 +1,7 @@
 {
- "version": "12.7",
- "app": "SubCounter-v12.7-APP-ONLY.bin",
- "size": 1799568,
- "md5": "c1b4cd30db6739a75efab5e1f7d24eb4",
- "notes": "Dashboard This morning card shows each new video with its thumbnail, channel and when it went up"
+ "version": "12.8",
+ "app": "SubCounter-v12.8-APP-ONLY.bin",
+ "size": 1807520,
+ "md5": "e17a364b415bca114253d7f44bfba2ba",
+ "notes": "Recent uploads on the dashboard: thumbnails, kept through restarts, and retried within 10 minutes if a fetch fails"
 }

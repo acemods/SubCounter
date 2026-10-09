@@ -2,6 +2,10 @@
 
 All builds are in [`builds/`](../builds). Source snapshots for most versions are in the git history.
 
+## v12.8
+- **Recent uploads went missing:** fixed. They were only kept in memory, fetched 3 minutes after start-up, and if a fetch failed the board waited 6 hours before trying again, so after a restart (or a failed fetch) the section didn't show. They're now saved on the board and shown straight away after a restart, fetched a minute after start-up on a fresh board, and retried within 10 minutes if anything fails.
+- **Thumbnails** in the Recent uploads table, with how long ago each video went up; titles can wrap to two lines
+
 ## v12.7
 - **This morning** card on the dashboard: each new video now shows its thumbnail, title, channel and when it went up (click to watch)
 - Docs: picture of the board's daily summary screen

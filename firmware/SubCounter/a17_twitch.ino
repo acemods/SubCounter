@@ -232,18 +232,21 @@ void refreshLiveVideos() {
 
 // Newest 3 comments on each channel's latest video: 1 unit per channel
 // Each channel's last 10 uploads with their numbers: 2 units per channel, every 6 hours
-void fetchRecent() {
+void saveRecent();
+// Returns false if any channel couldn't be fetched (so it's tried again soon, not in 6 hours)
+bool fetchRecent() {
+  bool allOk = true, any = false;
   for (int i = 0; i < numCh; i++) {
     Channel &c = ch[i];
     if (c.tw || !c.uploads.length()) continue;
     JsonDocument pl;
     if (ytGet("playlistItems", "part=contentDetails&maxResults=" + String(RECENT_N) +
-              "&fields=items/contentDetails(videoId,videoPublishedAt)&playlistId=" + c.uploads, pl) != 200) continue;
+              "&fields=items/contentDetails(videoId,videoPublishedAt)&playlistId=" + c.uploads, pl) != 200) { allOk = false; continue; }
     String ids;
     for (JsonObject it : pl["items"].as<JsonArray>()) { String v = it["contentDetails"]["videoId"] | ""; if (v.length()) ids += (ids.length() ? "," : "") + v; }
     if (!ids.length()) continue;
     JsonDocument vd;
-    if (ytGet("videos", "part=snippet,statistics&fields=items(id,snippet(title,publishedAt,liveBroadcastContent),statistics(viewCount,likeCount,commentCount))&id=" + ids, vd) != 200) continue;
+    if (ytGet("videos", "part=snippet,statistics&fields=items(id,snippet(title,publishedAt,liveBroadcastContent),statistics(viewCount,likeCount,commentCount))&id=" + ids, vd) != 200) { allOk = false; continue; }
     int n = 0;
     for (JsonObject it : vd["items"].as<JsonArray>()) {
       if (n >= RECENT_N) break;
@@ -255,8 +258,45 @@ void fetchRecent() {
       r.likes = String(it["statistics"]["likeCount"] | "-1").toInt();
       r.comments = String(it["statistics"]["commentCount"] | "-1").toInt();
     }
-    c.rvN = n;
+    c.rvN = n; any = true;
     pump();
+  }
+  if (any) saveRecent();
+  return allOk;
+}
+// Keep the recent uploads on flash so they're there straight after a restart
+void saveRecent() {
+  if (!fsOk) return;
+  JsonDocument d;
+  for (int i = 0; i < numCh; i++) {
+    Channel &c = ch[i];
+    if (c.tw || !c.id.length() || !c.rvN) continue;
+    JsonArray a = d[c.id].to<JsonArray>();
+    for (int k = 0; k < c.rvN; k++) {
+      JsonArray x = a.add<JsonArray>();
+      x.add(c.rv[k].id); x.add(c.rv[k].title); x.add((long)c.rv[k].pub); x.add(c.rv[k].views); x.add(c.rv[k].likes); x.add(c.rv[k].comments);
+    }
+  }
+  File f = LittleFS.open("/recent.json", "w"); if (!f) return;
+  serializeJson(d, f); f.close();
+}
+void loadRecent() {
+  if (!fsOk || !LittleFS.exists("/recent.json")) return;
+  File f = LittleFS.open("/recent.json", "r"); if (!f) return;
+  JsonDocument d; DeserializationError e = deserializeJson(d, f); f.close();
+  if (e) return;
+  for (int i = 0; i < numCh; i++) {
+    Channel &c = ch[i];
+    if (c.tw || !c.id.length() || c.rvN) continue;
+    JsonArray a = d[c.id].as<JsonArray>(); if (a.isNull()) continue;
+    int n = 0;
+    for (JsonArray x : a) {
+      if (n >= RECENT_N) break;
+      Channel::Recent &r = c.rv[n++];
+      r.id = x[0] | ""; r.title = x[1] | ""; r.pub = x[2] | 0L;
+      r.views = x[3] | -1LL; r.likes = x[4] | -1L; r.comments = x[5] | -1L;
+    }
+    c.rvN = n;
   }
 }
 // views per day since upload (at least one day, so brand-new videos don't jump to the top)

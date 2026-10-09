@@ -77,6 +77,7 @@ void setup() {
   drawStatus("Loading...", String(numCh) + (numCh == 1 ? " channel" : " channels"), C_WHITE);
   fetchAll();
   lastFetch = millis();
+  loadRecent();                         // last saved "Recent uploads", until the fresh ones arrive
   drawStatus("Loading...", "pictures & videos", C_WHITE);
   fetchAvatars();
   fetchLatestVideos();
@@ -154,9 +155,13 @@ void netCycle() {
     updCheckReq = false; lastUpdCheck = millis();
     netStage = "update check"; checkForUpdate();
   }
-  if (lastRecentFetch == 0 ? millis() > 180000UL : millis() - lastRecentFetch > RECENT_REFRESH_MS) {
+  static unsigned long recentWait = RECENT_REFRESH_MS;
+  static bool hadSaved = false, checkedSaved = false;
+  if (!checkedSaved) { checkedSaved = true; for (int i = 0; i < numCh; i++) if (ch[i].rvN) hadSaved = true; }
+  if (lastRecentFetch == 0 ? millis() > (hadSaved ? 180000UL : 60000UL) : millis() - lastRecentFetch > recentWait) {
     lastRecentFetch = millis();
-    netStage = "recent uploads"; fetchRecent();
+    netStage = "recent uploads";
+    recentWait = fetchRecent() ? RECENT_REFRESH_MS : 10UL * 60000UL;   // something failed: try again in 10 min
   }
   netStage = "phone notifications"; if (noteN) sendNotes();
   netStage = "closing connections"; connCloseIdle(connYT); connCloseIdle(connTW); connCloseIdle(connSP, 30000);

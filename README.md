@@ -6,6 +6,7 @@ A desk gadget built on the **Waveshare ESP32-C6-Touch-LCD-1.47** that shows live
 
 ## What's new
 
+- **v12.8:** Recent uploads get thumbnails and stay through restarts
 - **v12.7:** thumbnails for new videos in the dashboard's This morning card
 - **v12.6:** daily summary on the dashboard, a Summary tile on the board, and a setting for its time
 - **v12.5:** YouTube / Twitch logos on the board's leaderboards
@@ -60,7 +61,7 @@ Full history: [docs/CHANGELOG.md](docs/CHANGELOG.md)
 - Side column with the last 24 hours' top growers, weather, the race and the leaderboard
 - A card per channel: live (estimated) count, growth chips, milestone progress and predicted date, 7 or 30-day graph, latest video with thumbnail, and the new video tracker on your own channel
 - Monthly table, a compare chart (up to 4 channels) and CSV download of the history
-- Recent uploads per channel, sortable by views, views per day or likes %
+- Recent uploads per channel, with thumbnails, sortable by views, views per day or likes %
 - An **Update** button in the header when a new version is out
 - Adapts to the screen: side column on desktops, two columns on tablets, one on phones
 - Settings at `/settings` and wireless updates at `/update`
@@ -79,7 +80,7 @@ Full history: [docs/CHANGELOG.md](docs/CHANGELOG.md)
 
 ## Quick start
 
-1. **Flash the board.** Open <https://espressif.github.io/esptool-js/> in Chrome, connect the board, and flash `builds/latest/SubCounter-v12.7-FULL-new-board-flash-at-0x0.bin` at address **0x0**.
+1. **Flash the board.** Open <https://espressif.github.io/esptool-js/> in Chrome, connect the board, and flash `builds/latest/SubCounter-v12.8-FULL-new-board-flash-at-0x0.bin` at address **0x0**.
 2. **Set it up.** The board shows *SETUP MODE*. Join the Wi-Fi network **SubCounter-Setup** from your phone, and the setup page opens by itself (or go to <http://192.168.4.1>). Pick your Wi-Fi, add your YouTube channels and a YouTube Data API key, then save.
 3. **Use it.** The board shows a QR code and its address for a few seconds, then your subscriber count. Scan the code, or open **<http://subcounter.local>**, for the dashboard.
 

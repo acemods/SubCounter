@@ -143,7 +143,9 @@ The pages show the SubCounter badge as their browser tab icon, so they're easy t
 
   ![Compare chart](images/compare.png)
 
-- **Recent uploads** on each YouTube card: the last 10 videos, sortable by views, views per day or likes %
+- **Recent uploads** on each YouTube card (tap the heading to open it): the last 10 videos with thumbnails and how long ago they went up, sortable by views, views per day or likes %. Refreshed every 6 hours and saved on the board, so they're there straight after a restart. A brand-new board fills them in about a minute after starting.
+
+  <img src="images/recent-uploads.png" width="360" alt="Recent uploads with thumbnails">
 - a green **Update** button in the header when a new version is out
 - the colour of your chosen theme
 
