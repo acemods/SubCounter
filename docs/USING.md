@@ -109,8 +109,11 @@ After **3 minutes** with no touch, button press or movement (change it, or turn 
 
 ## Daily summary and night clock
 
-- **9 am** (or the time you pick in Settings → Alerts → *Daily summary on the board*, or Off): "Good morning!" with the top 3 growers since yesterday and any new videos. It shows for 10 minutes; touch it to dismiss.
-- **Missed it?** Open it any time on the board: long-press → swipe left → **Summary**. Or look at the dashboard: the **This morning** card keeps that day's summary all day (every channel's growth in the 24 hours before, where you ranked, and the new videos with links). It's saved on the board, so it survives a restart.
+- **9 am** (or the time you pick in Settings → Alerts → *Daily summary on the board*, or Off): "Good morning!" with the top 3 growers since yesterday (your channel in gold) and how many new videos went up in the last day. It shows for 10 minutes; touch it to dismiss.
+
+  <img src="images/summary-board.png" width="334" alt="Daily summary on the board">
+
+- **Missed it?** Open it any time on the board: long-press → swipe left → **Summary**. Or look at the dashboard: the **This morning** card keeps that day's summary all day (every channel's growth in the 24 hours before, where you ranked, and each new video with its thumbnail, channel and when it went up). It's saved on the board, so it survives a restart.
 - **1st of the month, summary time:** a recap of last month instead: your subscribers gained, your rank among your channels, and the top grower
 - **Night** (default 23:00–07:00, adjustable): after a minute untouched, the screen dims to a large clock with your channel's count. Touch it to wake.
 

@@ -1,7 +1,7 @@
 {
- "version": "12.6",
- "app": "SubCounter-v12.6-APP-ONLY.bin",
- "size": 1799184,
- "md5": "6a88c1b0db8d497f8fc6941d7e401fce",
- "notes": "Daily summary: kept on the dashboard all day (This morning card), a Summary tile on the board's home menu, and a setting for the summary time"
+ "version": "12.7",
+ "app": "SubCounter-v12.7-APP-ONLY.bin",
+ "size": 1799568,
+ "md5": "c1b4cd30db6739a75efab5e1f7d24eb4",
+ "notes": "Dashboard This morning card shows each new video with its thumbnail, channel and when it went up"
 }

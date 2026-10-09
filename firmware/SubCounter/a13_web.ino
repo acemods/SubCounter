@@ -319,7 +319,7 @@ const char DASH_HTML[] PROGMEM = R"HTML(<!doctype html><html lang="en"><head>
 a{color:inherit;text-decoration:none}
 header{display:flex;align-items:center;gap:12px;padding:16px 20px;border-bottom:1px solid var(--line);position:sticky;top:0;background:rgba(13,13,15,.92);backdrop-filter:blur(8px);z-index:2}
 .logo{width:34px;height:24px;flex:none;display:block}
-.side{min-width:0}.morning{min-width:0;overflow:hidden}.morning .me span{color:var(--gold)}.morning .mv{margin-top:4px;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.morning .mv a{color:var(--text);text-decoration:none;font-weight:600}.morning .list .pi{margin-right:5px}
+.side{min-width:0}.morning{min-width:0;overflow:hidden}.morning .me span{color:var(--gold)}.morning .mv{display:flex;gap:10px;align-items:flex-start;margin-top:8px;color:var(--text);text-decoration:none}.morning .mv img{width:96px;height:54px;border-radius:6px;object-fit:cover;flex:none;background:var(--line)}.morning .mv>div{min-width:0}.morning .mv .t{font-weight:600;font-size:14px;line-height:1.3;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}.morning .mv .sub{margin-top:2px}.morning .list .pi{margin-right:5px}
 header h1{font-size:18px;margin:0;flex:1}header .meta{color:var(--muted);font-size:13px}
 .btn{border:1px solid var(--line);border-radius:9px;padding:7px 12px;font-size:13px;color:var(--text);background:var(--card);cursor:pointer}
 main{max-width:1500px;margin:0 auto;padding:20px}
@@ -488,7 +488,7 @@ row.append(h('div',{class:'card morning'},h('h2',{text:today?'This morning':'Sum
 h('div',{class:'sub',style:'margin:-8px 0 8px',text:`Daily summary at ${tm} · growth in the 24 hours before`}),
 h('div',{class:'list'},top.length?top.map((r,k)=>h('div',{class:r.me?'me':''},h('span',{},(k+1)+'. ',mx?pIcon(r):null,r.n),h('b',{class:cls(r.g),text:sg(r.g)}))):h('div',{class:'sub',text:'No data yet'})),
 mi>=5?h('div',{class:'sub',style:'margin-top:6px',text:`${rs[mi].n}: #${mi+1} of ${rs.length}, ${sg(rs[mi].g)}`}):null,
-h('div',{class:'sub',style:'margin-top:8px'},vs.length?[vs.length+' new video'+(vs.length>1?'s':'')+':',...vs.map(v=>h('div',{class:'mv'},h('a',{href:'https://youtu.be/'+v.id,target:'_blank',text:v.t}),' · '+v.n))]:'No new videos in the day before')))}
+h('div',{class:'sub',style:'margin-top:10px'},vs.length?vs.length+' new video'+(vs.length>1?'s':''):'No new videos in the day before'),...vs.map(v=>h('a',{class:'mv',href:'https://youtu.be/'+v.id,target:'_blank'},h('img',{src:`https://i.ytimg.com/vi/${v.id}/mqdefault.jpg`,alt:''}),h('div',{},h('div',{class:'t',text:v.t}),h('div',{class:'sub',text:v.n+(v.pub?' · '+ago(v.pub):'')}))))))}
 // summary
 const ok=C.filter(c=>c.statsOk).sort((a,b)=>b.d1-a.d1);const nv=C.filter(c=>c.vid&&!c.tw&&Date.now()/1000-c.vid.pub<86400);
 row.append(h('div',{class:'card'},h('h2',{text:'Last 24 hours'}),h('div',{class:'sub',style:'margin:-8px 0 8px',text:'Rolling: gains since this time yesterday'}),h('div',{class:'list'},ok.length?ok.slice(0,5).map(c=>h('div',{},h('span',{text:name(c)}),h('b',{class:cls(c.d1),text:sg(c.d1)}))):h('div',{class:'sub',text:'Collecting data – check back in a few hours'})),h('div',{class:'sub',style:'margin-top:8px',text:nv.length?`${nv.length} new video${nv.length>1?'s':''} today`:'No new videos in the last day'})));

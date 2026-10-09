@@ -2,6 +2,10 @@
 
 All builds are in [`builds/`](../builds). Source snapshots for most versions are in the git history.
 
+## v12.7
+- **This morning** card on the dashboard: each new video now shows its thumbnail, title, channel and when it went up (click to watch)
+- Docs: picture of the board's daily summary screen
+
 ## v12.6
 - **Daily summary on the dashboard:** a **This morning** card at the top of the side column keeps the day's summary all day: every channel's growth in the 24 hours before (with YouTube/Twitch logos when mixed), where your channel ranked, and that day's new videos with links. Saved on the board, so it survives a restart. Follows the All / YouTube / Twitch filter.
 - **Summary tile** on the board's home menu (swipe left, next to Device) opens the summary any time
