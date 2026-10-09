@@ -52,6 +52,7 @@ void setup() {
   touchInit();
   imuInit();
   fsOk = LittleFS.begin(true);
+  loadMorning();
   Serial.printf("History storage %s\n", fsOk ? "ready" : "unavailable");
   randomSeed(esp_random());
 
@@ -270,13 +271,27 @@ void loopBody() {
     btnDownAt = 0;
   }
 
-  // ── 9 am summary ──────────────────────────────────────────────────────────
-  if (cfgSummary && timeValid()) {
+  // ── daily summary (9 am unless changed in settings) ───────────────────────
+  if (timeValid()) {
     time_t n = nowT(); struct tm lt; localtime_r(&n, &lt);
-    if (lt.tm_hour == 9 && lt.tm_min < 30 && lt.tm_yday != lastSummaryDay) {
+    int sh = cfgSummary ? cfgSumHour : 9;
+    if (cfgSummary && lt.tm_hour == sh && lt.tm_min < 30 && lt.tm_yday != lastSummaryDay) {
       lastSummaryDay = lt.tm_yday;
       summaryActive = true; summaryShownAt = millis();
     }
+    // keep a copy for the dashboard: once a day at the summary time (or as soon as there's data after it)
+    static int capturedDay = -2;
+    if (capturedDay == -2) {                     // first time: is the saved one already from today?
+      capturedDay = -1;
+      if (morningJson.length()) {
+        JsonDocument d; if (!deserializeJson(d, morningJson)) {
+          time_t at = d["at"] | 0L; struct tm a; localtime_r(&at, &a);
+          if (a.tm_yday == lt.tm_yday && a.tm_year == lt.tm_year && a.tm_hour >= sh) capturedDay = lt.tm_yday;
+        }
+      }
+    }
+    bool anyStats = false; for (int i = 0; i < numCh; i++) if (ch[i].statsOk) anyStats = true;
+    if (lt.tm_hour >= sh && capturedDay != lt.tm_yday && anyStats) { capturedDay = lt.tm_yday; captureMorning(); }
   }
   if (summaryActive && millis() - summaryShownAt > SUMMARY_SHOW_MS) summaryActive = false;
 
@@ -333,7 +348,11 @@ void loopBody() {
       if (swipe == 'T') {
         int a = menuPage * MENU_PER_PAGE + constrain(tapX * MENU_PER_PAGE / gfx->width(), 0, MENU_PER_PAGE - 1);
         if (a < NUM_APPS) openApp(a);
-        else if (a < MENU_TILES) openDevice();
+        else if (a == 3) openDevice();
+        else if (a == 4) {                                    // Summary: today's summary for 10 minutes
+          menuOpen = false; deviceOpen = false; lastInteract = millis();
+          summaryActive = true; summaryShownAt = millis();
+        }
       } else if ((swipe == 'L' || swipe == 'R') && menuPages() > 1) {
         menuPage = (menuPage + (swipe == 'L' ? 1 : menuPages() - 1)) % menuPages();
         gfx->fillScreen(C_BG); drawMenu();

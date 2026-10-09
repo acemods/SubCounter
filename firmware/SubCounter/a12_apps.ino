@@ -511,7 +511,7 @@ void drawAppIcon(int a, int cx, int cy) {
   }
 }
 
-#define MENU_TILES 4            // the three apps + Device (more tiles can be added later)
+#define MENU_TILES 5            // the three apps + Device + Summary
 #define MENU_PER_PAGE 3         // three big tiles per page; swipe left/right for the next page
 int menuPage = 0;
 int menuPages() { return (MENU_TILES + MENU_PER_PAGE - 1) / MENU_PER_PAGE; }
@@ -524,11 +524,23 @@ void drawDeviceIcon(int cx, int cy, uint16_t col) {
   }
   gfx->fillRect(cx + 3, cy - 3, 3, 3, col); gfx->fillRect(cx + 7, cy + 1, 3, 3, col); gfx->fillRect(cx + 3, cy + 5, 3, 3, col);
 }
+void drawSummaryIcon(int cx, int cy) {          // a sunrise over a little list
+  gfx->fillCircle(cx, cy - 4, 15, C_GOLD);
+  gfx->fillRect(cx - 18, cy - 4, 36, 18, C_BG);
+  for (int k = 0; k < 5; k++) {
+    float a = 3.14159f * (k + 1) / 6;
+    gfx->drawLine(cx - cosf(a) * 19, cy - 4 - sinf(a) * 19, cx - cosf(a) * 24, cy - 4 - sinf(a) * 24, C_GOLD);
+  }
+  gfx->fillRect(cx - 24, cy - 2, 48, 3, C_WHITE);
+  gfx->fillRoundRect(cx - 16, cy + 6, 32, 3, 1, C_GREY);
+  gfx->fillRoundRect(cx - 16, cy + 13, 24, 3, 1, C_GREY);
+  gfx->fillRoundRect(cx - 16, cy + 20, 28, 3, 1, C_GREY);
+}
 void drawMenu() {
   gfx->fillScreen(C_BG);
   ftR(gfx->width() - 6, 14, "v" FW_VERSION, F_XS, C_DKGREY);
   if (updAvail) ft(6, 14, "v" + updVer + " available - swipe to Device", F_XS, C_GOLD);
-  const char *names[MENU_TILES] = { "Creators", "Weather", "Spotify", "Device" };
+  const char *names[MENU_TILES] = { "Creators", "Weather", "Spotify", "Device", "Summary" };
   menuPage = constrain(menuPage, 0, menuPages() - 1);
   int w = gfx->width() / MENU_PER_PAGE;
   for (int s = 0; s < MENU_PER_PAGE; s++) {
@@ -537,7 +549,8 @@ void drawMenu() {
     int cx = s * w + w / 2;
     if (a == app) gfx->drawRoundRect(s * w + 6, 22, w - 12, 116, 12, C_DKGREY);
     if (a < NUM_APPS) drawAppIcon(a, cx, 70);
-    else { drawDeviceIcon(cx, 70, updAvail ? C_GOLD : C_WHITE); if (updAvail) gfx->fillCircle(cx + 18, 44, 6, C_RED); }
+    else if (a == 3) { drawDeviceIcon(cx, 70, updAvail ? C_GOLD : C_WHITE); if (updAvail) gfx->fillCircle(cx + 18, 44, 6, C_RED); }
+    else drawSummaryIcon(cx, 70);
     ft(cx - tw(names[a], F_S) / 2, 130, names[a], F_S, a == app ? C_WHITE : C_GREY);
   }
   // page dots (a red one if an update is waiting on a page you're not on)

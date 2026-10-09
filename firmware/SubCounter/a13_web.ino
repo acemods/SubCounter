@@ -319,6 +319,7 @@ const char DASH_HTML[] PROGMEM = R"HTML(<!doctype html><html lang="en"><head>
 a{color:inherit;text-decoration:none}
 header{display:flex;align-items:center;gap:12px;padding:16px 20px;border-bottom:1px solid var(--line);position:sticky;top:0;background:rgba(13,13,15,.92);backdrop-filter:blur(8px);z-index:2}
 .logo{width:34px;height:24px;flex:none;display:block}
+.side{min-width:0}.morning{min-width:0;overflow:hidden}.morning .me span{color:var(--gold)}.morning .mv{margin-top:4px;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.morning .mv a{color:var(--text);text-decoration:none;font-weight:600}.morning .list .pi{margin-right:5px}
 header h1{font-size:18px;margin:0;flex:1}header .meta{color:var(--muted);font-size:13px}
 .btn{border:1px solid var(--line);border-radius:9px;padding:7px 12px;font-size:13px;color:var(--text);background:var(--card);cursor:pointer}
 main{max-width:1500px;margin:0 auto;padding:20px}
@@ -479,6 +480,15 @@ if(!(hasTw&&hasYt)){bar.style.display='none';if(PF!='all')PF='all';return}bar.st
 function render(){const app=$('#app');app.textContent='';filterBar();const C=D.channels.filter(kindOk);if(D.accent)document.documentElement.style.setProperty('--gold',D.accent);
 $('#meta').textContent=(D.err?D.err:(D.updatedAgo>=0?'Updated '+(D.updatedAgo<60?'just now':(D.updatedAgo/60|0)+' min ago'):''))+(D.ver?'  ·  v'+D.ver:'');{const u=$('#upd');if(D.upd){u.textContent='Update v'+D.upd;u.style.display=''}else u.style.display='none'}
 const row=h('aside',{class:'side'});
+// the board's daily summary, kept all day
+if(D.morning&&D.morning.at){const M=D.morning,dt=new Date(M.at*1000),today=dt.toDateString()==new Date().toDateString();
+const rs=(M.rows||[]).filter(r=>kindOk(r)),mx=rs.some(r=>r.tw)&&rs.some(r=>!r.tw),top=rs.slice(0,5),mi=rs.findIndex(r=>r.me),vs=PF=='tw'?[]:(M.vids||[]);
+const tm=dt.toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'});
+row.append(h('div',{class:'card morning'},h('h2',{text:today?'This morning':'Summary · '+dt.toLocaleDateString('en-GB',{weekday:'short',day:'numeric',month:'short'})}),
+h('div',{class:'sub',style:'margin:-8px 0 8px',text:`Daily summary at ${tm} · growth in the 24 hours before`}),
+h('div',{class:'list'},top.length?top.map((r,k)=>h('div',{class:r.me?'me':''},h('span',{},(k+1)+'. ',mx?pIcon(r):null,r.n),h('b',{class:cls(r.g),text:sg(r.g)}))):h('div',{class:'sub',text:'No data yet'})),
+mi>=5?h('div',{class:'sub',style:'margin-top:6px',text:`${rs[mi].n}: #${mi+1} of ${rs.length}, ${sg(rs[mi].g)}`}):null,
+h('div',{class:'sub',style:'margin-top:8px'},vs.length?[vs.length+' new video'+(vs.length>1?'s':'')+':',...vs.map(v=>h('div',{class:'mv'},h('a',{href:'https://youtu.be/'+v.id,target:'_blank',text:v.t}),' · '+v.n))]:'No new videos in the day before')))}
 // summary
 const ok=C.filter(c=>c.statsOk).sort((a,b)=>b.d1-a.d1);const nv=C.filter(c=>c.vid&&!c.tw&&Date.now()/1000-c.vid.pub<86400);
 row.append(h('div',{class:'card'},h('h2',{text:'Last 24 hours'}),h('div',{class:'sub',style:'margin:-8px 0 8px',text:'Rolling: gains since this time yesterday'}),h('div',{class:'list'},ok.length?ok.slice(0,5).map(c=>h('div',{},h('span',{text:name(c)}),h('b',{class:cls(c.d1),text:sg(c.d1)}))):h('div',{class:'sub',text:'Collecting data – check back in a few hours'})),h('div',{class:'sub',style:'margin-top:8px',text:nv.length?`${nv.length} new video${nv.length>1?'s':''} today`:'No new videos in the last day'})));
@@ -514,6 +524,7 @@ void handleApiData() {
   doc["accent"] = THEMES[cfgTheme].css;
   if (updAvail) doc["upd"] = updVer;
   doc["m0"] = (long)monthStart(0); doc["m1"] = (long)monthStart(1);
+  if (morningJson.length()) doc["morning"] = serialized(morningJson);
   if (raceSet()) { JsonArray r = doc["race"].to<JsonArray>(); r.add(cfgRaceA); r.add(cfgRaceB); }
   else doc["race"] = nullptr;
   if (wx.ok) {
@@ -900,7 +911,8 @@ void handleSettings() {
   h += sec("alerts", "Alerts");
   h += checkbox("celebrate", cfgCelebrate, "Confetti for milestones (bigger milestones, bigger party)");
   h += checkbox("livealert", cfgLiveAlert, "Alert when a channel goes live (and switch to it)");
-  h += checkbox("summary", cfgSummary, "Daily summary at 9 am (a monthly recap on the 1st)");
+  h += "<label>Daily summary on the board (a monthly recap on the 1st)</label>" + hourSelect("sumHour", cfgSummary ? cfgSumHour : -1);
+  h += "<small>Shows for 10 minutes at this time; touch to close it. It's also on the dashboard all day, and on the board any time: long-press &rarr; swipe left &rarr; <b>Summary</b>.</small>";
   h += "<small>New-subscriber, overtake and record alerts are always on. Alerts are skipped at night, "
        "when the board is face-down, and while Spotify is playing.</small>";
 
@@ -1155,7 +1167,7 @@ void handleSave() {
   { String pin = server.arg("pin"), pin2 = server.arg("pin2"); pin.trim(); pin2.trim();
     if (server.arg("nopin") == "1") cfgPin = "";
     else if (pin.length()) cfgPin = pin; }
-  cfgSummary = server.arg("summary") == "1";
+  if (server.hasArg("sumHour")) { int sh = server.arg("sumHour").toInt(); cfgSummary = sh >= 0; if (sh >= 0) cfgSumHour = constrain(sh, 0, 23); }
   cfgShake = server.arg("shake") == "1";
   cfgFaceDown = server.arg("facedown") == "1";
   cfgPortrait = server.arg("portrait") == "1";

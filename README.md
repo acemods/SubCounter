@@ -6,6 +6,7 @@ A desk gadget built on the **Waveshare ESP32-C6-Touch-LCD-1.47** that shows live
 
 ## What's new
 
+- **v12.6:** daily summary on the dashboard, a Summary tile on the board, and a setting for its time
 - **v12.5:** YouTube / Twitch logos on the board's leaderboards
 - **v12.4:** "Check for update" on the Device screen no longer gets stuck on "Checking..."
 - **v12.3:** settings page no longer gets cut off part-way down
@@ -65,7 +66,7 @@ Full history: [docs/CHANGELOG.md](docs/CHANGELOG.md)
 
 **Everyday**
 - **Idle clock:** after 3 minutes without use (adjustable), a large clock with date, weather and your count; pick the board up to go back
-- 9 am daily summary, plus a dim night clock overnight
+- Daily summary (9 am, or the time you choose) on the board, kept on the dashboard all day as **This morning**, plus a dim night clock overnight
 - **Device screen** (home menu, swipe left): QR code for the dashboard, and check for / install updates right on the touch screen
 - **Phone notifications** via the free ntfy app: milestones, going live, records, overtakes
 - **Colour themes** ([see them all](docs/images/themes.png)) and brightness settings
@@ -77,7 +78,7 @@ Full history: [docs/CHANGELOG.md](docs/CHANGELOG.md)
 
 ## Quick start
 
-1. **Flash the board.** Open <https://espressif.github.io/esptool-js/> in Chrome, connect the board, and flash `builds/latest/SubCounter-v12.5-FULL-new-board-flash-at-0x0.bin` at address **0x0**.
+1. **Flash the board.** Open <https://espressif.github.io/esptool-js/> in Chrome, connect the board, and flash `builds/latest/SubCounter-v12.6-FULL-new-board-flash-at-0x0.bin` at address **0x0**.
 2. **Set it up.** The board shows *SETUP MODE*. Join the Wi-Fi network **SubCounter-Setup** from your phone, and the setup page opens by itself (or go to <http://192.168.4.1>). Pick your Wi-Fi, add your YouTube channels and a YouTube Data API key, then save.
 3. **Use it.** The board shows a QR code and its address for a few seconds, then your subscriber count. Scan the code, or open **<http://subcounter.local>**, for the dashboard.
 

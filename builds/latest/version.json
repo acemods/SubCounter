@@ -1,7 +1,7 @@
 {
- "version": "12.5",
- "app": "SubCounter-v12.5-APP-ONLY.bin",
- "size": 1793136,
- "md5": "985b42ed2b1b9b8317ba5fe1b5c85dd1",
- "notes": "Board leaderboards show a small YouTube or Twitch logo by each name when you follow both"
+ "version": "12.6",
+ "app": "SubCounter-v12.6-APP-ONLY.bin",
+ "size": 1799184,
+ "md5": "6a88c1b0db8d497f8fc6941d7e401fce",
+ "notes": "Daily summary: kept on the dashboard all day (This morning card), a Summary tile on the board's home menu, and a setting for the summary time"
 }

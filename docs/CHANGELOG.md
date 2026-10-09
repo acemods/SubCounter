@@ -2,6 +2,12 @@
 
 All builds are in [`builds/`](../builds). Source snapshots for most versions are in the git history.
 
+## v12.6
+- **Daily summary on the dashboard:** a **This morning** card at the top of the side column keeps the day's summary all day: every channel's growth in the 24 hours before (with YouTube/Twitch logos when mixed), where your channel ranked, and that day's new videos with links. Saved on the board, so it survives a restart. Follows the All / YouTube / Twitch filter.
+- **Summary tile** on the board's home menu (swipe left, next to Device) opens the summary any time
+- **Summary time setting:** Settings → Alerts → *Daily summary on the board*: pick the hour, or Off (was always 9 am). Outside the morning the board says "Good afternoon!" or "Good evening!" instead.
+- Docs: new dashboard and home menu pictures
+
 ## v12.5
 - **Platform logos on the board's leaderboards:** when you follow both YouTube and Twitch channels, the leaderboard and the tall portrait leaderboard show a small YouTube or Twitch logo by each name (handy when someone is on both). Left out when everything is one platform.
 - Docs: new leaderboard picture; colour theme pictures redrawn with the logos

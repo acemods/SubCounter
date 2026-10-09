@@ -276,7 +276,8 @@ void drawRecap() {
 void drawSummary() {
   if (recapDue()) { drawRecap(); return; }
   gfx->fillScreen(C_BG);
-  ft(8, 22, "Good morning!", F_M, C_GOLD);
+  int hr = 9; if (timeValid()) { time_t n = nowT(); struct tm lt; localtime_r(&n, &lt); hr = lt.tm_hour; }
+  ft(8, 22, hr < 12 ? "Good morning!" : hr < 18 ? "Good afternoon!" : "Good evening!", F_M, C_GOLD);
   if (timeValid()) ftR(gfx->width() - 8, 22, dateStr(nowT(), "%a %d %b"), F_S, C_GREY);
   gfx->drawFastHLine(8, 31, gfx->width() - 16, C_DKGREY);
   int idx[MAX_CH]; int n = 0;
@@ -302,6 +303,33 @@ void drawSummary() {
   String v = newVids == 0 ? String("No new videos in the last day") :
              String(newVids) + (newVids == 1 ? " new video, from " : " new videos, latest ") + nameOf(newest);
   ft(8, 166, fit(v, F_S, gfx->width() - 16), F_S, newVids ? C_BLUE : C_GREY);
+}
+
+// Save today's summary (at the summary time) so the dashboard can show it all day
+void captureMorning() {
+  JsonDocument d;
+  d["at"] = (long)nowT();
+  int idx[MAX_CH]; int n = 0;
+  for (int i = 0; i < numCh; i++) if (ch[i].statsOk) idx[n++] = i;
+  for (int a = 0; a < n; a++) for (int b = a + 1; b < n; b++)
+    if (ch[idx[b]].gain24 > ch[idx[a]].gain24) { int t = idx[a]; idx[a] = idx[b]; idx[b] = t; }
+  JsonArray rows = d["rows"].to<JsonArray>();
+  for (int r = 0; r < n; r++) {
+    int i = idx[r]; JsonObject o = rows.add<JsonObject>();
+    o["n"] = nameOf(i); o["tw"] = ch[i].tw; o["g"] = ch[i].gain24; o["s"] = ch[i].subs; o["me"] = (i == 0);
+  }
+  JsonArray vids = d["vids"].to<JsonArray>();
+  for (int i = 0; i < numCh; i++)
+    if (!ch[i].tw && ch[i].vidPublished && nowT() - ch[i].vidPublished < 86400) {
+      JsonObject o = vids.add<JsonObject>(); o["n"] = nameOf(i); o["t"] = ch[i].vidTitle; o["id"] = ch[i].vidId; o["pub"] = (long)ch[i].vidPublished;
+    }
+  morningJson = ""; serializeJson(d, morningJson);
+  if (fsOk) { File f = LittleFS.open("/summary.json", "w"); if (f) { f.print(morningJson); f.close(); } }
+}
+void loadMorning() {
+  if (!fsOk || !LittleFS.exists("/summary.json")) return;
+  File f = LittleFS.open("/summary.json", "r"); if (!f) return;
+  morningJson = f.readString(); f.close();
 }
 
 // ── Night clock ─────────────────────────────────────────────────────────────

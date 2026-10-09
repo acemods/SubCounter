@@ -10,7 +10,7 @@
 | Tap | – | – | Play / pause |
 | **Long-press (≈1 s)** | **Home menu** | **Home menu** | **Home menu** |
 
-**Home menu:** three big tiles: **Creators** (your YouTube and Twitch channels), **Weather** and **Spotify**. **Swipe left** for the next page with **Device** (QR code, version, updates). Swipe, long-press or BOOT closes it.
+**Home menu:** three big tiles: **Creators** (your YouTube and Twitch channels), **Weather** and **Spotify**. **Swipe left** for the next page with **Device** (QR code, version, updates) and **Summary** (the daily summary, any time). Swipe, long-press or BOOT closes it.
 
 ![Home menu](images/home-menu.png)
 
@@ -109,8 +109,9 @@ After **3 minutes** with no touch, button press or movement (change it, or turn 
 
 ## Daily summary and night clock
 
-- **9 am:** "Good morning!" with the top 3 growers since yesterday and any new videos. Touch it to dismiss.
-- **1st of the month, 9 am:** a recap of last month instead: your subscribers gained, your rank among your channels, and the top grower
+- **9 am** (or the time you pick in Settings → Alerts → *Daily summary on the board*, or Off): "Good morning!" with the top 3 growers since yesterday and any new videos. It shows for 10 minutes; touch it to dismiss.
+- **Missed it?** Open it any time on the board: long-press → swipe left → **Summary**. Or look at the dashboard: the **This morning** card keeps that day's summary all day (every channel's growth in the 24 hours before, where you ranked, and the new videos with links). It's saved on the board, so it survives a restart.
+- **1st of the month, summary time:** a recap of last month instead: your subscribers gained, your rank among your channels, and the top grower
 - **Night** (default 23:00–07:00, adjustable): after a minute untouched, the screen dims to a large clock with your channel's count. Touch it to wake.
 
 ## Weather app
@@ -127,6 +128,7 @@ Open **`http://subcounter.local`** (or `http://<board-ip>/`) on any device on th
 
 The pages show the SubCounter badge as their browser tab icon, so they're easy to spot among your tabs and bookmarks. On a phone, use **Add to Home Screen** (Safari) or **Add to home screen / Install** (Chrome) and you'll get the same badge as an app icon.
 
+- **This morning:** the board's daily summary, kept all day (follows the filter too)
 - **All · YouTube · Twitch** buttons at the top (when you follow both): the side column, leaderboard, monthly table, channel cards and compare chart all follow the filter
 - a side column with top growers in the last 24 hours, weather, race and leaderboard (above the channels on tablets and phones)
 - a card for every channel: live (estimated) count, growth chips, milestone and ETA, a 7 or 30-day graph, and the latest video with thumbnail

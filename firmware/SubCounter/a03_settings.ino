@@ -126,6 +126,7 @@ void loadSettings() {
   applyTheme();
   cfgUpdUrl = prefs.getString("updurl", cfgUpdUrl);
   cfgSummary  = prefs.getBool("summary", true);
+  cfgSumHour  = constrain(prefs.getInt("sumH", 9), 0, 23);
   cfgShake    = prefs.getBool("shake", true);
   cfgFaceDown = prefs.getBool("facedown", true);
   cfgPortrait = prefs.getBool("portrait", true);
@@ -187,6 +188,7 @@ void saveSettings() {
   prefs.putInt("nbright", cfgNightBright);
   prefs.putString("updurl", cfgUpdUrl);
   prefs.putBool("summary", cfgSummary);
+  prefs.putInt("sumH", cfgSumHour);
   prefs.putBool("shake", cfgShake);
   prefs.putBool("facedown", cfgFaceDown);
   prefs.putBool("portrait", cfgPortrait);
