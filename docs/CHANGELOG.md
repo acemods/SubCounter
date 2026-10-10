@@ -2,6 +2,12 @@
 
 All builds are in [`builds/`](../builds). Source snapshots for most versions are in the git history.
 
+## v12.9
+- **Dashboard sometimes unreachable until you touched the board:** fixed by turning off Wi-Fi power saving. With it on, the board could stop answering incoming connections while idle. (It's mains powered, so the saving wasn't worth it.)
+- **YouTube failing with error -1 after a long time running:** album art used to get a new block of memory for every Spotify track and free the last one, which over a night broke memory into pieces too small for a secure connection. It now uses one buffer, reserved the first time Spotify shows art, for every track.
+- **Safety net:** if secure connections keep failing because memory is too fragmented, the board restarts itself to clear it (after 30 min up, and only when nobody has touched it for a minute). Nothing is lost.
+- `/debug` shows why the board last started
+
 ## v12.8
 - **Recent uploads went missing:** fixed. They were only kept in memory, fetched 3 minutes after start-up, and if a fetch failed the board waited 6 hours before trying again, so after a restart (or a failed fetch) the section didn't show. They're now saved on the board and shown straight away after a restart, fetched a minute after start-up on a fresh board, and retried within 10 minutes if anything fails.
 - **Thumbnails** in the Recent uploads table, with how long ago each video went up; titles can wrap to two lines

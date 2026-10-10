@@ -1,7 +1,7 @@
 {
- "version": "12.8",
- "app": "SubCounter-v12.8-APP-ONLY.bin",
- "size": 1807520,
- "md5": "e17a364b415bca114253d7f44bfba2ba",
- "notes": "Recent uploads on the dashboard: thumbnails, kept through restarts, and retried within 10 minutes if a fetch fails"
+ "version": "12.9",
+ "app": "SubCounter-v12.9-APP-ONLY.bin",
+ "size": 1809584,
+ "md5": "c09949f1af2b3255fe796229f9e41d23",
+ "notes": "Dashboard always reachable (Wi-Fi power saving off); album art no longer fragments memory; automatic tidy-up restart if YouTube can't connect"
 }

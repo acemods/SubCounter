@@ -1249,6 +1249,7 @@ void handleDebug() {
   String o; o.reserve(1500);
   o += "SubCounter v" FW_VERSION "\n";
   o += "Up " + String(millis() / 1000) + " s   free memory " + String(ESP.getFreeHeap()) + " (lowest " + String(ESP.getMinFreeHeap()) + ")\n";
+  o += "Last start: " + bootWhy + "\n";
   o += "Network task: " + String((const char *)netStage) + (netHolding ? " (busy with data)" : "") + "\n";
   o += "Wi-Fi signal " + String(WiFi.RSSI()) + " dBm\n";
   o += "Clock " + String(timeValid() ? "set" : "NOT set") + "   update check: " + String(updCheckSeq) + " done" +

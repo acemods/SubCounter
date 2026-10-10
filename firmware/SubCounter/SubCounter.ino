@@ -52,7 +52,7 @@
 #include <nvs.h>       // settings backup: list every saved setting
 #include <ESPmDNS.h>   // http://subcounter.local
 #define HOSTNAME "subcounter"
-#define FW_VERSION "12.8"     // shown on start-up, home menu, settings, update page and dashboard
+#define FW_VERSION "12.9"     // shown on start-up, home menu, settings, update page and dashboard
 
 // ── Pins (ESP32-C6 version of the board) ────────────────────────────────────
 #define LCD_SCK   1
@@ -248,7 +248,11 @@ bool memTight() { return ESP.getMaxAllocHeap() < 52000 || ESP.getFreeHeap() < 70
 // Diagnostics: the last few failed internet requests (shown on /debug)
 struct NetErr { unsigned long at; int code; uint32_t freeMem, block; char host[28]; };
 NetErr netErrs[12]; int netErrN = 0, netErrPos = 0; unsigned long netErrTotal = 0;
+int netFailRun = 0;                        // failed requests in a row
+volatile bool memRestartDue = false;       // memory too broken up to connect: restart when nobody's using the board
+String bootWhy;                            // why the board last restarted (for /debug)
 void noteNetErr(const String &url, int code) {
+  if (code < 0 && ++netFailRun >= 6 && ESP.getMaxAllocHeap() < 40000) memRestartDue = true;
   NetErr &e = netErrs[netErrPos]; e.at = millis(); e.code = code; e.freeMem = ESP.getFreeHeap(); e.block = ESP.getMaxAllocHeap();
   int a = url.indexOf("://"); a = a < 0 ? 0 : a + 3; int b = url.indexOf('/', a); if (b < 0) b = url.length();
   String h = url.substring(a, b); strncpy(e.host, h.c_str(), sizeof(e.host) - 1); e.host[sizeof(e.host) - 1] = 0;
@@ -314,13 +318,13 @@ int httpsCall(Conn &c, const char *method, const String &url, const Hdr *hs, int
     }
     break;
   }
-  if (code < 0 || code >= 500) noteNetErr(url, code);
+  if (code < 0 || code >= 500) noteNetErr(url, code); else { netFailRun = 0; memRestartDue = false; }
   return code;
 }
 // Download a picture into a new buffer (caller frees). Lets go of the data lock while waiting.
-uint8_t *httpDownload(const String &url, int &outLen, int maxLen) {
+uint8_t *httpDownload(const String &url, int &outLen, int maxLen, uint8_t *into = nullptr) {
   outLen = 0;
-  if (ESP.getFreeHeap() < maxLen + 70000) { connClose(connYT); connClose(connTW); connClose(connSP); }   // make room
+  if (!into && ESP.getFreeHeap() < maxLen + 70000) { connClose(connYT); connClose(connTW); connClose(connSP); }   // make room
   NetIO io;
   WiFiClientSecure client; client.setInsecure();
   HTTPClient http; http.setTimeout(8000);
@@ -332,7 +336,8 @@ uint8_t *httpDownload(const String &url, int &outLen, int maxLen) {
   if (dcode == 200) {
     int len = http.getSize();
     int cap = (len > 0 && len < maxLen) ? len : maxLen;
-    buf = (uint8_t *)malloc(cap);
+    if (into && len > maxLen) { http.end(); return nullptr; }          // too big for the fixed buffer
+    buf = into ? into : (uint8_t *)malloc(cap);
     if (buf) {
       WiFiClient *st = http.getStreamPtr();
       int got = 0; unsigned long t0 = millis();
@@ -343,7 +348,7 @@ uint8_t *httpDownload(const String &url, int &outLen, int maxLen) {
         else delay(3);
       }
       bool complete = (len > 0) ? (got == len) : (got > 4 && got < cap);
-      if (complete) outLen = got; else { free(buf); buf = nullptr; }
+      if (complete) outLen = got; else { if (!into) free(buf); buf = nullptr; }
     }
   }
   http.end();

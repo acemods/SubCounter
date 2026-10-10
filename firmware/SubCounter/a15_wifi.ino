@@ -61,6 +61,7 @@ bool connectAttempt(bool compat) {
   staAssociated = false;
   wifiFailReason = "";
 
+  WiFi.setSleep(false);       // no Wi-Fi power saving: with it on the board can stop answering the dashboard until it next goes online itself
   if (cfgUser.length()) WiFi.begin(cfgSsid.c_str(), WPA2_AUTH_PEAP, cfgUser.c_str(), cfgUser.c_str(), cfgPass.c_str());
   else                  WiFi.begin(cfgSsid.c_str(), cfgPass.c_str());
 

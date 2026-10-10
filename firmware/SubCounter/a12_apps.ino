@@ -290,16 +290,19 @@ int spCall(const char *method, const String &path, String *resp = nullptr) {
   return code;
 }
 
+// Album art goes into ONE buffer reserved the first time it's needed and re-used for every
+// track. Getting a new, differently-sized block for each song and freeing the last one broke
+// the memory into pieces too small for a secure connection after a night of music.
+#define ART_MAX 48000
+uint8_t *artBuf = nullptr;
 void spFetchArt() {
-  if (sp.art) { free(sp.art); sp.art = nullptr; sp.artLen = 0; }
+  sp.art = nullptr; sp.artLen = 0;                 // nothing draws from the buffer while it's being filled
   if (!sp.artUrl.length()) return;
+  if (!artBuf) artBuf = (uint8_t *)malloc(ART_MAX);
+  if (!artBuf) return;
   String url = sp.artUrl; int len;
-  uint8_t *buf = httpDownload(url, len, 90000);
-  if (!buf) return;
-  if (len > 4 && buf[0] == 0xFF && buf[1] == 0xD8 && url == sp.artUrl) {
-    if (sp.art) free(sp.art);
-    sp.art = buf; sp.artLen = len;
-  } else free(buf);
+  uint8_t *buf = httpDownload(url, len, ART_MAX, artBuf);
+  if (buf && len > 4 && buf[0] == 0xFF && buf[1] == 0xD8 && url == sp.artUrl) { sp.art = artBuf; sp.artLen = len; }
 }
 
 // Returns true if the track changed (needs a full redraw)

@@ -58,6 +58,11 @@ void setup() {
 
   WiFi.onEvent(onWiFiEvent);
   loadSettings();
+  { prefs.begin("subcounter", false); bootWhy = prefs.getString("rstwhy", ""); if (bootWhy.length()) prefs.remove("rstwhy"); prefs.end(); }
+  if (!bootWhy.length()) { esp_reset_reason_t r = esp_reset_reason();
+    bootWhy = r == ESP_RST_POWERON ? "Power on" : r == ESP_RST_SW ? "Restarted by the firmware (update, settings or restart button)" :
+              r == ESP_RST_PANIC ? "Crashed (software error)" : r == ESP_RST_INT_WDT || r == ESP_RST_TASK_WDT || r == ESP_RST_WDT ? "Watchdog (froze)" :
+              r == ESP_RST_BROWNOUT ? "Power dip (brown-out)" : "Other (" + String((int)r) + ")"; }
   prefs.begin("subcounter", true); app = constrain(prefs.getInt("app", APP_YT), 0, NUM_APPS - 1); prefs.end();
 
   bool needKey = false; for (int i = 0; i < numCh; i++) if (!ch[i].tw) needKey = true;
@@ -236,7 +241,23 @@ void loop() {
   lastEnd = millis();
 }
 
+void memRestartCheck() {
+  // Memory too fragmented for secure connections (YouTube keeps failing): a quick restart clears
+  // it. Only after 30 min up, when nobody's touched the board for a minute. Everything that
+  // matters (history, summary, recent uploads, settings) is saved, so nothing is lost.
+  if (!memRestartDue || millis() < 1800000UL || millis() - lastInteract < 60000UL) return;
+  prefs.begin("subcounter", false);
+  prefs.putString("rstwhy", "Memory was too fragmented to connect (biggest block " + String(ESP.getMaxAllocHeap()) +
+                  ", " + String(millis() / 3600000UL) + " h up)");
+  prefs.end();
+  setBacklight(BL_NORMAL);
+  drawStatus("Tidying up memory", "back in a few seconds", C_GREY);
+  delay(800);
+  ESP.restart();
+}
+
 void loopBody() {
+  memRestartCheck();
   { unsigned long t = millis(); server.handleClient(); unsigned long d = millis() - t;
     if (d > 400 && !portalMode && !lastLongIsWeb) { noteStall(d, "web connection (slow or empty request)"); lastLongIsWeb = true; } }
   if (portalMode) {
