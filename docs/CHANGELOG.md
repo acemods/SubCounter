@@ -2,6 +2,9 @@
 
 All builds are in [`builds/`](../builds). Source snapshots for most versions are in the git history.
 
+## v13.1
+- Dashboard on phones: the graph buttons (7 / 30 days, Subscribers / Views) and **Download CSV** now wrap onto a second line inside the card instead of sticking out of it
+
 ## v13.0
 - **Channel views over time** (YouTube): the board now saves each channel's total views as YouTube updates them. Each card gets a blue **Views** row (today, 24 h, 7 days, 30 days) and the graph gets a **Subscribers / Views** switch. New **Most viewed · 24 h** card in the side column. No extra API quota: the views come with the subscriber counts the board already fetches.
 - **Latest video tracker for every channel:** each YouTube card shows its newest video's views (if under a week old), views per hour right now, views in the last 24 hours, and how it compares with that channel's usual video (the middle of its last 10 uploads), with a small graph. Uses the existing 10-minute latest-video check, so no extra quota. Saved on the board across restarts.

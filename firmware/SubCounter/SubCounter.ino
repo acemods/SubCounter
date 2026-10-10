@@ -52,7 +52,7 @@
 #include <nvs.h>       // settings backup: list every saved setting
 #include <ESPmDNS.h>   // http://subcounter.local
 #define HOSTNAME "subcounter"
-#define FW_VERSION "13.0"     // shown on start-up, home menu, settings, update page and dashboard
+#define FW_VERSION "13.1"     // shown on start-up, home menu, settings, update page and dashboard
 
 // ── Pins (ESP32-C6 version of the board) ────────────────────────────────────
 #define LCD_SCK   1

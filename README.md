@@ -6,6 +6,7 @@ A desk gadget built on the **Waveshare ESP32-C6-Touch-LCD-1.47** that shows live
 
 ## What's new
 
+- **v13.1:** graph buttons fit on phones
 - **v13.0:** views tracking: channel views over time and a latest-video tracker for every channel
 - **v12.9:** dashboard always reachable; memory fixes for long Spotify sessions; automatic memory tidy-up
 - **v12.8:** Recent uploads get thumbnails and stay through restarts
@@ -83,7 +84,7 @@ Full history: [docs/CHANGELOG.md](docs/CHANGELOG.md)
 
 ## Quick start
 
-1. **Flash the board.** Open <https://espressif.github.io/esptool-js/> in Chrome, connect the board, and flash `builds/latest/SubCounter-v13.0-FULL-new-board-flash-at-0x0.bin` at address **0x0**.
+1. **Flash the board.** Open <https://espressif.github.io/esptool-js/> in Chrome, connect the board, and flash `builds/latest/SubCounter-v13.1-FULL-new-board-flash-at-0x0.bin` at address **0x0**.
 2. **Set it up.** The board shows *SETUP MODE*. Join the Wi-Fi network **SubCounter-Setup** from your phone, and the setup page opens by itself (or go to <http://192.168.4.1>). Pick your Wi-Fi, add your YouTube channels and a YouTube Data API key, then save.
 3. **Use it.** The board shows a QR code and its address for a few seconds, then your subscriber count. Scan the code, or open **<http://subcounter.local>**, for the dashboard.
 

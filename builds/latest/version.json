@@ -1,7 +1,7 @@
 {
- "version": "13.0",
- "app": "SubCounter-v13.0-APP-ONLY.bin",
- "size": 1821264,
- "md5": "7d0464e49d4527cc323b41dd5ec8541c",
- "notes": "Views tracking: channel views today / 24 h / 7 / 30 days with a views graph, Most viewed card, and a latest-video tracker for every channel"
+ "version": "13.1",
+ "app": "SubCounter-v13.1-APP-ONLY.bin",
+ "size": 1821328,
+ "md5": "adb2b4f20a366c8255e7391206600702",
+ "notes": "Dashboard: graph buttons and Download CSV wrap neatly on phones instead of sticking out of the card"
 }
