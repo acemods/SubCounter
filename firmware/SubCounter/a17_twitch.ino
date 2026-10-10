@@ -216,6 +216,9 @@ void fetchLatestVideos() {
     applyVideo(ch[i], pick);
   }
   videosLoaded = true;
+  bool added = false;
+  for (int i = 0; i < numCh; i++) if (trackLatest(i)) added = true;
+  if (added) saveLatest();
 }
 
 // While someone is live: refresh just their stream (1 unit) every stats round,

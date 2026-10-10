@@ -146,6 +146,10 @@ The pages show the SubCounter badge as their browser tab icon, so they're easy t
 - **Recent uploads** on each YouTube card (tap the heading to open it): the last 10 videos with thumbnails and how long ago they went up, sortable by views, views per day or likes %. Refreshed every 6 hours and saved on the board, so they're there straight after a restart. A brand-new board fills them in about a minute after starting.
 
   <img src="images/recent-uploads.png" width="360" alt="Recent uploads with thumbnails">
+- **Views** (YouTube channels): a blue row on each card with channel views gained **today**, in the last **24 h**, **7 days** and **30 days**, and a **Subscribers / Views** switch on the graph. A **Most viewed · 24 h** card in the side column ranks your channels by views gained. YouTube only updates a channel's total views every few hours, so these move in jumps; they're saved on the board as they change, and need a day or so of history before the numbers fill in. Twitch no longer gives out view totals, so this is YouTube only.
+- **Latest video** tracker on every YouTube card (for videos under a week old): its views, how long since upload, views per hour right now, views in the last 24 hours, and how it compares with a usual video for that channel (the middle of its last 10 uploads), with a little graph. It uses the latest-video check the board already does every 10 minutes, so it costs no extra API quota. Your own channel's first 48 hours still get the more detailed **New video tracker**.
+
+  <img src="images/views-card.png" width="360" alt="Views row and latest video tracker on a channel card">
 - a green **Update** button in the header when a new version is out
 - the colour of your chosen theme
 

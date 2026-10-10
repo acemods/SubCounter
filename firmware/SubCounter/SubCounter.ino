@@ -52,7 +52,7 @@
 #include <nvs.h>       // settings backup: list every saved setting
 #include <ESPmDNS.h>   // http://subcounter.local
 #define HOSTNAME "subcounter"
-#define FW_VERSION "12.9"     // shown on start-up, home menu, settings, update page and dashboard
+#define FW_VERSION "13.0"     // shown on start-up, home menu, settings, update page and dashboard
 
 // ── Pins (ESP32-C6 version of the board) ────────────────────────────────────
 #define LCD_SCK   1
@@ -130,6 +130,11 @@ struct Channel {
   time_t histStart = 0, lastSampleT = 0; long lastSampleS = -1;
   // monthly
   long gainMonth = 0, gainLastMonth = 0; bool lastMonthOk = false;
+  // channel views over time (YouTube): saved on the board, about once an hour
+  bool vOk = false; long long vToday = 0, v24 = 0, v7 = 0, v30 = 0;
+  time_t lastViewT = 0; long long lastViewV = -1; time_t vHistStart = 0;
+  // latest video's views over time (every channel; from the 10-minute latest-video check)
+  String lvVid; uint32_t lvT[48]; uint32_t lvV[48]; int lvN = 0;   // hourly, 48 h
   // newest comments on the latest video
   String cmAuthor[3], cmText[3]; time_t cmT[3] = {0, 0, 0}; long cmLikes[3] = {0, 0, 0};
   int cmN = 0; bool cmOff = false;

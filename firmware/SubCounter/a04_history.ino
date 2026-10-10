@@ -167,3 +167,124 @@ long estimateFor(int i) {
   return c.subs + add;
 }
 bool isEstimated(int i) { return !ch[i].tw && (estimateFor(i) != ch[i].subs || (cfgEst && stepFor(ch[i].subs) > 1 && ch[i].ratePerDay > 0)); }
+
+// ════════════════════════════════════════════════════════════════════════════
+//  Channel views history (LittleFS): one 12-byte sample when the total changes
+//  (at most every 30 min, and at least every 6 h). YouTube only updates channel
+//  view totals every few hours, so this is a day-by-day figure.
+// ════════════════════════════════════════════════════════════════════════════
+struct VSample { uint32_t t; uint32_t lo; uint32_t hi; };
+static inline long long vsVal(const VSample &s) { return ((long long)s.hi << 32) | s.lo; }
+String viewsPath(int i) { return "/v_" + ch[i].id + ".bin"; }
+
+void loadLastViews(int i) {
+  Channel &c = ch[i];
+  if (!fsOk || c.tw || !c.id.length() || c.lastViewT) return;
+  File f = LittleFS.open(viewsPath(i), "r");
+  if (!f) return;
+  size_t n = f.size() / sizeof(VSample);
+  VSample s;
+  if (n) {
+    f.read((uint8_t *)&s, sizeof(s)); c.vHistStart = s.t;
+    f.seek((n - 1) * sizeof(VSample)); f.read((uint8_t *)&s, sizeof(s));
+    c.lastViewT = s.t; c.lastViewV = vsVal(s);
+  }
+  f.close();
+}
+
+void recordViews(int i) {
+  Channel &c = ch[i];
+  if (!fsOk || !timeValid() || c.tw || c.views < 0 || !c.id.length()) return;
+  loadLastViews(i);
+  time_t now = nowT();
+  bool changed = c.views != c.lastViewV;
+  if (!(changed && now - c.lastViewT >= 1800) && now - c.lastViewT < 6 * 3600) return;
+  String p = viewsPath(i);
+  File f = LittleFS.open(p, "a");
+  if (!f) return;
+  VSample s = { (uint32_t)now, (uint32_t)(c.views & 0xFFFFFFFFLL), (uint32_t)(c.views >> 32) };
+  f.write((uint8_t *)&s, sizeof(s));
+  f.close();
+  c.lastViewT = now; c.lastViewV = c.views;
+  if (!c.vHistStart) c.vHistStart = now;
+  if (now - c.vHistStart > HIST_MAX_AGE + 86400) {            // trim to the last 40 days, about once a day
+    File in = LittleFS.open(p, "r"), out = LittleFS.open("/tmpv.bin", "w");
+    VSample r; time_t first = 0;
+    while (in && out && in.read((uint8_t *)&r, sizeof(r)) == sizeof(r))
+      if ((time_t)r.t >= now - HIST_MAX_AGE) { out.write((uint8_t *)&r, sizeof(r)); if (!first) first = r.t; }
+    if (in) in.close();
+    if (out) out.close();
+    LittleFS.remove(p); LittleFS.rename("/tmpv.bin", p);
+    c.vHistStart = first ? first : now;
+  }
+}
+
+void computeViewStats(int i) {
+  Channel &c = ch[i];
+  c.vOk = false;
+  if (!fsOk || !timeValid() || c.tw || c.views < 0 || !c.id.length()) return;
+  File f = LittleFS.open(viewsPath(i), "r");
+  if (!f) return;
+  time_t now = nowT(), mid = localMidnight();
+  long long beforeMid = -1, firstToday = -1, base7 = -1, base30 = -1, base24 = -1;
+  VSample s; bool any = false;
+  while (f.read((uint8_t *)&s, sizeof(s)) == sizeof(s)) {
+    long long v = vsVal(s); any = true;
+    if ((time_t)s.t < mid) beforeMid = v; else if (firstToday < 0) firstToday = v;
+    if (base30 < 0 && (time_t)s.t >= now - 30L * 86400) base30 = v;
+    if (base7 < 0 && (time_t)s.t >= now - 7L * 86400) base7 = v;
+    if ((time_t)s.t <= now - 86400 || base24 < 0) base24 = v;
+  }
+  f.close();
+  if (!any) return;
+  long long baseToday = beforeMid >= 0 ? beforeMid : (firstToday >= 0 ? firstToday : c.views);
+  c.vToday = c.views - baseToday;
+  c.v24 = c.views - base24;
+  c.v7 = base7 >= 0 ? c.views - base7 : 0;
+  c.v30 = base30 >= 0 ? c.views - base30 : 0;
+  c.vOk = true;
+}
+
+// ── Latest video tracker for every channel ───────────────────────────────────
+// A sample of the latest video's views every hour (from the 10-minute latest-video
+// check, so no extra API quota), up to 48 h worth, saved so a restart doesn't lose it.
+void saveLatest() {
+  if (!fsOk) return;
+  JsonDocument d;
+  for (int i = 0; i < numCh; i++) {
+    Channel &c = ch[i];
+    if (c.tw || !c.id.length() || !c.lvN) continue;
+    JsonObject o = d[c.id].to<JsonObject>();
+    o["vid"] = c.lvVid;
+    JsonArray a = o["p"].to<JsonArray>();
+    for (int k = 0; k < c.lvN; k++) { JsonArray x = a.add<JsonArray>(); x.add(c.lvT[k]); x.add(c.lvV[k]); }
+  }
+  File f = LittleFS.open("/latest.json", "w"); if (!f) return;
+  serializeJson(d, f); f.close();
+}
+void loadLatest() {
+  if (!fsOk || !LittleFS.exists("/latest.json")) return;
+  File f = LittleFS.open("/latest.json", "r"); if (!f) return;
+  JsonDocument d; DeserializationError e = deserializeJson(d, f); f.close();
+  if (e) return;
+  for (int i = 0; i < numCh; i++) {
+    Channel &c = ch[i];
+    if (c.tw || !c.id.length() || c.lvN) continue;
+    JsonObject o = d[c.id]; if (o.isNull()) continue;
+    c.lvVid = (const char *)(o["vid"] | "");
+    for (JsonArray x : o["p"].as<JsonArray>()) { if (c.lvN >= 48) break; c.lvT[c.lvN] = x[0] | 0; c.lvV[c.lvN] = x[1] | 0; c.lvN++; }
+  }
+}
+// Call after the latest videos have been refreshed. Returns true if anything was added.
+bool trackLatest(int i) {
+  Channel &c = ch[i];
+  if (c.tw || !c.vidId.length() || c.vidViews < 0 || c.live || !timeValid()) return false;
+  if (c.lvVid != c.vidId) { c.lvVid = c.vidId; c.lvN = 0; }         // a new upload: start again
+  uint32_t now = (uint32_t)nowT();
+  if (c.lvN > 1 && now - c.lvT[c.lvN - 2] < 3600) {                     // keep the newest number fresh
+    c.lvV[c.lvN - 1] = (uint32_t)min(c.vidViews, 4000000000LL); c.lvT[c.lvN - 1] = now; return false;
+  }
+  if (c.lvN >= 48) { memmove(c.lvT, c.lvT + 1, 47 * sizeof(uint32_t)); memmove(c.lvV, c.lvV + 1, 47 * sizeof(uint32_t)); c.lvN = 47; }
+  c.lvT[c.lvN] = now; c.lvV[c.lvN] = (uint32_t)min(c.vidViews, 4000000000LL); c.lvN++;
+  return true;
+}

@@ -83,6 +83,7 @@ void setup() {
   fetchAll();
   lastFetch = millis();
   loadRecent();                         // last saved "Recent uploads", until the fresh ones arrive
+  loadLatest();                         // latest-video view samples from before the restart
   drawStatus("Loading...", "pictures & videos", C_WHITE);
   fetchAvatars();
   fetchLatestVideos();

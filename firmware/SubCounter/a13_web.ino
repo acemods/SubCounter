@@ -319,6 +319,7 @@ const char DASH_HTML[] PROGMEM = R"HTML(<!doctype html><html lang="en"><head>
 a{color:inherit;text-decoration:none}
 header{display:flex;align-items:center;gap:12px;padding:16px 20px;border-bottom:1px solid var(--line);position:sticky;top:0;background:rgba(13,13,15,.92);backdrop-filter:blur(8px);z-index:2}
 .logo{width:34px;height:24px;flex:none;display:block}
+.vchips{align-items:center}.vchips>.sub{margin-right:2px}.vb{color:var(--blue)}.tsep{width:1px;height:20px;background:var(--line);margin:0 4px}.lvbox{margin-top:14px;padding:12px;border-radius:12px;background:#17202b}
 .side{min-width:0}.morning{min-width:0;overflow:hidden}.morning .me span{color:var(--gold)}.morning .mv{display:flex;gap:10px;align-items:flex-start;margin-top:8px;color:var(--text);text-decoration:none}.morning .mv img{width:96px;height:54px;border-radius:6px;object-fit:cover;flex:none;background:var(--line)}.morning .mv>div{min-width:0}.morning .mv .t{font-weight:600;font-size:14px;line-height:1.3;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}.morning .mv .sub{margin-top:2px}.morning .list .pi{margin-right:5px}
 header h1{font-size:18px;margin:0;flex:1}header .meta{color:var(--muted);font-size:13px}
 .btn{border:1px solid var(--line);border-radius:9px;padding:7px 12px;font-size:13px;color:var(--text);background:var(--card);cursor:pointer}
@@ -395,13 +396,22 @@ function eta(c){const e=est(c);if(!(c.rate>0.01))return c.rate<0?'Losing subscri
 function av(c,lg){const i=c.avatar?h('img',{class:'av'+(lg?' lg':''),src:c.avatar,alt:''}):h('div',{class:'av'+(lg?' lg':'')});const L=isLive(c);return h('span',{class:'avw'+(L?' on':'')+(lg?' lg':''),title:L?name(c)+' is live now':''},i,L?h('span',{class:'lv',text:'LIVE'}):null)}
 function isLive(c){return !!(c.vid&&c.vid.live)}
 function name(c){return c.title||c.handle}
-async function graph(c,days,box){box.textContent='';const r=await fetch('/api/history?i='+c.i+'&days='+days);const pts=await r.json();if(pts.length<2){box.append(h('div',{class:'sub',text:'Collecting data – recorded every hour'}));return}
-pts.push([Date.now()/1000|0,c.subs]);const W=600,H=120,t0=pts[0][0],t1=pts[pts.length-1][0];let mn=Math.min(...pts.map(p=>p[1])),mx=Math.max(...pts.map(p=>p[1]));if(mx==mn){mx++;mn--}
+async function graph(c,days,box,kind){const V=kind=='views';box.textContent='';const r=await fetch('/api/history?i='+c.i+'&days='+days+(V?'&kind=views':''));const pts=await r.json();if(pts.length<2){box.append(h('div',{class:'sub',text:V?'Collecting data – views are saved as YouTube updates them (every few hours)':'Collecting data – recorded every hour'}));return}
+pts.push([Date.now()/1000|0,V?c.views:c.subs]);const GC=V?'#4da3ff':'#30d158',GA=V?'rgba(77,163,255,.12)':'rgba(48,209,88,.12)';const W=600,H=120,t0=pts[0][0],t1=pts[pts.length-1][0];let mn=Math.min(...pts.map(p=>p[1])),mx=Math.max(...pts.map(p=>p[1]));if(mx==mn){mx++;mn--}
 const X=t=>(t-t0)/(t1-t0||1)*(W-4)+2,Y=v=>H-6-(v-mn)/(mx-mn)*(H-24);const d=pts.map((p,k)=>(k?'L':'M')+X(p[0]).toFixed(1)+' '+Y(p[1]).toFixed(1)).join(' ');
 const ns='http://www.w3.org/2000/svg',svg=document.createElementNS(ns,'svg');svg.setAttribute('viewBox',`0 0 ${W} ${H}`);svg.setAttribute('class','g');svg.setAttribute('preserveAspectRatio','none');
-const area=document.createElementNS(ns,'path');area.setAttribute('d',d+` L ${X(t1)} ${H} L ${X(t0)} ${H} Z`);area.setAttribute('fill','rgba(48,209,88,.12)');svg.append(area);
-const ln=document.createElementNS(ns,'path');ln.setAttribute('d',d);ln.setAttribute('fill','none');ln.setAttribute('stroke','#30d158');ln.setAttribute('stroke-width','2.5');ln.setAttribute('vector-effect','non-scaling-stroke');svg.append(ln);
-box.append(svg,h('div',{class:'sub',text:`${cmp(mn)} – ${cmp(mx)}  ·  ${new Date(t0*1000).toLocaleDateString('en-GB',{day:'numeric',month:'short'})} to now`}))}
+const area=document.createElementNS(ns,'path');area.setAttribute('d',d+` L ${X(t1)} ${H} L ${X(t0)} ${H} Z`);area.setAttribute('fill',GA);svg.append(area);
+const ln=document.createElementNS(ns,'path');ln.setAttribute('d',d);ln.setAttribute('fill','none');ln.setAttribute('stroke',GC);ln.setAttribute('stroke-width','2.5');ln.setAttribute('vector-effect','non-scaling-stroke');svg.append(ln);
+box.append(svg,h('div',{class:'sub',text:`${V?'Views ':''}${cmp(mn)} – ${cmp(mx)}  ·  ${new Date(t0*1000).toLocaleDateString('en-GB',{day:'numeric',month:'short'})} to now`}))}
+function spark(p,col){const W=600,H=60,t0=p[0][0],t1=p[p.length-1][0],mn=p[0][1],mx=Math.max(p[p.length-1][1],mn+1);const d=p.map((q,k)=>(k?'L':'M')+((q[0]-t0)/(t1-t0||1)*(W-4)+2).toFixed(1)+' '+(H-4-(q[1]-mn)/(mx-mn)*(H-10)).toFixed(1)).join(' ');const ns='http://www.w3.org/2000/svg',sv=document.createElementNS(ns,'svg');sv.setAttribute('viewBox',`0 0 ${W} ${H}`);sv.setAttribute('preserveAspectRatio','none');sv.setAttribute('class','g');sv.style.height='60px';const ln=document.createElementNS(ns,'path');ln.setAttribute('d',d);ln.setAttribute('fill','none');ln.setAttribute('stroke',col);ln.setAttribute('stroke-width','2.5');ln.setAttribute('vector-effect','non-scaling-stroke');sv.append(ln);return sv}
+function latestBox(c){const v=c.vid,L=c.lv,now=Date.now()/1000|0,p=[...L.p];if(!p.length||p[p.length-1][1]!=v.views)p.push([now,v.views]);
+const age=Math.max(60,now-v.pub),ah=age/3600,ag=ah<1?Math.round(age/60)+' min':ah<48?Math.floor(ah)+'h '+Math.floor(age%3600/60)+'m':Math.floor(ah/24)+' days';
+let rate=-1;for(let k=p.length-2;k>=0;k--){const dt=p[p.length-1][0]-p[k][0];if(dt>=3000){rate=(p[p.length-1][1]-p[k][1])/(dt/3600);break}}
+let d24=null;if(ah>=25){const t=now-86400;let b=null;for(const q of p)if(q[0]<=t)b=q;if(b)d24=v.views-b[1]}
+const box=h('div',{class:'lvbox'},h('div',{class:'sub',style:'color:var(--blue)',text:'LATEST VIDEO'}),h('div',{style:'font-size:24px;font-weight:800',text:fmt(v.views)+' views'}),
+h('div',{class:'sub',text:`in ${ag} since upload`+(rate>=0?` · ${cmp(Math.round(rate))}/hour now`:'')+(d24!=null?` · +${cmp(d24)} in the last 24 h`:'')}),
+L.usual?h('div',{style:'margin-top:4px',text:`A usual video for this channel gets about ${cmp(L.usual)} views`+(L.usual>0?`, so this one already has ${Math.round(v.views/L.usual*100)}% of that`:'')}):null);
+if(p.length>1)box.append(spark(p,'#4da3ff'));return box}
 function channelCard(c){const card=h('div',{class:'card'+(c.err&&c.subs<0?' err':'')});
 const link=c.tw?'https://www.twitch.tv/'+c.tw:isLive(c)?'https://youtu.be/'+c.vid.id:c.id?'https://www.youtube.com/channel/'+c.id:'#';
 card.append(h('a',{class:'top',href:link,target:'_blank'},av(c,true),h('div',{style:'min-width:0'},h('div',{class:'nm'},name(c),c.tw?h('span',{class:'twb',text:'Twitch'}):null),h('div',{class:'sub',text:[c.tw?'twitch.tv/'+c.tw:c.handle,c.country,c.joined?'since '+new Date(c.joined*1000).getFullYear():''].filter(Boolean).join(' · ')}))));
@@ -410,14 +420,17 @@ const e=est(c);card.append(h('div',{class:'big'},h('span',{'data-est':c.i,text:f
 card.append(h('div',{class:'sub',text:c.tw?(isLive(c)?'followers · live now':'followers · offline'):`${cmp(c.views)} views · ${fmt(c.videos)} videos · ${c.videos>0?cmp(Math.round(c.views/c.videos)):'-'} avg`}));
 if(c.statsOk)card.append(h('div',{class:'chips'},[['Today',c.today],['Last 24 h',c.d1],['7 days',c.d7],['30 days',c.d30]].map(([k,v])=>h('div',{class:'chip'},k+' ',h('b',{class:cls(v),text:sg(v)}))),c.rate?h('div',{class:'chip'},'≈ ',h('b',{text:sg(Math.round(c.rate))}),'/day'):null));
 else card.append(h('div',{class:'chips'},h('div',{class:'chip',text:'Growth: collecting data'})));
+if(c.vw)card.append(h('div',{class:'chips vchips',title:'Channel views. YouTube updates these every few hours, so they move in jumps.'},h('span',{class:'sub',text:'Views'}),[['Today',c.vw.t],['24 h',c.vw.d1],['7 days',c.vw.d7],['30 days',c.vw.d30]].map(([k,v])=>h('div',{class:'chip'},k+' ',h('b',{class:'vb',text:'+'+cmp(Math.max(0,v))})))));
 const f=Math.max(0,Math.min(1,(e-c.prev)/(c.next-c.prev||1)));
 card.append(h('div',{style:'margin-top:6px;display:flex;justify-content:space-between'},h('span',{class:'sub',text:'Next milestone '}),h('b',{text:fmt(c.next)})),h('div',{class:'bar'},h('i',{style:`width:${(f*100).toFixed(1)}%`})),(c.next-e>0&&c.next-e<=Math.max(10,(c.next-c.prev)/10))?h('div',{style:'color:var(--gold);font-weight:700',text:`Almost there: ${fmt(c.next-e)} to go! · ${eta(c)}`}):h('div',{class:'sub',text:`${fmt(c.next-e)} to go · ${eta(c)}`}));
-const tabs=h('div',{class:'tabs'}),gbox=h('div');let cur=graphs[c.i]||7;
-for(const dd of [7,30]){const b=h('button',{text:dd+' days',class:dd==cur?'on':'',onclick:()=>{graphs[c.i]=dd;[...tabs.children].forEach(x=>x.className='');b.className='on';graph(c,dd,gbox)}});tabs.append(b)}
-tabs.append(h('a',{class:'small',href:'/api/csv?i='+c.i,text:'Download CSV'}));card.append(tabs,gbox);graph(c,cur,gbox);
+const tabs=h('div',{class:'tabs'}),gbox=h('div');let cur=graphs[c.i]||7,gk=GK[c.i]||'subs';
+const dayB=[7,30].map(dd=>h('button',{text:dd+' days',class:dd==cur?'on':'',onclick:()=>{graphs[c.i]=cur=dd;dayB.forEach((x,k)=>x.className=[7,30][k]==dd?'on':'');graph(c,dd,gbox,gk)}}));tabs.append(...dayB);
+if(c.vw){const kB=[['subs',c.tw?'Followers':'Subscribers'],['views','Views']].map(([k,t])=>h('button',{text:t,class:k==gk?'on':'',onclick:()=>{GK[c.i]=gk=k;kB.forEach((x,j)=>x.className=['subs','views'][j]==k?'on':'');graph(c,cur,gbox,gk)}}));tabs.append(h('span',{class:'tsep'}),...kB)}
+tabs.append(h('a',{class:'small',href:'/api/csv?i='+c.i,text:'Download CSV'}));card.append(tabs,gbox);graph(c,cur,gbox,gk);
 if(c.vt){const t=c.vt,ag=t.ageMin<60?t.ageMin+' min':(t.ageMin/60|0)+'h '+(t.ageMin%60)+'m';const box=h('div',{style:'margin-top:14px;padding:12px;border-radius:12px;background:#1f2a1f'},h('div',{class:'sub',style:'color:var(--gold)',text:'NEW VIDEO TRACKER'}),h('div',{style:'font-size:26px;font-weight:800',text:fmt(t.views)+' views'}),h('div',{class:'sub',text:`in ${ag}`+(t.rate>=0?` · ${cmp(t.rate)}/hour now`:'')}),t.cmp?h('div',{style:'margin-top:4px',class:t.cmp.includes('+')?'pos':t.cmp.includes('-')?'neg':'',text:t.cmp}):null);
 if(t.pts&&t.pts.length>1){const W=600,H=70,p=t.pts,t0=p[0][0],t1=p[p.length-1][0],mn=p[0][1],mx=Math.max(p[p.length-1][1],mn+1);const d=p.map((q,k)=>(k?'L':'M')+((q[0]-t0)/(t1-t0||1)*(W-4)+2).toFixed(1)+' '+(H-4-(q[1]-mn)/(mx-mn)*(H-10)).toFixed(1)).join(' ');const ns='http://www.w3.org/2000/svg',sv=document.createElementNS(ns,'svg');sv.setAttribute('viewBox',`0 0 ${W} ${H}`);sv.setAttribute('preserveAspectRatio','none');sv.setAttribute('class','g');sv.style.height='70px';const ln=document.createElementNS(ns,'path');ln.setAttribute('d',d);ln.setAttribute('fill','none');ln.setAttribute('stroke','#ffc53d');ln.setAttribute('stroke-width','2.5');ln.setAttribute('vector-effect','non-scaling-stroke');sv.append(ln);box.append(sv)}
 card.append(box)}
+else if(c.lv&&c.vid&&!c.vid.live)card.append(latestBox(c));
 if(c.vid){const v=c.vid;card.append(h('a',{class:'vid',href:c.tw?'https://www.twitch.tv/'+c.tw:'https://youtu.be/'+v.id,target:'_blank'},h('img',{src:v.thumb||`https://i.ytimg.com/vi/${v.id}/mqdefault.jpg`,alt:''}),h('div',{style:'min-width:0'},h('div',{class:'t'},v.live?h('span',{class:'live',text:'LIVE'}):null,v.title),h('div',{class:'sub',text:v.live?`${fmt(v.viewers)} watching now`:`${ago(v.pub)} · ${dur(v.dur)}`}),c.tw?h('div',{class:'sub',text:v.game||''}):h('div',{class:'sub',text:`${cmp(v.views)} views · ${v.likes>=0?cmp(v.likes)+' likes':'likes hidden'} · ${v.comments>=0?cmp(v.comments)+' comments':'comments off'}`}))))}
 if(c.pb){const b=c.pb,dd=t=>t?new Date(t*1000).toLocaleDateString('en-GB',{day:'numeric',month:'short'}):'';const it=[];
 if(b.day)it.push(h('span',{},'Best day ',h('b',{text:sg(b.day)}),' '+dd(b.dayT)));if(b.week)it.push(h('span',{},'Best week ',h('b',{text:sg(b.week)}),' '+dd(b.weekT)));if(b.vid)it.push(h('span',{title:b.vidTitle||''},'Best video, 1st day ',h('b',{text:cmp(b.vid)+' views'})));
@@ -470,7 +483,7 @@ tip.textContent='';tip.append(h('div',{class:'sub',text:new Date(t*1000).toLocal
 ser.forEach(s=>{let v=s.pts[0][1];for(const p of s.pts){if(p[0]>t)break;v=p[1]}tip.append(h('div',{},h('i',{style:'background:'+colFor(s.c.i)}),name(s.c)+' ',h('b',{text:fv(v)})))});
 tip.style.display='block';const px=ev.clientX-r.left;tip.style.left=Math.min(px+12,r.width-tip.offsetWidth-4)+'px';tip.style.top='10px'};
 svg.onmouseleave=()=>{cross.setAttribute('visibility','hidden');tip.style.display='none'}}
-let PF='all';try{PF=localStorage.getItem('pf')||'all'}catch(e){}
+const GK={};let PF='all';try{PF=localStorage.getItem('pf')||'all'}catch(e){}
 const PIC={yt:'<svg width="18" height="13" viewBox="0 0 20 14"><rect width="20" height="14" rx="4" fill="#ff0033"/><path d="M8 4v6l5-3z" fill="#fff"/></svg>',tw:'<svg width="15" height="15" viewBox="0 0 16 16"><path d="M2 1h13v9l-4 4H8l-2 2H4v-2H1V4z" fill="#9146ff"/><path d="M7 4h1.5v4H7zM10.5 4H12v4h-1.5z" fill="#fff"/></svg>'};
 function pIcon(c){const s=document.createElement('span');s.className='pi';s.title=c.tw?'Twitch':'YouTube';s.innerHTML=PIC[c.tw?'tw':'yt'];return s}
 const kindOk=c=>PF=='all'||(PF=='tw'?!!c.tw:!c.tw);
@@ -492,6 +505,8 @@ h('div',{class:'sub',style:'margin-top:10px'},vs.length?vs.length+' new video'+(
 // summary
 const ok=C.filter(c=>c.statsOk).sort((a,b)=>b.d1-a.d1);const nv=C.filter(c=>c.vid&&!c.tw&&Date.now()/1000-c.vid.pub<86400);
 row.append(h('div',{class:'card'},h('h2',{text:'Last 24 hours'}),h('div',{class:'sub',style:'margin:-8px 0 8px',text:'Rolling: gains since this time yesterday'}),h('div',{class:'list'},ok.length?ok.slice(0,5).map(c=>h('div',{},h('span',{text:name(c)}),h('b',{class:cls(c.d1),text:sg(c.d1)}))):h('div',{class:'sub',text:'Collecting data – check back in a few hours'})),h('div',{class:'sub',style:'margin-top:8px',text:nv.length?`${nv.length} new video${nv.length>1?'s':''} today`:'No new videos in the last day'})));
+// most viewed in the last 24 h (YouTube channel views)
+{const mv=C.filter(c=>c.vw&&!c.tw).sort((a,b)=>b.vw.d1-a.vw.d1);if(mv.length>1)row.append(h('div',{class:'card'},h('h2',{text:'Most viewed · 24 h'}),h('div',{class:'sub',style:'margin:-8px 0 8px',text:'Channel views gained (YouTube updates these every few hours)'}),h('div',{class:'list'},mv.slice(0,5).map(c=>h('div',{},h('span',{text:name(c)}),h('b',{class:'vb',text:'+'+cmp(Math.max(0,c.vw.d1))}))))))}
 // weather
 if(D.wx){const w=D.wx;row.append(h('div',{class:'card'},h('h2',{text:'Weather · '+w.place}),h('div',{class:'big',text:w.temp+'°'}),h('div',{text:w.text+' · feels '+w.feels+'°'}),h('div',{class:'sub',text:`High ${w.hi}° · Low ${w.lo}° · Wind ${w.wind} mph`}),w.rainHour>=0?h('div',{style:'margin-top:8px;color:var(--blue)',text:`Rain likely around ${String(w.rainHour).padStart(2,'0')}:00 (${w.rainPct}%)`}):null))}
 // race
@@ -543,6 +558,19 @@ void handleApiData() {
     o["country"] = c.country; o["avatar"] = c.avatarUrl; o["err"] = c.err;
     o["statsOk"] = c.statsOk; o["today"] = c.gainToday; o["d1"] = c.gain24;
     o["d7"] = c.gain7; o["d30"] = c.gain30; o["histStart"] = (long)c.histStart;
+    if (c.vOk) { JsonObject vv = o["vw"].to<JsonObject>(); vv["t"] = c.vToday; vv["d1"] = c.v24; vv["d7"] = c.v7; vv["d30"] = c.v30; }
+    if (!c.tw && c.lvN && c.lvVid == c.vidId && c.vidPublished && nowT() - c.vidPublished < 7L * 86400) {   // videos under a week old
+      JsonObject lv = o["lv"].to<JsonObject>();
+      JsonArray p = lv["p"].to<JsonArray>();
+      int step = (c.lvN + 23) / 24;                     // at most ~24 points: enough for the little graph, light on memory
+      for (int k = 0; k < c.lvN; k += step) { JsonArray x = p.add<JsonArray>(); x.add(c.lvT[k]); x.add(c.lvV[k]); }
+      if ((c.lvN - 1) % step) { JsonArray x = p.add<JsonArray>(); x.add(c.lvT[c.lvN - 1]); x.add(c.lvV[c.lvN - 1]); }
+      // a usual video for this channel: the median views of its recent uploads (not counting this one)
+      long long v[RECENT_N]; int n = 0;
+      for (int k = 0; k < c.rvN; k++) if (c.rv[k].id != c.vidId && c.rv[k].views >= 0) v[n++] = c.rv[k].views;
+      for (int a = 0; a < n; a++) for (int b = a + 1; b < n; b++) if (v[b] < v[a]) { long long t = v[a]; v[a] = v[b]; v[b] = t; }
+      if (n >= 3) lv["usual"] = v[n / 2];
+    }
     long e = c.subs >= 0 ? estimateFor(i) : 0;
     long nx = nextMilestone(max(0L, e));
     o["next"] = nx; o["prev"] = prevMilestone(nx);
@@ -600,7 +628,22 @@ void handleApiHistory() {
   server.setContentLength(CONTENT_LENGTH_UNKNOWN);
   server.send(200, "application/json", "");
   server.sendContent("[");
-  if (i >= 0 && i < numCh && fsOk && ch[i].id.length()) {
+  if (server.arg("kind") == "views" && i >= 0 && i < numCh && fsOk && ch[i].id.length()) {
+    File f = LittleFS.open(viewsPath(i), "r");
+    if (f) {
+      time_t from = nowT() - (time_t)days * 86400;
+      String chunk; bool first = true; VSample s;
+      while (f.read((uint8_t *)&s, sizeof(s)) == sizeof(s)) {
+        if ((time_t)s.t < from) continue;
+        char num[24]; snprintf(num, sizeof(num), "%lld", vsVal(s));
+        chunk += (first ? "[" : ",[") + String(s.t) + "," + num + "]";
+        first = false;
+        if (chunk.length() > 1200) { server.sendContent(chunk); chunk = ""; }
+      }
+      f.close();
+      if (chunk.length()) server.sendContent(chunk);
+    }
+  } else if (i >= 0 && i < numCh && fsOk && ch[i].id.length()) {
     File f = LittleFS.open(histPath(i), "r");
     if (f) {
       time_t from = nowT() - (time_t)days * 86400;

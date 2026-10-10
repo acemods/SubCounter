@@ -2,6 +2,11 @@
 
 All builds are in [`builds/`](../builds). Source snapshots for most versions are in the git history.
 
+## v13.0
+- **Channel views over time** (YouTube): the board now saves each channel's total views as YouTube updates them. Each card gets a blue **Views** row (today, 24 h, 7 days, 30 days) and the graph gets a **Subscribers / Views** switch. New **Most viewed · 24 h** card in the side column. No extra API quota: the views come with the subscriber counts the board already fetches.
+- **Latest video tracker for every channel:** each YouTube card shows its newest video's views (if under a week old), views per hour right now, views in the last 24 hours, and how it compares with that channel's usual video (the middle of its last 10 uploads), with a small graph. Uses the existing 10-minute latest-video check, so no extra quota. Saved on the board across restarts.
+- Docs: new dashboard pictures
+
 ## v12.9
 - **Dashboard sometimes unreachable until you touched the board:** fixed by turning off Wi-Fi power saving. With it on, the board could stop answering incoming connections while idle. (It's mains powered, so the saving wasn't worth it.)
 - **YouTube failing with error -1 after a long time running:** album art used to get a new block of memory for every Spotify track and free the last one, which over a night broke memory into pieces too small for a secure connection. It now uses one buffer, reserved the first time Spotify shows art, for every track.

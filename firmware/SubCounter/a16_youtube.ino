@@ -89,6 +89,7 @@ void fetchAll() {
     if (!found) ch[i].err = "Channel not found";
     recordSample(i);
     computeStats(i);
+    recordViews(i); computeViewStats(i);
     updateRecords(i);
     pump();
   }
