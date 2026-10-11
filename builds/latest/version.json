@@ -1,7 +1,7 @@
 {
- "version": "13.1",
- "app": "SubCounter-v13.1-APP-ONLY.bin",
- "size": 1821328,
- "md5": "adb2b4f20a366c8255e7391206600702",
- "notes": "Dashboard: graph buttons and Download CSV wrap neatly on phones instead of sticking out of the card"
+ "version": "13.2",
+ "app": "SubCounter-v13.2-APP-ONLY.bin",
+ "size": 1834320,
+ "md5": "8d7fed6e29114ed62baac85791d4538e",
+ "notes": "Estimated earnings (YouTube) on the dashboard: today, 7 days, 30 days and lifetime, as a range; currency and rate in settings"
 }

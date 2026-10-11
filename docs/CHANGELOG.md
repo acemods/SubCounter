@@ -2,6 +2,9 @@
 
 All builds are in [`builds/`](../builds). Source snapshots for most versions are in the git history.
 
+## v13.2
+- **Estimated earnings** for YouTube channels on the dashboard: a 30-day range on each card, and today / 7 days / 30 days / lifetime when you tap it. Worked out from views at an adjustable rate per 1,000 views (default £0.20–£3.50), like Social Blade. Settings → Display: on/off, currency (£, $, €) and the low/high rate. No extra API quota.
+
 ## v13.1
 - Dashboard on phones: the graph buttons (7 / 30 days, Subscribers / Views) and **Download CSV** now wrap onto a second line inside the card instead of sticking out of it
 

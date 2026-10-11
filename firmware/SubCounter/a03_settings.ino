@@ -110,6 +110,10 @@ void loadSettings() {
   cfgApiKey   = prefs.getString("apikey", "");
   cfgAuto     = prefs.getBool("auto", false);
   cfgEst      = prefs.getBool("est", true);
+  cfgEarn     = prefs.getBool("earn", true);
+  cfgEarnCur  = constrain(prefs.getInt("earnCur", 0), 0, 2);
+  cfgEarnLo   = prefs.getFloat("earnLo", 0.20f);
+  cfgEarnHi   = prefs.getFloat("earnHi", 3.50f);
   cfgCelebrate = prefs.getBool("celebrate", true);
   cfgPin = prefs.getString("pin", "");
   cfgTwId = prefs.getString("twid", "");
@@ -173,6 +177,8 @@ void saveSettings() {
   prefs.putString("apikey", cfgApiKey);
   prefs.putBool("auto", cfgAuto);
   prefs.putBool("est", cfgEst);
+  prefs.putBool("earn", cfgEarn); prefs.putInt("earnCur", cfgEarnCur);
+  prefs.putFloat("earnLo", cfgEarnLo); prefs.putFloat("earnHi", cfgEarnHi);
   prefs.putBool("celebrate", cfgCelebrate);
   prefs.putString("pin", cfgPin);
   prefs.putString("twid", cfgTwId);

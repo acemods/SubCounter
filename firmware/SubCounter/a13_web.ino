@@ -319,7 +319,7 @@ const char DASH_HTML[] PROGMEM = R"HTML(<!doctype html><html lang="en"><head>
 a{color:inherit;text-decoration:none}
 header{display:flex;align-items:center;gap:12px;padding:16px 20px;border-bottom:1px solid var(--line);position:sticky;top:0;background:rgba(13,13,15,.92);backdrop-filter:blur(8px);z-index:2}
 .logo{width:34px;height:24px;flex:none;display:block}
-.vchips{align-items:center}.vchips>.sub{margin-right:2px}.vb{color:var(--blue)}.tsep{width:1px;height:20px;background:var(--line);margin:0 4px}.lvbox{margin-top:14px;padding:12px;border-radius:12px;background:#17202b}
+.vchips{align-items:center}details.earn{margin:2px 0 8px}details.earn summary{cursor:pointer;list-style:revert}details.earn summary b{color:#e3b341}.eb{color:#e3b341}details.earn>.sub{margin-top:2px;font-size:12px}.vchips>.sub{margin-right:2px}.vb{color:var(--blue)}.tsep{width:1px;height:20px;background:var(--line);margin:0 4px}.lvbox{margin-top:14px;padding:12px;border-radius:12px;background:#17202b}
 .side{min-width:0}.morning{min-width:0;overflow:hidden}.morning .me span{color:var(--gold)}.morning .mv{display:flex;gap:10px;align-items:flex-start;margin-top:8px;color:var(--text);text-decoration:none}.morning .mv img{width:96px;height:54px;border-radius:6px;object-fit:cover;flex:none;background:var(--line)}.morning .mv>div{min-width:0}.morning .mv .t{font-weight:600;font-size:14px;line-height:1.3;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}.morning .mv .sub{margin-top:2px}.morning .list .pi{margin-right:5px}
 header h1{font-size:18px;margin:0;flex:1}header .meta{color:var(--muted);font-size:13px}
 .btn{border:1px solid var(--line);border-radius:9px;padding:7px 12px;font-size:13px;color:var(--text);background:var(--card);cursor:pointer}
@@ -421,6 +421,11 @@ card.append(h('div',{class:'sub',text:c.tw?(isLive(c)?'followers · live now':'f
 if(c.statsOk)card.append(h('div',{class:'chips'},[['Today',c.today],['Last 24 h',c.d1],['7 days',c.d7],['30 days',c.d30]].map(([k,v])=>h('div',{class:'chip'},k+' ',h('b',{class:cls(v),text:sg(v)}))),c.rate?h('div',{class:'chip'},'≈ ',h('b',{text:sg(Math.round(c.rate))}),'/day'):null));
 else card.append(h('div',{class:'chips'},h('div',{class:'chip',text:'Growth: collecting data'})));
 if(c.vw)card.append(h('div',{class:'chips vchips',title:'Channel views. YouTube updates these every few hours, so they move in jumps.'},h('span',{class:'sub',text:'Views'}),[['Today',c.vw.t],['24 h',c.vw.d1],['7 days',c.vw.d7],['30 days',c.vw.d30]].map(([k,v])=>h('div',{class:'chip'},k+' ',h('b',{class:'vb',text:'+'+cmp(Math.max(0,v))})))));
+if(!c.tw&&D.earn&&c.views>0){const E=D.earn,m=x=>{x=Math.max(0,x);return E.cur+(x<10?x.toFixed(2):x<1000?Math.round(x).toLocaleString('en-GB'):cmp(Math.round(x)))},rg=v=>m(v*E.lo/1000)+' – '+m(v*E.hi/1000);
+const it=[];if(c.vw){it.push(['Today',c.vw.t],['7 days',c.vw.d7],['30 days',c.vw.d30])}it.push(['Lifetime',c.views]);
+card.append(h('details',{class:'earn'},h('summary',{},h('span',{class:'sub',text:'Est. earnings'}),' ',h('b',{text:c.vw?rg(c.vw.d30):rg(c.views)}),h('span',{class:'sub',text:c.vw?' / 30 days':' lifetime'})),
+h('div',{class:'chips'},it.map(([k,v])=>h('div',{class:'chip'},k+' ',h('b',{class:'eb',text:rg(v)})))),
+h('div',{class:'sub',text:`A rough guess from views at ${E.cur}${E.lo.toFixed(2)}–${E.cur}${E.hi.toFixed(2)} per 1,000 views (change it in Settings). YouTube doesn't publish real earnings; Shorts pay much less, and a channel only earns once it's in the YouTube Partner Programme. Lifetime assumes every view was paid, so it's the roughest.`})))}
 const f=Math.max(0,Math.min(1,(e-c.prev)/(c.next-c.prev||1)));
 card.append(h('div',{style:'margin-top:6px;display:flex;justify-content:space-between'},h('span',{class:'sub',text:'Next milestone '}),h('b',{text:fmt(c.next)})),h('div',{class:'bar'},h('i',{style:`width:${(f*100).toFixed(1)}%`})),(c.next-e>0&&c.next-e<=Math.max(10,(c.next-c.prev)/10))?h('div',{style:'color:var(--gold);font-weight:700',text:`Almost there: ${fmt(c.next-e)} to go! · ${eta(c)}`}):h('div',{class:'sub',text:`${fmt(c.next-e)} to go · ${eta(c)}`}));
 const tabs=h('div',{class:'tabs'}),gbox=h('div');let cur=graphs[c.i]||7,gk=GK[c.i]||'subs';
@@ -540,6 +545,7 @@ void handleApiData() {
   if (updAvail) doc["upd"] = updVer;
   doc["m0"] = (long)monthStart(0); doc["m1"] = (long)monthStart(1);
   if (morningJson.length()) doc["morning"] = serialized(morningJson);
+  if (cfgEarn) { JsonObject e = doc["earn"].to<JsonObject>(); const char *sy[] = { "£", "$", "€" }; e["cur"] = sy[cfgEarnCur]; e["lo"] = cfgEarnLo; e["hi"] = cfgEarnHi; }
   if (raceSet()) { JsonArray r = doc["race"].to<JsonArray>(); r.add(cfgRaceA); r.add(cfgRaceB); }
   else doc["race"] = nullptr;
   if (wx.ok) {
@@ -932,6 +938,14 @@ void handleSettings() {
        "<input type='range' name='nbright' min='1' max='40' value='" + String(cfgNightBright) + "' oninput=\"nv.textContent=this.value+'%'\" style='padding:0'>";
   h += checkbox("auto", cfgAuto, "Switch channels automatically every 10 seconds");
   h += checkbox("est", cfgEst, "Estimated live counts between YouTube's rounded steps (“est.”)");
+  h += checkbox("earn", cfgEarn, "Show estimated earnings on the dashboard (YouTube)");
+  { const char *cs[] = { "£ pounds", "$ dollars", "€ euros" };
+    h += "<div class='row'><select name='earnCur'>";
+    for (int k = 0; k < 3; k++) h += "<option value='" + String(k) + "'" + (cfgEarnCur == k ? " selected" : "") + ">" + cs[k] + "</option>";
+    h += "</select><input name='earnLo' type='number' step='0.01' min='0' value='" + String(cfgEarnLo, 2) + "' title='Low'>"
+         "<span>to</span><input name='earnHi' type='number' step='0.01' min='0' value='" + String(cfgEarnHi, 2) + "' title='High'></div>"; }
+  h += "<small>Earnings per 1,000 views, low to high. YouTube doesn't publish what channels earn, so the dashboard shows a range "
+       "worked out from views (like Social Blade). Typical is about 0.20 to 3.50; narrow it if you know a channel's real rate.</small>";
   h += "<label>Show the big clock after this long without use</label><select name='idleclk'>";
   { const int opts[] = { 0, 1, 2, 3, 5, 10 };
     for (int o : opts) h += "<option value='" + String(o) + "'" + (cfgIdleClock == o ? " selected" : "") + ">" +
@@ -1192,6 +1206,10 @@ void handleSave() {
   if (key.length()) cfgApiKey = key;
   cfgAuto = server.arg("auto") == "1";
   cfgEst = server.arg("est") == "1";
+  cfgEarn = server.arg("earn") == "1";
+  if (server.hasArg("earnCur")) cfgEarnCur = constrain(server.arg("earnCur").toInt(), 0, 2);
+  if (server.hasArg("earnLo")) { float lo = server.arg("earnLo").toFloat(), hi = server.arg("earnHi").toFloat();
+    if (lo >= 0 && hi >= lo && hi < 1000) { cfgEarnLo = lo; cfgEarnHi = hi; } }
   cfgCelebrate = server.arg("celebrate") == "1";
   cfgLiveAlert = server.arg("livealert") == "1";
   cfgAutoUpd = server.arg("autoupd") == "1";

@@ -149,7 +149,9 @@ The pages show the SubCounter badge as their browser tab icon, so they're easy t
 - **Views** (YouTube channels): a blue row on each card with channel views gained **today**, in the last **24 h**, **7 days** and **30 days**, and a **Subscribers / Views** switch on the graph. A **Most viewed · 24 h** card in the side column ranks your channels by views gained. YouTube only updates a channel's total views every few hours, so these move in jumps; they're saved on the board as they change, and need a day or so of history before the numbers fill in. Twitch no longer gives out view totals, so this is YouTube only.
 - **Latest video** tracker on every YouTube card (for videos under a week old): its views, how long since upload, views per hour right now, views in the last 24 hours, and how it compares with a usual video for that channel (the middle of its last 10 uploads), with a little graph. It uses the latest-video check the board already does every 10 minutes, so it costs no extra API quota. Your own channel's first 48 hours still get the more detailed **New video tracker**.
 
-  <img src="images/views-card.png" width="360" alt="Views row and latest video tracker on a channel card">
+- **Estimated earnings** (YouTube): under the Views row, a range for the last 30 days; tap it for today, 7 days, 30 days and lifetime. It's a rough guess worked out from views, like Social Blade's: views ÷ 1,000 × a rate per 1,000 views (default **£0.20 to £3.50**). YouTube doesn't publish what channels really earn, Shorts pay far less, a channel only earns once it's in the YouTube Partner Programme, and the lifetime figure assumes every view was paid, so treat it as a ballpark. Change the currency (£, $, €) and the rate, or turn it off, in Settings → Display.
+
+  <img src="images/views-card.png" width="360" alt="Views row, estimated earnings and latest video tracker on a channel card">
 - a green **Update** button in the header when a new version is out
 - the colour of your chosen theme
 

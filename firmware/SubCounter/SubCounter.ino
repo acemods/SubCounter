@@ -52,7 +52,7 @@
 #include <nvs.h>       // settings backup: list every saved setting
 #include <ESPmDNS.h>   // http://subcounter.local
 #define HOSTNAME "subcounter"
-#define FW_VERSION "13.1"     // shown on start-up, home menu, settings, update page and dashboard
+#define FW_VERSION "13.2"     // shown on start-up, home menu, settings, update page and dashboard
 
 // ── Pins (ESP32-C6 version of the board) ────────────────────────────────────
 #define LCD_SCK   1
@@ -378,7 +378,10 @@ bool   cfgShake = true, cfgFaceDown = true, cfgPortrait = true, cfgFlipPortrait 
 int    cfgTapSens = 2;
 int    cfgRaceA = -1, cfgRaceB = -1;
 int    cfgNightStart = 23, cfgNightEnd = 7;
-int    cfgSumHour = 9;                          // daily summary time (hour)
+int    cfgSumHour = 9;
+bool   cfgEarn = true;                           // estimated earnings on the dashboard
+int    cfgEarnCur = 0;                           // 0 = £, 1 = $, 2 = €
+float  cfgEarnLo = 0.20f, cfgEarnHi = 3.50f;     // estimated earnings per 1,000 views (low / high)                          // daily summary time (hour)
 String morningJson;                             // today's summary, kept for the dashboard
 float  cfgG0x = 0, cfgG0y = 0, cfgG0z = 1;       // motion calibration: "normal" gravity direction
 bool   g0Saved = false;                          // false = use the position at power-up
