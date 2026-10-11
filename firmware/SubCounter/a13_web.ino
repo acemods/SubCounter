@@ -319,7 +319,8 @@ const char DASH_HTML[] PROGMEM = R"HTML(<!doctype html><html lang="en"><head>
 a{color:inherit;text-decoration:none}
 header{display:flex;align-items:center;gap:12px;padding:16px 20px;border-bottom:1px solid var(--line);position:sticky;top:0;background:rgba(13,13,15,.92);backdrop-filter:blur(8px);z-index:2}
 .logo{width:34px;height:24px;flex:none;display:block}
-.vchips{align-items:center}details.earn{margin:2px 0 8px}details.earn summary{cursor:pointer;list-style:revert}details.earn summary b{color:#e3b341}.eb{color:#e3b341}details.earn>.sub{margin-top:2px;font-size:12px}.vchips>.sub{margin-right:2px}.vb{color:var(--blue)}.tsep{width:1px;height:20px;background:var(--line);margin:0 4px}.lvbox{margin-top:14px;padding:12px;border-radius:12px;background:#17202b}
+.vchips{align-items:center}details.earn{margin:2px 0 8px}details.earn summary{cursor:pointer;list-style:revert}details.earn summary b{color:#e3b341}.eb{color:#e3b341}.rvt td.er{color:#e3b341;white-space:nowrap;font-size:13px}.rvt td.nm2 .sub{white-space:nowrap}.cm a.c{display:block;color:inherit;text-decoration:none;border-radius:8px;margin:0 -8px;padding:6px 8px}.cm a.c:hover{background:#222226}
+@media(max-width:520px){.rvt .lkc{display:none}.rvt td.nm2 img{width:48px;height:27px}.rvt td.nm2 a{gap:6px}.rvt td,.rvt th{padding:6px 3px}.rvt td.er{font-size:12px}}details.earn>.sub{margin-top:2px;font-size:12px}.vchips>.sub{margin-right:2px}.vb{color:var(--blue)}.tsep{width:1px;height:20px;background:var(--line);margin:0 4px}.lvbox{margin-top:14px;padding:12px;border-radius:12px;background:#17202b}
 .side{min-width:0}.morning{min-width:0;overflow:hidden}.morning .me span{color:var(--gold)}.morning .mv{display:flex;gap:10px;align-items:flex-start;margin-top:8px;color:var(--text);text-decoration:none}.morning .mv img{width:96px;height:54px;border-radius:6px;object-fit:cover;flex:none;background:var(--line)}.morning .mv>div{min-width:0}.morning .mv .t{font-weight:600;font-size:14px;line-height:1.3;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}.morning .mv .sub{margin-top:2px}.morning .list .pi{margin-right:5px}
 header h1{font-size:18px;margin:0;flex:1}header .meta{color:var(--muted);font-size:13px}
 .btn{border:1px solid var(--line);border-radius:9px;padding:7px 12px;font-size:13px;color:var(--text);background:var(--card);cursor:pointer}
@@ -442,13 +443,14 @@ if(b.day)it.push(h('span',{},'Best day ',h('b',{text:sg(b.day)}),' '+dd(b.dayT))
 if(it.length)card.append(h('div',{class:'pb'},h('span',{text:'Records:'}),it))}
 if(c.rv&&c.rv.length){const box=h('details',{class:'cm'}),tb=h('table',{class:'rvt'});let sk=RVS[c.i]||'pd';
 const rows=c.rv.map(r=>{const d=Math.max(1,(Date.now()/1000-r[2])/86400);return{id:r[0],t:r[1],pub:r[2],v:r[3],pd:r[3]/d,lk:r[3]>0&&r[4]>=0?r[4]/r[3]*100:-1}});
-const keys=[['v','Views'],['pd','Per day'],['lk','Likes %']];
-const draw=()=>{tb.textContent='';tb.append(h('tr',{class:'hd'},h('th',{text:'Video'}),keys.map(([k,t])=>h('th',{class:'n'},h('a',{href:'#',text:t+(sk==k?' ▾':''),onclick:e=>{e.preventDefault();sk=k;RVS[c.i]=k;draw()}})))));
-[...rows].sort((a,b)=>b[sk]-a[sk]).forEach(r=>tb.append(h('tr',{},h('td',{class:'nm2'},h('a',{href:'https://youtu.be/'+r.id,target:'_blank',title:r.t},h('img',{src:`https://i.ytimg.com/vi/${r.id}/mqdefault.jpg`,alt:'',loading:'lazy'}),h('span',{},h('span',{class:'rt',text:r.t}),h('span',{class:'sub',text:ago(r.pub)})))),h('td',{class:'n',text:cmp(r.v)}),h('td',{class:'n',text:cmp(Math.round(r.pd))}),h('td',{class:'n',text:r.lk>=0?r.lk.toFixed(1)+'%':'–'}))))};
+const E=D.earn,em=x=>{x=Math.max(0,x);return E.cur+(x<10?x.toFixed(2):x<1000?Math.round(x).toLocaleString('en-GB'):cmp(Math.round(x)))};rows.forEach(r=>r.e=r.v);
+const keys=[['v','Views'],['pd','Per day'],['lk','Likes %']];if(E)keys.push(['e','Est. '+E.cur]);
+const draw=()=>{tb.textContent='';tb.append(h('tr',{class:'hd'},h('th',{text:'Video'}),keys.map(([k,t])=>h('th',{class:'n'+(k=='lk'?' lkc':'')},h('a',{href:'#',text:t+(sk==k?' ▾':''),onclick:e=>{e.preventDefault();sk=k;RVS[c.i]=k;draw()}})))));
+[...rows].sort((a,b)=>b[sk]-a[sk]).forEach(r=>tb.append(h('tr',{},h('td',{class:'nm2'},h('a',{href:'https://youtu.be/'+r.id,target:'_blank',title:r.t},h('img',{src:`https://i.ytimg.com/vi/${r.id}/mqdefault.jpg`,alt:'',loading:'lazy'}),h('span',{},h('span',{class:'rt',text:r.t}),h('span',{class:'sub',text:ago(r.pub)})))),h('td',{class:'n',text:cmp(r.v)}),h('td',{class:'n',text:cmp(Math.round(r.pd))}),h('td',{class:'n lkc',text:r.lk>=0?r.lk.toFixed(1)+'%':'–'}),E?h('td',{class:'n er',title:'Rough guess from views at '+E.cur+E.lo.toFixed(2)+'–'+E.cur+E.hi.toFixed(2)+' per 1,000 views',text:r.v>=0?em(r.v*E.lo/1000)+'–'+em(r.v*E.hi/1000):'–'}):null)))};
 draw();box.append(h('summary',{},h('h3',{style:'display:inline',text:'Recent uploads ('+rows.length+')'})),tb);card.append(box)}
 if(c.vid&&(c.cm||c.cmOff)){const box=h('div',{class:'cm'},h('h3',{text:'Latest comments'}));
 if(c.cmOff)box.append(h('div',{class:'sub',text:'Comments are off on this video'}));
-else c.cm.forEach(m=>box.append(h('div',{class:'c'},h('b',{text:m.a}),h('span',{class:'sub',text:'  '+ago(m.ts)+(m.l>0?' · '+cmp(m.l)+' likes':'')}),h('p',{text:m.t}))));card.append(box)}
+else c.cm.forEach(m=>box.append(h(m.id?'a':'div',m.id?{class:'c',href:`https://www.youtube.com/watch?v=${c.vid.id}&lc=${m.id}`,target:'_blank',title:'Open this comment on YouTube'}:{class:'c'},h('b',{text:m.a}),h('span',{class:'sub',text:'  '+ago(m.ts)+(m.l>0?' · '+cmp(m.l)+' likes':'')}),h('p',{text:m.t}))));card.append(box)}
 return card}
 const COLS=['#3987e5','#d95926','#199e70','#c98500','#d55181','#008300','#9085e9','#e66767'];
 const colFor=i=>i<COLS.length?COLS[i]:'#8d8d95';
@@ -612,7 +614,7 @@ void handleApiData() {
       JsonArray cm = o["cm"].to<JsonArray>();
       for (int k = 0; k < c.cmN; k++) {
         JsonObject x = cm.add<JsonObject>();
-        x["a"] = c.cmAuthor[k]; x["t"] = c.cmText[k]; x["ts"] = (long)c.cmT[k]; x["l"] = c.cmLikes[k];
+        x["a"] = c.cmAuthor[k]; x["t"] = c.cmText[k]; if (c.cmId[k].length()) x["id"] = c.cmId[k]; x["ts"] = (long)c.cmT[k]; x["l"] = c.cmLikes[k];
       }
     }
     if (!c.tw && c.vidId.length() && c.vidTitle.length()) {

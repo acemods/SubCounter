@@ -315,7 +315,7 @@ void fetchComments() {
     if (!c.vidId.length()) continue;
     JsonDocument doc;
     int code = ytGet("commentThreads", "part=snippet&maxResults=3&order=time&textFormat=plainText"
-                     "&fields=items/snippet/topLevelComment/snippet(authorDisplayName,textOriginal,publishedAt,likeCount)"
+                     "&fields=items(id,snippet/topLevelComment/snippet(authorDisplayName,textOriginal,publishedAt,likeCount))"
                      "&videoId=" + c.vidId, doc);
     if (code == 403) { c.cmOff = true; c.cmN = 0; continue; }       // comments turned off (or members-only)
     if (code != 200) continue;
@@ -326,6 +326,7 @@ void fetchComments() {
       String t = sn["textOriginal"] | ""; t.replace("\n", " "); t.replace("\r", " ");
       if (t.length() > 200) t = t.substring(0, 200);
       c.cmAuthor[c.cmN] = sn["authorDisplayName"] | "";
+      c.cmId[c.cmN] = it["id"] | "";                         // opens the comment on YouTube (watch?v=...&lc=id)
       c.cmText[c.cmN] = t;
       c.cmT[c.cmN] = parseIso(sn["publishedAt"] | "");
       c.cmLikes[c.cmN] = sn["likeCount"] | 0;

@@ -2,6 +2,10 @@
 
 All builds are in [`builds/`](../builds). Source snapshots for most versions are in the git history.
 
+## v13.3
+- **Recent uploads:** a new **Est. £** column with each video's estimated earnings (a range, from its views and your rate in settings); sortable like the others. On phones the Likes % column is hidden and thumbnails are smaller so it fits.
+- **Latest comments:** click a comment to open it on YouTube, shown at the top of that video's comments. (Comments are re-fetched every 30 minutes, so the links appear after the next refresh.)
+
 ## v13.2
 - **Estimated earnings** for YouTube channels on the dashboard: a 30-day range on each card, and today / 7 days / 30 days / lifetime when you tap it. Worked out from views at an adjustable rate per 1,000 views (default £0.20–£3.50), like Social Blade. Settings → Display: on/off, currency (£, $, €) and the low/high rate. No extra API quota.
 
