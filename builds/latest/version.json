@@ -1,7 +1,7 @@
 {
- "version": "13.3",
- "app": "SubCounter-v13.3-APP-ONLY.bin",
- "size": 1835696,
- "md5": "da54836581b8719b9beb2c1e085c916b",
- "notes": "Recent uploads show each video's estimated earnings; latest comments open on YouTube when clicked"
+ "version": "13.4",
+ "app": "SubCounter-v13.4-APP-ONLY.bin",
+ "size": 1836128,
+ "md5": "0fb600b2c330596fdd3096a2936fc11c",
+ "notes": "Recent uploads table fits inside its card at any screen size or zoom"
 }

@@ -2,6 +2,9 @@
 
 All builds are in [`builds/`](../builds). Source snapshots for most versions are in the git history.
 
+## v13.4
+- **Recent uploads table sticking out of the card** (with the new earnings column, or with the browser zoomed in): fixed. The table now fits the card it's in rather than the screen: Likes % is hidden when the card is narrow, thumbnails shrink and then hide on very narrow cards, and anything left over scrolls sideways inside the card
+
 ## v13.3
 - **Recent uploads:** a new **Est. £** column with each video's estimated earnings (a range, from its views and your rate in settings); sortable like the others. On phones the Likes % column is hidden and thumbnails are smaller so it fits.
 - **Latest comments:** click a comment to open it on YouTube, shown at the top of that video's comments. (Comments are re-fetched every 30 minutes, so the links appear after the next refresh.)

@@ -143,7 +143,7 @@ The pages show the SubCounter badge as their browser tab icon, so they're easy t
 
   ![Compare chart](images/compare.png)
 
-- **Recent uploads** on each YouTube card (tap the heading to open it): the last 10 videos with thumbnails and how long ago they went up, sortable by views, views per day, likes % or **estimated earnings** (the same rough range as the card, per video; on a phone the likes column is hidden to make room). Refreshed every 6 hours and saved on the board, so they're there straight after a restart. A brand-new board fills them in about a minute after starting.
+- **Recent uploads** on each YouTube card (tap the heading to open it): the last 10 videos with thumbnails and how long ago they went up, sortable by views, views per day, likes % or **estimated earnings** (the same rough range as the card, per video). The table fits the card: when the card is narrow the Likes % column is hidden, and on very narrow ones the thumbnails too. Refreshed every 6 hours and saved on the board, so they're there straight after a restart. A brand-new board fills them in about a minute after starting.
 
   <img src="images/recent-uploads.png" width="360" alt="Recent uploads with thumbnails">
 - **Views** (YouTube channels): a blue row on each card with channel views gained **today**, in the last **24 h**, **7 days** and **30 days**, and a **Subscribers / Views** switch on the graph. A **Most viewed · 24 h** card in the side column ranks your channels by views gained. YouTube only updates a channel's total views every few hours, so these move in jumps; they're saved on the board as they change, and need a day or so of history before the numbers fill in. Twitch no longer gives out view totals, so this is YouTube only.
