@@ -78,6 +78,7 @@ Arduino joins the files into one program: `SubCounter.ino` first, then the other
 | `a10_ota` | Wireless updates |
 | `a11_tracker` | New video tracker |
 | `a12_apps` | Home menu, Weather (Open-Meteo), Spotify (Web API) |
+| `a12z_dashgz` | The dashboard page, gzip-compressed. **Generated**: after changing `DASH_HTML` in `a13_web`, run `python3 tools/gen_dashgz.py firmware/SubCounter`. If you forget, the board spots the size mismatch and sends the uncompressed page |
 | `a13_web` | Dashboard, JSON/CSV API, settings page, PIN |
 | `a14_portal` / `a15_wifi` | Setup mode; multi-network Wi-Fi, roaming |
 | `a16_youtube` / `a17_twitch` | YouTube Data API; Twitch Helix API |

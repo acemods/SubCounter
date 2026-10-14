@@ -1,7 +1,7 @@
 {
- "version": "13.4",
- "app": "SubCounter-v13.4-APP-ONLY.bin",
- "size": 1836128,
- "md5": "0fb600b2c330596fdd3096a2936fc11c",
- "notes": "Recent uploads table fits inside its card at any screen size or zoom"
+ "version": "13.5",
+ "app": "SubCounter-v13.5-APP-ONLY.bin",
+ "size": 1811792,
+ "md5": "1e9be7fadae2e79b68b0d044d2103ff3",
+ "notes": "Dashboard loads faster and freezes the board less: page sent compressed (37 KB to 12.5 KB) and reused by your browser when unchanged"
 }

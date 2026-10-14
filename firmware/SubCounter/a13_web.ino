@@ -537,7 +537,16 @@ load();setInterval(load,60000);
 
 void handleDashboard() {
   if (portalMode) { handleSettings(); return; }
-  server.send_P(200, "text/html", DASH_HTML);
+  // The browser keeps a copy: if it already has this version, just say "not changed" (no page sent at all)
+  String etag = String("\"v") + FW_VERSION + "-" + String((unsigned long)DASH_GZ_SRC_LEN) + "\"";
+  if (server.header("If-None-Match") == etag) { server.send(304); return; }
+  server.sendHeader("ETag", etag);
+  server.sendHeader("Cache-Control", "no-cache");
+  // Send the compressed copy (about a third of the size) - unless it's out of date, then the plain page
+  if (strlen_P(DASH_HTML) == DASH_GZ_SRC_LEN) {
+    server.sendHeader("Content-Encoding", "gzip");
+    server.send_P(200, "text/html", (const char *)DASH_GZ, sizeof(DASH_GZ));
+  } else server.send_P(200, "text/html", DASH_HTML);
 }
 
 void handleApiData() {
