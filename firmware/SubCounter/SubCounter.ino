@@ -52,7 +52,7 @@
 #include <nvs.h>       // settings backup: list every saved setting
 #include <ESPmDNS.h>   // http://subcounter.local
 #define HOSTNAME "subcounter"
-#define FW_VERSION "13.5"     // shown on start-up, home menu, settings, update page and dashboard
+#define FW_VERSION "13.6"     // shown on start-up, home menu, settings, update page and dashboard
 
 // ── Pins (ESP32-C6 version of the board) ────────────────────────────────────
 #define LCD_SCK   1
@@ -379,6 +379,7 @@ int    cfgTapSens = 2;
 int    cfgRaceA = -1, cfgRaceB = -1;
 int    cfgNightStart = 23, cfgNightEnd = 7;
 int    cfgSumHour = 9;
+String cfgOrder;                                 // dashboard card order (channel ids, comma separated)
 bool   cfgEarn = true;                           // estimated earnings on the dashboard
 int    cfgEarnCur = 0;                           // 0 = £, 1 = $, 2 = €
 float  cfgEarnLo = 0.20f, cfgEarnHi = 3.50f;     // estimated earnings per 1,000 views (low / high)                          // daily summary time (hour)

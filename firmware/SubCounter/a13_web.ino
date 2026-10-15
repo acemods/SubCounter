@@ -369,7 +369,11 @@ td .av{width:28px;height:28px;display:block}td{padding:6px 4px}td.nm2{overflow:h
 .wide{grid-column:1/-1}
 .pi{display:inline-flex;vertical-align:-2px;margin-right:6px}.pi svg{display:block}
 .pf{max-width:1500px;margin:0 auto;padding:14px 20px 0;display:flex;gap:8px}.pf button{border:1px solid var(--line);background:var(--card);color:var(--muted);border-radius:999px;padding:7px 14px;font-size:14px;cursor:pointer}
-.pf button.on{color:var(--text);border-color:var(--gold);background:#222226}.pf button span{opacity:.6;margin-left:2px;font-size:12px}
+.pf button.on{color:var(--text);border-color:var(--gold);background:#222226}.pf{flex-wrap:wrap;align-items:center}.pf .sp{flex:1}
+.sortsel{background:var(--card);color:var(--text);border:1px solid var(--line);border-radius:999px;padding:7px 12px;font-size:14px}.arrhint{color:var(--muted);font-size:13px}
+.arranging .chcard{cursor:grab;outline:2px dashed var(--line);outline-offset:-2px}.chcard.dragging{opacity:.4}
+.arr{display:flex;justify-content:space-between;align-items:center;margin:-6px 0 10px;padding:6px 10px;border-radius:10px;background:#26262b;font-weight:700;font-size:14px}
+.arr button{border:0;background:#3a3a40;color:var(--text);border-radius:8px;width:40px;height:34px;font-size:18px;margin-left:6px;cursor:pointer}.pf button span{opacity:.6;margin-left:2px;font-size:12px}
 @media(max-width:600px){.pf{padding:12px 12px 0}}
 .twb{background:#9146ff;color:#fff;border-radius:5px;font-size:10px;font-weight:800;padding:1px 5px;margin-left:8px;vertical-align:3px;letter-spacing:.03em}
 .ctl{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-bottom:12px}
@@ -499,9 +503,29 @@ const GK={};let PF='all';try{PF=localStorage.getItem('pf')||'all'}catch(e){}
 const PIC={yt:'<svg width="18" height="13" viewBox="0 0 20 14"><rect width="20" height="14" rx="4" fill="#ff0033"/><path d="M8 4v6l5-3z" fill="#fff"/></svg>',tw:'<svg width="15" height="15" viewBox="0 0 16 16"><path d="M2 1h13v9l-4 4H8l-2 2H4v-2H1V4z" fill="#9146ff"/><path d="M7 4h1.5v4H7zM10.5 4H12v4h-1.5z" fill="#fff"/></svg>'};
 function pIcon(c){const s=document.createElement('span');s.className='pi';s.title=c.tw?'Twitch':'YouTube';s.innerHTML=PIC[c.tw?'tw':'yt'];return s}
 const kindOk=c=>PF=='all'||(PF=='tw'?!!c.tw:!c.tw);
-function filterBar(){const all=D.channels,hasTw=all.some(c=>c.tw),hasYt=all.some(c=>!c.tw);const bar=$('#pf');bar.textContent='';
-if(!(hasTw&&hasYt)){bar.style.display='none';if(PF!='all')PF='all';return}bar.style.display='';
-[['all','All',all.length],['yt','YouTube',all.filter(c=>!c.tw).length],['tw','Twitch',all.filter(c=>c.tw).length]].forEach(([k,t,n])=>bar.append(h('button',{class:PF==k?'on':'',onclick:()=>{PF=k;try{localStorage.setItem('pf',k)}catch(e){}CMP.sel=null;render()}},t+' ',h('span',{text:n}))))}
+// card order: "My order" is saved on the board (same on every device); the sort choice is per browser
+let SORT='mine';try{SORT=localStorage.getItem('sort')||'mine'}catch(e){}let ARR=false;
+const ck=c=>c.id||('tw:'+c.tw);
+function ordered(C,mode){const O=(D.order||'').split(',').filter(Boolean),pos=c=>{const k=O.indexOf(ck(c));return k<0?1000+c.i:k};
+const by={mine:(a,b)=>pos(a)-pos(b),subs:(a,b)=>est(b)-est(a),grow:(a,b)=>(b.statsOk?b.d1:-1e9)-(a.statsOk?a.d1:-1e9)||est(b)-est(a),new:(a,b)=>((b.vid&&b.vid.pub)||0)-((a.vid&&a.vid.pub)||0)};
+return [...C].sort(by[mode]||by.mine)}
+async function saveOrder(){const vis=[...document.querySelectorAll('.chcard')].map(e=>e.dataset.k);let q=[...vis];
+const full=ordered(D.channels,'mine').map(ck).map(k=>vis.includes(k)?q.shift():k);
+try{const r=await fetch('/order',{method:'POST',body:full.join(',')});if(!r.ok)throw 0;D.order=full.join(',');ARR=false;SORT='mine';try{localStorage.setItem('sort','mine')}catch(e){}render()}catch(e){alert('Couldn\'t save the order - is the board reachable? (If you set a PIN, open Settings once first.)')}}
+function filterBar(){const all=D.channels,hasTw=all.some(c=>c.tw),hasYt=all.some(c=>!c.tw);const bar=$('#pf');bar.textContent='';bar.style.display='';
+if(!(hasTw&&hasYt)){if(PF!='all')PF='all'}else
+[['all','All',all.length],['yt','YouTube',all.filter(c=>!c.tw).length],['tw','Twitch',all.filter(c=>c.tw).length]].forEach(([k,t,n])=>bar.append(h('button',{class:PF==k?'on':'',onclick:()=>{PF=k;try{localStorage.setItem('pf',k)}catch(e){}CMP.sel=null;render()}},t+' ',h('span',{text:n}))));
+if(all.length<2)return;
+bar.append(h('span',{class:'sp'}));
+if(!ARR)bar.append(h('select',{class:'sortsel',title:'Order of the channel cards',onchange:e=>{SORT=e.target.value;try{localStorage.setItem('sort',SORT)}catch(x){}render()}},[['mine','My order'],['subs','Most subscribers'],['grow','Fastest growing (24 h)'],['new','Newest upload']].map(([v,t])=>{const o=h('option',{value:v,text:'Sort: '+t});if(v==SORT)o.selected=true;return o})));
+else bar.append(h('span',{class:'arrhint',text:'Drag the cards, or use the arrows'}),h('button',{text:'Cancel',onclick:()=>{ARR=false;render()}}));
+bar.append(h('button',{class:ARR?'on':'',text:ARR?'Done':'Arrange',title:ARR?'Save this order on the board':'Set your own order',onclick:()=>{if(ARR)saveOrder();else{ARR=true;render()}}}))}
+function arrangeGrid(grid){let drag=null;const cards=()=>[...grid.querySelectorAll('.chcard')];
+grid.querySelectorAll('.chcard').forEach(el=>{el.draggable=true;
+el.addEventListener('dragstart',e=>{drag=el;el.classList.add('dragging');e.dataTransfer.effectAllowed='move';try{e.dataTransfer.setData('text/plain',el.dataset.k)}catch(x){}});
+el.addEventListener('dragend',()=>{el.classList.remove('dragging');drag=null});
+el.addEventListener('dragover',e=>{if(!drag||drag==el)return;e.preventDefault();const r=el.getBoundingClientRect(),after=(e.clientY-r.top)>r.height/2||(e.clientX-r.left)>r.width*0.66;grid.insertBefore(drag,after?el.nextSibling:el)})})}
+function moveCard(el,d){const g=el.parentNode,cs=[...g.querySelectorAll('.chcard')],k=cs.indexOf(el),t=cs[k+d];if(!t)return;if(d<0)g.insertBefore(el,t);else g.insertBefore(el,t.nextSibling);el.scrollIntoView({block:'nearest',behavior:'smooth'})}
 function render(){const app=$('#app');app.textContent='';filterBar();const C=D.channels.filter(kindOk);if(D.accent)document.documentElement.style.setProperty('--gold',D.accent);
 $('#meta').textContent=(D.err?D.err:(D.updatedAgo>=0?'Updated '+(D.updatedAgo<60?'just now':(D.updatedAgo/60|0)+' min ago'):''))+(D.ver?'  ·  v'+D.ver:'');{const u=$('#upd');if(D.upd){u.textContent='Update v'+D.upd;u.style.display=''}else u.style.display='none'}
 const row=h('aside',{class:'side'});
@@ -529,8 +553,10 @@ const lb=[...C].filter(c=>c.subs>=0).sort((a,b)=>b.subs-a.subs);const mixed=C.so
 row.append(h('div',{class:'card'},h('h2',{text:'Leaderboard'}),h('table',{},h('tr',{class:'hd'},h('th',{colspan:'3'}),h('th',{class:'n',text:C.some(c=>c.tw)?'Total':'Subs'}),h('th',{class:'n',text:'Today',title:'Since midnight'})),lb.map((c,k)=>h('tr',{class:c.i==0?'me':''},h('td',{text:k+1+'.'}),h('td',{},av(c)),h('td',{class:'nm2'},mixed?pIcon(c):null,name(c)),h('td',{class:'n',text:cmp(c.subs)}),h('td',{class:'n '+cls(c.today),text:c.statsOk?sg(c.today):''}))))));
 {const mon=t=>new Date(t*1000).toLocaleDateString('en-GB',{month:'short'});const ms=[...C].filter(c=>c.subs>=0).sort((a,b)=>(b.mo||0)-(a.mo||0));
 if(ms.length&&C.some(c=>c.statsOk))row.append(h('div',{class:'card'},h('h2',{text:'Monthly'}),h('table',{},h('tr',{class:'hd'},h('th',{}),h('th',{class:'n',text:mon(D.m1)}),h('th',{class:'n',text:mon(D.m0)+' so far'})),ms.map(c=>h('tr',{class:c.i==0?'me':''},h('td',{class:'nm2',text:name(c)}),h('td',{class:'n '+(c.lm!=null?cls(c.lm):''),text:c.lm!=null?sg(c.lm):'–'}),h('td',{class:'n '+cls(c.mo),text:c.statsOk?sg(c.mo):'–'}))))))}
-const grid=h('section',{class:'grid'});C.forEach(c=>grid.append(channelCard(c)));if(C.filter(c=>c.subs>=0).length>1)grid.append(compareCard());app.append(h('div',{class:'layout'},row,grid))}
-async function load(){try{const r=await fetch('/api/data');D=await r.json();render()}catch(e){$('#meta').textContent='Board not reachable'}}
+const grid=h('section',{class:'grid'+(ARR?' arranging':'')});ordered(C,ARR?'mine':SORT).forEach(c=>{const el=channelCard(c);el.dataset.k=ck(c);el.classList.add('chcard');
+if(ARR)el.prepend(h('div',{class:'arr'},h('span',{text:'⠿ '+name(c)}),h('span',{},h('button',{text:'↑',title:'Move up',onclick:()=>moveCard(el,-1)}),h('button',{text:'↓',title:'Move down',onclick:()=>moveCard(el,1)}))));grid.append(el)});
+if(ARR)arrangeGrid(grid);else if(C.filter(c=>c.subs>=0).length>1)grid.append(compareCard());app.append(h('div',{class:'layout'},row,grid))}
+async function load(){try{const r=await fetch('/api/data');const d=await r.json();if(ARR)return;D=d;render()}catch(e){$('#meta').textContent='Board not reachable'}}
 setInterval(()=>{if(!D)return;document.querySelectorAll('[data-est]').forEach(el=>{const c=D.channels[el.dataset.est];el.textContent=fmt(est(c))})},1000);
 load();setInterval(load,60000);
 </script></body></html>)HTML";
@@ -561,6 +587,7 @@ void handleApiData() {
   if (updAvail) doc["upd"] = updVer;
   doc["m0"] = (long)monthStart(0); doc["m1"] = (long)monthStart(1);
   if (morningJson.length()) doc["morning"] = serialized(morningJson);
+  doc["order"] = cfgOrder;
   if (cfgEarn) { JsonObject e = doc["earn"].to<JsonObject>(); const char *sy[] = { "£", "$", "€" }; e["cur"] = sy[cfgEarnCur]; e["lo"] = cfgEarnLo; e["hi"] = cfgEarnHi; }
   if (raceSet()) { JsonArray r = doc["race"].to<JsonArray>(); r.add(cfgRaceA); r.add(cfgRaceB); }
   else doc["race"] = nullptr;
@@ -1349,7 +1376,19 @@ void handleDebug() {
   server.send(200, "text/plain; charset=utf-8", o);
 }
 
+// Dashboard card order (from Arrange on the dashboard): channel ids, comma separated
+void handleOrder() {
+  if (!authed()) return;
+  String o = server.arg("plain"); o.trim();
+  if (o.length() > 1500) { server.send(400, "text/plain", "Too long"); return; }
+  for (size_t k = 0; k < o.length(); k++) { char c = o[k]; if (!(isalnum((unsigned char)c) || c == '_' || c == '-' || c == ',' || c == ':')) { server.send(400, "text/plain", "Bad order"); return; } }
+  cfgOrder = o;
+  prefs.begin("subcounter", false); prefs.putString("order", cfgOrder); prefs.end();
+  server.send(200, "text/plain", "OK");
+}
+
 void registerRoutes() {
+  server.on("/order", HTTP_POST, handleOrder);
   server.addMiddleware([](WebServer &sv, Middleware::Callback next) {   // time every page (for /debug)
     unsigned long t = millis(); String u = sv.uri();
     bool r = next();

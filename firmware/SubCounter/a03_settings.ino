@@ -111,6 +111,7 @@ void loadSettings() {
   cfgAuto     = prefs.getBool("auto", false);
   cfgEst      = prefs.getBool("est", true);
   cfgEarn     = prefs.getBool("earn", true);
+  cfgOrder    = prefs.getString("order", "");
   cfgEarnCur  = constrain(prefs.getInt("earnCur", 0), 0, 2);
   cfgEarnLo   = prefs.getFloat("earnLo", 0.20f);
   cfgEarnHi   = prefs.getFloat("earnHi", 3.50f);
