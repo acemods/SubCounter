@@ -1,7 +1,7 @@
 {
- "version": "13.8",
- "app": "SubCounter-v13.8-APP-ONLY.bin",
- "size": 1815168,
- "md5": "d1eb68c56c67c2ac77f544ca6b2b32d6",
- "notes": "Faster history reading (graphs and growth figures); /debug labels alerts instead of counting them as freezes"
+ "version": "13.9",
+ "app": "SubCounter-v13.9-APP-ONLY.bin",
+ "size": 1816272,
+ "md5": "7b5131e6e655fcf42a525f762d4594c7",
+ "notes": "Updates free memory first and retry once; the board stops sending to a browser that has gone; dashboard graphs no longer re-download every minute"
 }

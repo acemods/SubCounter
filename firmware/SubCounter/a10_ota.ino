@@ -91,8 +91,11 @@ void installGithubUpdate() {
   setBacklight(BL_NORMAL);
   if (mode == M_PORTRAIT) gfx->setRotation(1);
   drawStatus("Updating...", "to v" + updVer, C_GOLD);
+  connFreeOthers(nullptr);                      // close every kept-open connection: the download needs the memory
   String err;
-  {
+  for (int attempt = 0; attempt < 2; attempt++) {
+    if (attempt) { drawStatus("Updating...", "trying again", C_GOLD); delay(1500); }
+    err = "";
     NetIO io;                                   // let go of the data: nothing else runs while we install
     WiFiClientSecure client; client.setInsecure();
     HTTPClient http; http.setTimeout(15000);
@@ -127,6 +130,7 @@ void installGithubUpdate() {
       }
     }
     http.end();
+    if (!err.startsWith("Download failed (-")) break;   // only a failed connection is worth a second try
   }
   if (!err.length()) {
     drawStatus("Updated!", "Restarting...", C_GREEN);

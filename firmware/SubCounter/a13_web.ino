@@ -274,8 +274,16 @@ struct ChunkOut : public Print {
   void begin() { if (!started) { server.setContentLength(CONTENT_LENGTH_UNKNOWN); server.send(code, type, ""); started = true; } }
   size_t write(uint8_t c) override { buf[n++] = (char)c; if (n == sizeof(buf)) flush(); return 1; }
   size_t write(const uint8_t *p, size_t l) override { for (size_t i = 0; i < l; i++) write(p[i]); return l; }
-  void flush() override { begin(); if (n) { server.sendContent(buf, n); n = 0; } }
-  void end() { flush(); server.sendContent(""); }
+  bool dead = false;                       // the browser went away: stop sending (each try waits up to 5 s)
+  void flush() override {
+    begin();
+    if (n && !dead) {
+      if (!server.client().connected()) dead = true;
+      else { unsigned long t = millis(); server.sendContent(buf, n); if (millis() - t > 3000) dead = true; }
+    }
+    n = 0;
+  }
+  void end() { flush(); if (!dead) server.sendContent(""); }
   ChunkOut &operator+=(const String &s) { print(s); return *this; }
   ChunkOut &operator+=(const char *s) { print(s); return *this; }
   ChunkOut &operator+=(const __FlashStringHelper *s) { print(s); return *this; }
@@ -408,7 +416,7 @@ function eta(c){const e=est(c);if(!(c.rate>0.01))return c.rate<0?'Losing subscri
 function av(c,lg){const i=c.avatar?h('img',{class:'av'+(lg?' lg':''),src:c.avatar,alt:''}):h('div',{class:'av'+(lg?' lg':'')});const L=isLive(c);return h('span',{class:'avw'+(L?' on':'')+(lg?' lg':''),title:L?name(c)+' is live now':''},i,L?h('span',{class:'lv',text:'LIVE'}):null)}
 function isLive(c){return !!(c.vid&&c.vid.live)}
 function name(c){return c.title||c.handle}
-async function graph(c,days,box,kind){const V=kind=='views';box.textContent='';const r=await fetch('/api/history?i='+c.i+'&days='+days+(V?'&kind=views':''));const pts=await r.json();if(pts.length<2){box.append(h('div',{class:'sub',text:V?'Collecting data – views are saved as YouTube updates them (every few hours)':'Collecting data – recorded every hour'}));return}
+async function graph(c,days,box,kind){const V=kind=='views';box.textContent='';let pts;try{pts=await hist(c.i,days,V?'views':'')}catch(e){box.append(h('div',{class:'sub',text:'Graph not available right now'}));return}if(pts.length<2){box.append(h('div',{class:'sub',text:V?'Collecting data – views are saved as YouTube updates them (every few hours)':'Collecting data – recorded every hour'}));return}
 pts.push([Date.now()/1000|0,V?c.views:c.subs]);const GC=V?'#4da3ff':'#30d158',GA=V?'rgba(77,163,255,.12)':'rgba(48,209,88,.12)';const W=600,H=120,t0=pts[0][0],t1=pts[pts.length-1][0];let mn=Math.min(...pts.map(p=>p[1])),mx=Math.max(...pts.map(p=>p[1]));if(mx==mn){mx++;mn--}
 const X=t=>(t-t0)/(t1-t0||1)*(W-4)+2,Y=v=>H-6-(v-mn)/(mx-mn)*(H-24);const d=pts.map((p,k)=>(k?'L':'M')+X(p[0]).toFixed(1)+' '+Y(p[1]).toFixed(1)).join(' ');
 const ns='http://www.w3.org/2000/svg',svg=document.createElementNS(ns,'svg');svg.setAttribute('viewBox',`0 0 ${W} ${H}`);svg.setAttribute('class','g');svg.setAttribute('preserveAspectRatio','none');
@@ -466,7 +474,7 @@ return card}
 const COLS=['#3987e5','#d95926','#199e70','#c98500','#d55181','#008300','#9085e9','#e66767'];
 const colFor=i=>i<COLS.length?COLS[i]:'#8d8d95';
 let CMP={sel:null,days:7,mode:'gain'},HC={},RVS={};
-async function hist(i,days){const k=i+':'+days;if(!HC[k]||Date.now()-HC[k].at>120000){const r=await fetch('/api/history?i='+i+'&days='+days);HC[k]={at:Date.now(),p:await r.json()}}return HC[k].p}
+const HP={};async function hist(i,days,kind){const k=i+':'+days+':'+(kind||'');if(!HC[k]||Date.now()-HC[k].at>(kind?600000:120000)){if(!HP[k])HP[k]=fetch('/api/history?i='+i+'&days='+days+(kind?'&kind='+kind:'')).then(r=>r.json()).then(p=>{HC[k]={at:Date.now(),p};delete HP[k];return p}).catch(e=>{delete HP[k];throw e});return [...await HP[k]]}return [...HC[k].p]}
 function compareCard(){const C=D.channels.filter(c=>c.subs>=0&&kindOk(c));
 if(!CMP.sel){const o=[...C].filter(c=>c.i!=0).sort((a,b)=>(b.d7||0)-(a.d7||0));const base=C.some(c=>c.i==0)?[0]:[];CMP.sel=[...base,...o.slice(0,3-base.length).map(c=>c.i)]}
 const card=h('div',{class:'card wide'}),box=h('div',{class:'cmp'}),ctl=h('div',{class:'ctl'});
@@ -680,6 +688,13 @@ void handleApiData() {
 }
 
 // [[time, subs], ...] for one channel, streamed in chunks
+// Send one piece of a streamed reply; false if the browser has gone or stopped reading (don't wait 5 s per piece)
+bool sendOrGiveUp(const String &chunk) {
+  if (!server.client().connected()) return false;
+  unsigned long t = millis();
+  server.sendContent(chunk);
+  return millis() - t < 3000 && server.client().connected();
+}
 void handleApiHistory() {
   int i = server.arg("i").toInt();
   int days = constrain(server.arg("days").toInt(), 1, 31);
@@ -697,7 +712,7 @@ void handleApiHistory() {
         char num[24]; snprintf(num, sizeof(num), "%lld", vsVal(s));
         chunk += (first ? "[" : ",[") + String(s.t) + "," + num + "]";
         first = false;
-        if (chunk.length() > 2800) { server.sendContent(chunk); chunk = ""; }
+        if (chunk.length() > 2800) { if (!sendOrGiveUp(chunk)) break; chunk = ""; }
       }
       f.close();
       if (chunk.length()) server.sendContent(chunk);
@@ -712,7 +727,7 @@ void handleApiHistory() {
         if ((time_t)s.t < from) continue;
         chunk += (first ? "[" : ",[") + String(s.t) + "," + String(s.s) + "]";
         first = false;
-        if (chunk.length() > 2800) { server.sendContent(chunk); chunk = ""; }
+        if (chunk.length() > 2800) { if (!sendOrGiveUp(chunk)) break; chunk = ""; }
       }
       f.close();
       if (chunk.length()) server.sendContent(chunk);
@@ -742,7 +757,7 @@ void handleApiCsv() {
       char ts[24]; time_t t = sm.t; struct tm g; gmtime_r(&t, &g);
       strftime(ts, sizeof(ts), "%Y-%m-%dT%H:%M:%SZ", &g);
       chunk += "\"" + nm + "\"," + ts + "," + String(sm.s) + "\n";
-      if (chunk.length() > 2800) { server.sendContent(chunk); chunk = ""; }
+      if (chunk.length() > 2800) { if (!sendOrGiveUp(chunk)) break; chunk = ""; }
     }
     f.close();
     if (chunk.length()) server.sendContent(chunk);
