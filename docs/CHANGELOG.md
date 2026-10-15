@@ -2,6 +2,10 @@
 
 All builds are in [`builds/`](../builds). Source snapshots for most versions are in the git history.
 
+## v13.8
+- **Faster history reading:** the saved subscriber and views history is now read 1 KB at a time instead of 8 bytes at a time. Dashboard graphs load faster (one load had taken 7 s) and the growth figures the board works out every 2 minutes take less time.
+- `/debug`: new-subscriber alerts are labelled "alert shown (not a freeze)" instead of looking like 4-second freezes
+
 ## v13.7
 - **Arrange by dragging:** in Arrange mode the cards become small tiles you press and drag into place, with a mouse or a finger (phones and tablets too). The side column steps aside while you arrange. The up/down arrows are gone.
 

@@ -479,6 +479,7 @@ void loopBody() {
       Alert show[MAX_CH * 2]; int n = numAlerts;
       memcpy(show, alerts, sizeof(Alert) * n); numAlerts = 0;
       for (int i = 0; i < n; i++) showAlert(show[i]);
+      lastLongWhat = n == 1 ? "alert shown (not a freeze)" : "alerts shown (not a freeze)";
       if (jumpToCh >= 0 && app == APP_YT && !menuOpen) { page = jumpToCh; card = 0; board = false; }
       jumpToCh = -1;
       gfx->fillScreen(C_BG);

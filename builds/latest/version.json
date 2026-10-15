@@ -1,7 +1,7 @@
 {
- "version": "13.7",
- "app": "SubCounter-v13.7-APP-ONLY.bin",
- "size": 1814400,
- "md5": "a5edf3c32710baf33fc4dbf6670591c2",
- "notes": "Arrange: press and drag the channel tiles into place with a mouse or a finger (no more arrows)"
+ "version": "13.8",
+ "app": "SubCounter-v13.8-APP-ONLY.bin",
+ "size": 1815168,
+ "md5": "d1eb68c56c67c2ac77f544ca6b2b32d6",
+ "notes": "Faster history reading (graphs and growth figures); /debug labels alerts instead of counting them as freezes"
 }

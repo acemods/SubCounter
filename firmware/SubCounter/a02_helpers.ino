@@ -236,3 +236,17 @@ long stepFor(long n) {
   while (v >= 1000) { v /= 10; step *= 10; }
   return step;
 }
+
+// Read fixed-size records from a file 1 KB at a time (reading 8 bytes per call is slow on LittleFS)
+struct BufRd {
+  File &f; uint8_t b[1024]; int n = 0, p = 0;
+  BufRd(File &file) : f(file) {}
+  bool read(void *dst, int sz) {
+    uint8_t *d = (uint8_t *)dst;
+    for (int i = 0; i < sz; i++) {
+      if (p >= n) { n = f.read(b, sizeof(b)); p = 0; if (n <= 0) return false; }
+      d[i] = b[p++];
+    }
+    return true;
+  }
+};

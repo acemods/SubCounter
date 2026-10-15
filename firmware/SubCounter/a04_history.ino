@@ -32,7 +32,8 @@ void computeStats(int i) {
   time_t m0 = monthStart(0), m1 = monthStart(1);
   long beforeM0 = -1, beforeM1 = -1, firstS = -1; time_t firstT = 0;
   bool first = true;
-  while (f.read((uint8_t *)&s, sizeof(s)) == sizeof(s)) {
+  BufRd br(f);
+  while (br.read(&s, sizeof(s))) {
     if (first) { c.histStart = s.t; first = false; firstS = s.s; firstT = s.t; }
     if ((time_t)s.t < m0) beforeM0 = s.s;
     if ((time_t)s.t < m1) beforeM1 = s.s;
@@ -228,7 +229,8 @@ void computeViewStats(int i) {
   time_t now = nowT(), mid = localMidnight();
   long long beforeMid = -1, firstToday = -1, base7 = -1, base30 = -1, base24 = -1;
   VSample s; bool any = false;
-  while (f.read((uint8_t *)&s, sizeof(s)) == sizeof(s)) {
+  BufRd br(f);
+  while (br.read(&s, sizeof(s))) {
     long long v = vsVal(s); any = true;
     if ((time_t)s.t < mid) beforeMid = v; else if (firstToday < 0) firstToday = v;
     if (base30 < 0 && (time_t)s.t >= now - 30L * 86400) base30 = v;

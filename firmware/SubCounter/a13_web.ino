@@ -691,12 +691,13 @@ void handleApiHistory() {
     if (f) {
       time_t from = nowT() - (time_t)days * 86400;
       String chunk; bool first = true; VSample s;
-      while (f.read((uint8_t *)&s, sizeof(s)) == sizeof(s)) {
+      BufRd br(f);
+      while (br.read(&s, sizeof(s))) {
         if ((time_t)s.t < from) continue;
         char num[24]; snprintf(num, sizeof(num), "%lld", vsVal(s));
         chunk += (first ? "[" : ",[") + String(s.t) + "," + num + "]";
         first = false;
-        if (chunk.length() > 1200) { server.sendContent(chunk); chunk = ""; }
+        if (chunk.length() > 2800) { server.sendContent(chunk); chunk = ""; }
       }
       f.close();
       if (chunk.length()) server.sendContent(chunk);
@@ -706,11 +707,12 @@ void handleApiHistory() {
     if (f) {
       time_t from = nowT() - (time_t)days * 86400;
       String chunk; bool first = true; Sample s;
-      while (f.read((uint8_t *)&s, sizeof(s)) == sizeof(s)) {
+      BufRd br(f);
+      while (br.read(&s, sizeof(s))) {
         if ((time_t)s.t < from) continue;
         chunk += (first ? "[" : ",[") + String(s.t) + "," + String(s.s) + "]";
         first = false;
-        if (chunk.length() > 1200) { server.sendContent(chunk); chunk = ""; }
+        if (chunk.length() > 2800) { server.sendContent(chunk); chunk = ""; }
       }
       f.close();
       if (chunk.length()) server.sendContent(chunk);
@@ -740,7 +742,7 @@ void handleApiCsv() {
       char ts[24]; time_t t = sm.t; struct tm g; gmtime_r(&t, &g);
       strftime(ts, sizeof(ts), "%Y-%m-%dT%H:%M:%SZ", &g);
       chunk += "\"" + nm + "\"," + ts + "," + String(sm.s) + "\n";
-      if (chunk.length() > 1200) { server.sendContent(chunk); chunk = ""; }
+      if (chunk.length() > 2800) { server.sendContent(chunk); chunk = ""; }
     }
     f.close();
     if (chunk.length()) server.sendContent(chunk);

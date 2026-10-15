@@ -375,7 +375,8 @@ void drawGraph() {
   long mn = c.subs, mx = c.subs;
   Sample s;
   if (f) {
-    while (f.read((uint8_t *)&s, sizeof(s)) == sizeof(s))
+    BufRd br(f);
+    while (br.read(&s, sizeof(s)))
       if ((time_t)s.t >= from) { mn = min(mn, (long)s.s); mx = max(mx, (long)s.s); }
   }
   if (mx == mn) { mx += 1; mn -= 1; }
@@ -384,7 +385,8 @@ void drawGraph() {
   if (f) {
     f.seek(0);
     int px = -1, py = -1;
-    while (f.read((uint8_t *)&s, sizeof(s)) == sizeof(s)) {
+    BufRd br(f);
+    while (br.read(&s, sizeof(s))) {
       if ((time_t)s.t < from) continue;
       int x = gx + 1 + (int)((float)(s.t - from) / (7L * 86400) * (gw - 3));
       int y = gy + gh - 3 - (int)((float)(s.s - mn) / (mx - mn) * (gh - 6));
