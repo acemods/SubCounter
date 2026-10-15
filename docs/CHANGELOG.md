@@ -2,6 +2,9 @@
 
 All builds are in [`builds/`](../builds). Source snapshots for most versions are in the git history.
 
+## v13.7
+- **Arrange by dragging:** in Arrange mode the cards become small tiles you press and drag into place, with a mouse or a finger (phones and tablets too). The side column steps aside while you arrange. The up/down arrows are gone.
+
 ## v13.6
 - **Sort and Arrange the channel cards** on the dashboard. Sort by My order, Most subscribers, Fastest growing (24 h) or Newest upload. **Arrange** sets My order: drag cards on a computer or use the ↑ ↓ arrows on a phone, then Done. YouTube and Twitch can be mixed, and the order is saved on the board so every device shows the same. (The board's swipe order, "your channel" and the race are unchanged.)
 

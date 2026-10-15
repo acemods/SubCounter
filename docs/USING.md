@@ -132,9 +132,9 @@ Open **`http://subcounter.local`** (or `http://<board-ip>/`) on any device on th
 The pages show the SubCounter badge as their browser tab icon, so they're easy to spot among your tabs and bookmarks. On a phone, use **Add to Home Screen** (Safari) or **Add to home screen / Install** (Chrome) and you'll get the same badge as an app icon.
 
 - **This morning:** the board's daily summary, kept all day (follows the filter too)
-- **Sort and Arrange** (top right): *Sort* the channel cards by **My order**, **Most subscribers**, **Fastest growing (24 h)** or **Newest upload** (remembered in that browser). Tap **Arrange** to set *My order*: drag the cards on a computer, or use the **↑ ↓** arrows (handy on a phone), then **Done**. YouTube and Twitch cards can be mixed in any order, and the order is saved on the board, so every phone and computer shows the same. It doesn't change the board's own swipe order, which channel counts as yours, or the race.
+- **Sort and Arrange** (top right): *Sort* the channel cards by **My order**, **Most subscribers**, **Fastest growing (24 h)** or **Newest upload** (remembered in that browser). Tap **Arrange** to set *My order*: the cards shrink to small tiles; press one and drag it where you want it (mouse or finger, the others slide out of the way), then **Done**. YouTube and Twitch cards can be mixed in any order, and the order is saved on the board, so every phone and computer shows the same. It doesn't change the board's own swipe order, which channel counts as yours, or the race.
 
-  <img src="images/arrange.png" width="600" alt="Arranging the channel cards">
+  <img src="images/arrange.png" width="600" alt="Dragging a tile on a computer"> <img src="images/arrange-phone.png" width="220" alt="Dragging a tile on a phone">
 - **All · YouTube · Twitch** buttons at the top (when you follow both): the side column, leaderboard, monthly table, channel cards and compare chart all follow the filter
 - a side column with top growers in the last 24 hours, weather, race and leaderboard (above the channels on tablets and phones)
 - a card for every channel: live (estimated) count, growth chips, milestone and ETA, a 7 or 30-day graph, and the latest video with thumbnail

@@ -371,9 +371,11 @@ td .av{width:28px;height:28px;display:block}td{padding:6px 4px}td.nm2{overflow:h
 .pf{max-width:1500px;margin:0 auto;padding:14px 20px 0;display:flex;gap:8px}.pf button{border:1px solid var(--line);background:var(--card);color:var(--muted);border-radius:999px;padding:7px 14px;font-size:14px;cursor:pointer}
 .pf button.on{color:var(--text);border-color:var(--gold);background:#222226}.pf{flex-wrap:wrap;align-items:center}.pf .sp{flex:1}
 .sortsel{background:var(--card);color:var(--text);border:1px solid var(--line);border-radius:999px;padding:7px 12px;font-size:14px}.arrhint{color:var(--muted);font-size:13px}
-.arranging .chcard{cursor:grab;outline:2px dashed var(--line);outline-offset:-2px}.chcard.dragging{opacity:.4}
-.arr{display:flex;justify-content:space-between;align-items:center;margin:-6px 0 10px;padding:6px 10px;border-radius:10px;background:#26262b;font-weight:700;font-size:14px}
-.arr button{border:0;background:#3a3a40;color:var(--text);border-radius:8px;width:40px;height:34px;font-size:18px;margin-left:6px;cursor:pointer}.pf button span{opacity:.6;margin-left:2px;font-size:12px}
+.arrlay{display:block}.arrlay .grid{max-width:1100px;margin:0 auto}.grid.arranging{grid-template-columns:repeat(auto-fill,minmax(260px,1fr));align-content:start}
+.tile{display:flex;align-items:center;gap:12px;background:var(--card);border:1px solid var(--line);border-radius:14px;padding:12px 14px;cursor:grab;touch-action:none;user-select:none;-webkit-user-select:none}
+.tile .nm{font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.tile .grip{color:var(--muted);font-size:20px}.tile .av{width:42px;height:42px;flex:none}
+.tile.lift{position:fixed;z-index:50;cursor:grabbing;box-shadow:0 12px 30px rgba(0,0,0,.55);border-color:var(--gold)}
+.tile.ph{background:transparent;border:2px dashed var(--gold);opacity:.6}
 @media(max-width:600px){.pf{padding:12px 12px 0}}
 .twb{background:#9146ff;color:#fff;border-radius:5px;font-size:10px;font-weight:800;padding:1px 5px;margin-left:8px;vertical-align:3px;letter-spacing:.03em}
 .ctl{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-bottom:12px}
@@ -518,14 +520,22 @@ if(!(hasTw&&hasYt)){if(PF!='all')PF='all'}else
 if(all.length<2)return;
 bar.append(h('span',{class:'sp'}));
 if(!ARR)bar.append(h('select',{class:'sortsel',title:'Order of the channel cards',onchange:e=>{SORT=e.target.value;try{localStorage.setItem('sort',SORT)}catch(x){}render()}},[['mine','My order'],['subs','Most subscribers'],['grow','Fastest growing (24 h)'],['new','Newest upload']].map(([v,t])=>{const o=h('option',{value:v,text:'Sort: '+t});if(v==SORT)o.selected=true;return o})));
-else bar.append(h('span',{class:'arrhint',text:'Drag the cards, or use the arrows'}),h('button',{text:'Cancel',onclick:()=>{ARR=false;render()}}));
+else bar.append(h('span',{class:'arrhint',text:'Press and drag the tiles into the order you want'}),h('button',{text:'Cancel',onclick:()=>{ARR=false;render()}}));
 bar.append(h('button',{class:ARR?'on':'',text:ARR?'Done':'Arrange',title:ARR?'Save this order on the board':'Set your own order',onclick:()=>{if(ARR)saveOrder();else{ARR=true;render()}}}))}
-function arrangeGrid(grid){let drag=null;const cards=()=>[...grid.querySelectorAll('.chcard')];
-grid.querySelectorAll('.chcard').forEach(el=>{el.draggable=true;
-el.addEventListener('dragstart',e=>{drag=el;el.classList.add('dragging');e.dataTransfer.effectAllowed='move';try{e.dataTransfer.setData('text/plain',el.dataset.k)}catch(x){}});
-el.addEventListener('dragend',()=>{el.classList.remove('dragging');drag=null});
-el.addEventListener('dragover',e=>{if(!drag||drag==el)return;e.preventDefault();const r=el.getBoundingClientRect(),after=(e.clientY-r.top)>r.height/2||(e.clientX-r.left)>r.width*0.66;grid.insertBefore(drag,after?el.nextSibling:el)})})}
-function moveCard(el,d){const g=el.parentNode,cs=[...g.querySelectorAll('.chcard')],k=cs.indexOf(el),t=cs[k+d];if(!t)return;if(d<0)g.insertBefore(el,t);else g.insertBefore(el,t.nextSibling);el.scrollIntoView({block:'nearest',behavior:'smooth'})}
+// Arrange: compact tiles you press and drag (mouse, finger or pen - pointer events work everywhere)
+function arrangeGrid(grid){let drag=null,ph=null,ox=0,oy=0;
+const move=e=>{if(!drag)return;e.preventDefault();drag.style.left=(e.clientX-ox)+'px';drag.style.top=(e.clientY-oy)+'px';
+if(e.clientY<70)window.scrollBy(0,-12);else if(e.clientY>innerHeight-70)window.scrollBy(0,12);
+// the gap jumps past whichever tile the pointer is over (no flicker); past the last tile it goes to the end
+let over=null;for(const x of grid.querySelectorAll('.chcard')){const r=x.getBoundingClientRect();if(e.clientX>=r.left&&e.clientX<=r.right&&e.clientY>=r.top&&e.clientY<=r.bottom){over=x;break}}
+if(over){if(ph.compareDocumentPosition(over)&Node.DOCUMENT_POSITION_FOLLOWING)grid.insertBefore(ph,over.nextSibling);else grid.insertBefore(ph,over)}
+else{const cs=[...grid.querySelectorAll('.chcard')],last=cs[cs.length-1];if(last){const r=last.getBoundingClientRect();if(e.clientY>r.bottom+10||(e.clientY>r.top&&e.clientX>r.right+10))grid.append(ph)}}};
+const drop=()=>{if(!drag)return;drag.classList.remove('lift');drag.style.width=drag.style.left=drag.style.top='';grid.insertBefore(drag,ph);ph.remove();ph=null;drag=null;
+removeEventListener('pointermove',move);removeEventListener('pointerup',drop);removeEventListener('pointercancel',drop)};
+grid.querySelectorAll('.chcard').forEach(el=>el.addEventListener('pointerdown',e=>{if(e.button>0||drag)return;e.preventDefault();const r=el.getBoundingClientRect();ox=e.clientX-r.left;oy=e.clientY-r.top;
+ph=h('div',{class:'tile ph'});ph.style.height=r.height+'px';grid.insertBefore(ph,el);
+drag=el;el.classList.add('lift');el.style.width=r.width+'px';el.style.left=r.left+'px';el.style.top=r.top+'px';document.body.append(el);
+addEventListener('pointermove',move,{passive:false});addEventListener('pointerup',drop);addEventListener('pointercancel',drop)}))}
 function render(){const app=$('#app');app.textContent='';filterBar();const C=D.channels.filter(kindOk);if(D.accent)document.documentElement.style.setProperty('--gold',D.accent);
 $('#meta').textContent=(D.err?D.err:(D.updatedAgo>=0?'Updated '+(D.updatedAgo<60?'just now':(D.updatedAgo/60|0)+' min ago'):''))+(D.ver?'  ·  v'+D.ver:'');{const u=$('#upd');if(D.upd){u.textContent='Update v'+D.upd;u.style.display=''}else u.style.display='none'}
 const row=h('aside',{class:'side'});
@@ -553,9 +563,8 @@ const lb=[...C].filter(c=>c.subs>=0).sort((a,b)=>b.subs-a.subs);const mixed=C.so
 row.append(h('div',{class:'card'},h('h2',{text:'Leaderboard'}),h('table',{},h('tr',{class:'hd'},h('th',{colspan:'3'}),h('th',{class:'n',text:C.some(c=>c.tw)?'Total':'Subs'}),h('th',{class:'n',text:'Today',title:'Since midnight'})),lb.map((c,k)=>h('tr',{class:c.i==0?'me':''},h('td',{text:k+1+'.'}),h('td',{},av(c)),h('td',{class:'nm2'},mixed?pIcon(c):null,name(c)),h('td',{class:'n',text:cmp(c.subs)}),h('td',{class:'n '+cls(c.today),text:c.statsOk?sg(c.today):''}))))));
 {const mon=t=>new Date(t*1000).toLocaleDateString('en-GB',{month:'short'});const ms=[...C].filter(c=>c.subs>=0).sort((a,b)=>(b.mo||0)-(a.mo||0));
 if(ms.length&&C.some(c=>c.statsOk))row.append(h('div',{class:'card'},h('h2',{text:'Monthly'}),h('table',{},h('tr',{class:'hd'},h('th',{}),h('th',{class:'n',text:mon(D.m1)}),h('th',{class:'n',text:mon(D.m0)+' so far'})),ms.map(c=>h('tr',{class:c.i==0?'me':''},h('td',{class:'nm2',text:name(c)}),h('td',{class:'n '+(c.lm!=null?cls(c.lm):''),text:c.lm!=null?sg(c.lm):'–'}),h('td',{class:'n '+cls(c.mo),text:c.statsOk?sg(c.mo):'–'}))))))}
-const grid=h('section',{class:'grid'+(ARR?' arranging':'')});ordered(C,ARR?'mine':SORT).forEach(c=>{const el=channelCard(c);el.dataset.k=ck(c);el.classList.add('chcard');
-if(ARR)el.prepend(h('div',{class:'arr'},h('span',{text:'⠿ '+name(c)}),h('span',{},h('button',{text:'↑',title:'Move up',onclick:()=>moveCard(el,-1)}),h('button',{text:'↓',title:'Move down',onclick:()=>moveCard(el,1)}))));grid.append(el)});
-if(ARR)arrangeGrid(grid);else if(C.filter(c=>c.subs>=0).length>1)grid.append(compareCard());app.append(h('div',{class:'layout'},row,grid))}
+const grid=h('section',{class:'grid'+(ARR?' arranging':'')});ordered(C,ARR?'mine':SORT).forEach(c=>{const el=ARR?h('div',{class:'tile'},h('span',{class:'grip',text:'⠿'}),av(c),h('div',{style:'min-width:0'},h('div',{class:'nm'},c.tw?pIcon(c):null,name(c)),h('div',{class:'sub',text:c.subs>=0?fmt(est(c))+(c.tw?' followers':' subscribers'):''}))):channelCard(c);el.dataset.k=ck(c);el.classList.add('chcard');grid.append(el)});
+if(ARR)arrangeGrid(grid);else if(C.filter(c=>c.subs>=0).length>1)grid.append(compareCard());app.append(h('div',{class:'layout'+(ARR?' arrlay':'')},ARR?null:row,grid));if(ARR)scrollTo(0,0)}
 async function load(){try{const r=await fetch('/api/data');const d=await r.json();if(ARR)return;D=d;render()}catch(e){$('#meta').textContent='Board not reachable'}}
 setInterval(()=>{if(!D)return;document.querySelectorAll('[data-est]').forEach(el=>{const c=D.channels[el.dataset.est];el.textContent=fmt(est(c))})},1000);
 load();setInterval(load,60000);
