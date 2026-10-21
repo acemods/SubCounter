@@ -1,7 +1,7 @@
 {
- "version": "13.9",
- "app": "SubCounter-v13.9-APP-ONLY.bin",
- "size": 1816272,
- "md5": "7b5131e6e655fcf42a525f762d4594c7",
- "notes": "Updates free memory first and retry once; the board stops sending to a browser that has gone; dashboard graphs no longer re-download every minute"
+ "version": "14.0",
+ "app": "SubCounter-v14.0-APP-ONLY.bin",
+ "size": 1817008,
+ "md5": "d946711a8dc88ced53afa32d56287d88",
+ "notes": "Dashboard data sent one channel at a time (peak memory ~51 KB down to ~10 KB); a browser that stops collecting holds the board up 2.5 s at most"
 }

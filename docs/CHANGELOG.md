@@ -2,6 +2,10 @@
 
 All builds are in [`builds/`](../builds). Source snapshots for most versions are in the git history.
 
+## v14.0
+- **Memory nearly ran out when the dashboard refreshed:** the dashboard's data (counts, views, recent uploads, comments, latest-video tracking, summary...) was built in memory all at once before sending: about 50 KB with 10 channels, more with two browsers open. It's now built and sent one channel at a time, which needs about 10 KB.
+- **Shorter waits:** a browser that stops collecting a page (a phone locking, a tab in the background) now holds the board up for 2.5 s at most, instead of 5 s per piece (which added up to 10 s or more).
+
 ## v13.9
 - **GitHub update failing with "Download failed (-1)":** the installer now closes the board's other connections first to free memory, and tries once more if it still can't connect. (If an update ever fails this way, uploading the APP-ONLY file on the Update page always works.)
 - **Long freezes (up to ~2 minutes) from the dashboard graphs:** the dashboard re-asked for every graph's history on each 1-minute refresh, abandoning the requests still in flight, and the board kept waiting 5 s per piece for a browser that had gone. Graph history is now kept by the browser (2 min for subscribers, 10 min for views), and the board stops sending as soon as a browser goes away or stops reading.

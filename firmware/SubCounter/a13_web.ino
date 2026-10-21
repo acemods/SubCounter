@@ -592,7 +592,11 @@ void handleDashboard() {
   } else server.send_P(200, "text/html", DASH_HTML);
 }
 
+// Built and sent one channel at a time: the whole lot in one go (with recent uploads, comments,
+// views and so on for every channel) could briefly use nearly all the board's free memory.
 void handleApiData() {
+  ChunkOut out("application/json");
+  {
   JsonDocument doc;
   doc["now"] = (long)nowT();
   doc["updatedAgo"] = lastFetchOk ? (long)((millis() - lastFetchOk) / 1000) : -1;
@@ -613,10 +617,14 @@ void handleApiData() {
     w["place"] = cfgWxName; w["temp"] = lroundf(wx.temp); w["feels"] = lroundf(wx.feels); w["text"] = wxText(wx.code);
     w["hi"] = wx.hi; w["lo"] = wx.lo; w["rainHour"] = wx.rainHour; w["rainPct"] = wx.rainPct; w["wind"] = lroundf(wx.wind);
   }
-  JsonArray arr = doc["channels"].to<JsonArray>();
+  String head; serializeJson(doc, head);           // {"now":...,"wx":{...}} - reopen it to add the channels
+  head.remove(head.length() - 1);
+  out += head; out += ",\"channels\":[";
+  }
   for (int i = 0; i < numCh; i++) {
     Channel &c = ch[i];
-    JsonObject o = arr.add<JsonObject>();
+    JsonDocument cd;                               // just this channel
+    JsonObject o = cd.to<JsonObject>();
     o["i"] = i; o["handle"] = c.handle; o["id"] = c.id; o["title"] = c.title;
     o["subs"] = c.subs; o["step"] = (c.subs >= 0 && !c.tw) ? stepFor(c.subs) : 1;
     o["rate"] = c.ratePerDay; o["stepAt"] = (long)c.stepChangedAt;
@@ -681,9 +689,11 @@ void handleApiData() {
       v["views"] = c.vidViews; v["likes"] = c.vidLikes; v["comments"] = c.vidComments;
       v["live"] = c.live; v["viewers"] = c.liveViewers;
     }
+    if (i) out += ',';
+    serializeJson(cd, out);
+    if (out.dead) break;                           // browser has gone: stop
   }
-  ChunkOut out("application/json");
-  serializeJson(doc, out);
+  out += "]}";
   out.end();
 }
 
@@ -1416,6 +1426,7 @@ void handleOrder() {
 void registerRoutes() {
   server.on("/order", HTTP_POST, handleOrder);
   server.addMiddleware([](WebServer &sv, Middleware::Callback next) {   // time every page (for /debug)
+    sv.client().setTimeout(2500);   // a browser that stops collecting holds the board up 2.5 s at most (was 5 s per piece)
     unsigned long t = millis(); String u = sv.uri();
     bool r = next();
     unsigned long d = millis() - t;
