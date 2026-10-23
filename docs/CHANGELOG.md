@@ -2,6 +2,10 @@
 
 All builds are in [`builds/`](../builds). Source snapshots for most versions are in the git history.
 
+## v14.1
+- **10-second freezes when a browser stopped loading a page:** the network library retries a stalled send 10 times with a 1-second wait each, so the 2.5 s limit in v14.0 didn't take effect. Pages and data are now sent by the board's own routine with a hard limit (2.5 s; 4 s for the dashboard page itself), and a browser that's gone is dropped straight away.
+- `/debug`: **"Lowest memory noticed"**, with when and what the board was doing (to track down the occasional very low reading), and how many times the dashboard page was sent in full versus reused from the browser's saved copy
+
 ## v14.0
 - **Memory nearly ran out when the dashboard refreshed:** the dashboard's data (counts, views, recent uploads, comments, latest-video tracking, summary...) was built in memory all at once before sending: about 50 KB with 10 channels, more with two browsers open. It's now built and sent one channel at a time, which needs about 10 KB.
 - **Shorter waits:** a browser that stops collecting a page (a phone locking, a tab in the background) now holds the board up for 2.5 s at most, instead of 5 s per piece (which added up to 10 s or more).

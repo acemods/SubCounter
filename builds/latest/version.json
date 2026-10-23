@@ -1,7 +1,7 @@
 {
- "version": "14.0",
- "app": "SubCounter-v14.0-APP-ONLY.bin",
- "size": 1817008,
- "md5": "d946711a8dc88ced53afa32d56287d88",
- "notes": "Dashboard data sent one channel at a time (peak memory ~51 KB down to ~10 KB); a browser that stops collecting holds the board up 2.5 s at most"
+ "version": "14.1",
+ "app": "SubCounter-v14.1-APP-ONLY.bin",
+ "size": 1820240,
+ "md5": "7c1b559f574e308d0d45b7e27f238c62",
+ "notes": "Web pages sent with a hard 2.5 s limit (a stalled browser could still freeze the board for 10 s); /debug shows when memory was lowest and what the board was doing, and how often the dashboard page came from the browser's saved copy"
 }

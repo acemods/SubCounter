@@ -107,47 +107,47 @@ void netCycle() {
   netBusy = true; netHolding = true;
   if (updCheckReq) {                       // someone tapped "Check for update": do that first
     updCheckReq = false; lastUpdCheck = millis();
-    netStage = "update check"; checkForUpdate();
+    netStage = "update check"; memMark("network: " "update check"); checkForUpdate();
   }
-  netStage = "Spotify command";
+  netStage = "Spotify command"; memMark("network: " "Spotify command");
   if (spPendingCmd) { char c = spPendingCmd; spPendingCmd = 0; if (cfgSpRefresh.length()) spCommandNet(c); }
   if (lastFetch == 0 || millis() - lastFetch > REFRESH_MS) {
     lastFetch = millis();
-    netStage = "channel counts"; fetchAll();
-    netStage = "live streams";     refreshLiveVideos();     // keeps LIVE badges and viewer counts current
-    netStage = "profile pictures"; fetchAvatars();          // picks up any that failed earlier
+    netStage = "channel counts"; memMark("network: " "channel counts"); fetchAll();
+    netStage = "live streams"; memMark("network: " "live streams");     refreshLiveVideos();     // keeps LIVE badges and viewer counts current
+    netStage = "profile pictures"; memMark("network: " "profile pictures"); fetchAvatars();          // picks up any that failed earlier
     netRefreshed = true;
   }
   if (lastVideoFetch == 0 || millis() - lastVideoFetch > VIDEO_REFRESH_MS) {
     lastVideoFetch = millis();
-    netStage = "latest videos"; fetchLatestVideos();
+    netStage = "latest videos"; memMark("network: " "latest videos"); fetchLatestVideos();
     vtCheckNewUpload();
     netRefreshed = true;
   }
   if (lastCommentFetch == 0 || millis() - lastCommentFetch > COMMENT_REFRESH_MS) {
     lastCommentFetch = millis();
-    netStage = "comments"; fetchComments();
+    netStage = "comments"; memMark("network: " "comments"); fetchComments();
   }
   // your new upload: its own numbers every 5 minutes, typical views once a day
   if (vt.active && (lastVtFetch == 0 || millis() - lastVtFetch > 5UL * 60000UL)) {
     lastVtFetch = millis();
-    netStage = "new video tracker"; vtPoll();
+    netStage = "new video tracker"; memMark("network: " "new video tracker"); vtPoll();
     netRefreshed = true;
   }
   if (vt.active && (lastTypicalFetch == 0 || millis() - lastTypicalFetch > 24UL * 3600000UL)) {
     lastTypicalFetch = millis();
-    netStage = "typical views"; vtFetchTypical();
+    netStage = "typical views"; memMark("network: " "typical views"); vtFetchTypical();
   }
   if (lastWxFetch == 0 || millis() - lastWxFetch > 15UL * 60000UL) {
     lastWxFetch = millis();
-    netStage = "weather"; fetchWeather();
+    netStage = "weather"; memMark("network: " "weather"); fetchWeather();
     netWxRefreshed = true;
   }
   // Spotify: every 3 s while it's on screen
   if (mode == M_NORMAL && !menuOpen && app == APP_SP && cfgSpRefresh.length() &&
       (lastSpPoll == 0 || millis() - lastSpPoll > spWait)) {
     bool wasPlaying = sp.playing, had = sp.hasTrack;
-    netStage = "Spotify"; bool changed = spPoll();
+    netStage = "Spotify"; memMark("network: " "Spotify"); bool changed = spPoll();
     lastSpPoll = millis();
     // A failing sign-in used to be retried every 3 s, and each try freezes the board for a
     // moment, so long-presses were missed. Back off: 15 s, 30 s, 1 min ... up to 5 min.
@@ -159,19 +159,19 @@ void netCycle() {
   // new firmware on GitHub? once a day (first check 2 minutes after start-up), or when asked
   if (updCheckReq || (lastUpdCheck == 0 ? millis() > 120000UL : millis() - lastUpdCheck > 24UL * 3600000UL)) {
     updCheckReq = false; lastUpdCheck = millis();
-    netStage = "update check"; checkForUpdate();
+    netStage = "update check"; memMark("network: " "update check"); checkForUpdate();
   }
   static unsigned long recentWait = RECENT_REFRESH_MS;
   static bool hadSaved = false, checkedSaved = false;
   if (!checkedSaved) { checkedSaved = true; for (int i = 0; i < numCh; i++) if (ch[i].rvN) hadSaved = true; }
   if (lastRecentFetch == 0 ? millis() > (hadSaved ? 180000UL : 60000UL) : millis() - lastRecentFetch > recentWait) {
     lastRecentFetch = millis();
-    netStage = "recent uploads";
+    netStage = "recent uploads"; memMark("network: " "recent uploads");
     recentWait = fetchRecent() ? RECENT_REFRESH_MS : 10UL * 60000UL;   // something failed: try again in 10 min
   }
-  netStage = "phone notifications"; if (noteN) sendNotes();
-  netStage = "closing connections"; connCloseIdle(connYT); connCloseIdle(connTW); connCloseIdle(connSP, 30000);
-  netBusy = false; netHolding = false; netStage = "idle";
+  netStage = "phone notifications"; memMark("network: " "phone notifications"); if (noteN) sendNotes();
+  netStage = "closing connections"; memMark("network: " "closing connections"); connCloseIdle(connYT); connCloseIdle(connTW); connCloseIdle(connSP, 30000);
+  netBusy = false; netHolding = false; netStage = "idle"; memMark("network: " "idle");
 }
 void netTask(void *) {
   for (;;) { netCycle(); vTaskDelay(pdMS_TO_TICKS(40)); }
@@ -259,6 +259,7 @@ void memRestartCheck() {
 
 void loopBody() {
   memRestartCheck();
+  memMark("drawing the screen");
   { unsigned long t = millis(); server.handleClient(); unsigned long d = millis() - t;
     if (d > 400 && !portalMode && !lastLongIsWeb) { noteStall(d, "web connection (slow or empty request)"); lastLongIsWeb = true; } }
   if (portalMode) {

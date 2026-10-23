@@ -51,8 +51,9 @@
 #include <qrcode.h>    // built into the ESP32 core (esp_qrcode_*)
 #include <nvs.h>       // settings backup: list every saved setting
 #include <ESPmDNS.h>   // http://subcounter.local
+#include <lwip/sockets.h>   // our own time-limited sending to web browsers
 #define HOSTNAME "subcounter"
-#define FW_VERSION "14.0"     // shown on start-up, home menu, settings, update page and dashboard
+#define FW_VERSION "14.1"     // shown on start-up, home menu, settings, update page and dashboard
 
 // ── Pins (ESP32-C6 version of the board) ────────────────────────────────────
 #define LCD_SCK   1
@@ -202,7 +203,14 @@ volatile bool netHolding = false;          // the network task has the data righ
 struct Stall { unsigned long at, ms; char what[48]; };
 Stall stalls[16]; int stallN = 0, stallPos = 0;
 unsigned long worstStall = 0;
-bool lastLongIsWeb = false;              // this loop's slow moment was a web page (already logged)
+bool lastLongIsWeb = false;
+// When was memory lowest, and what was the board doing? (checked at busy moments, shown on /debug)
+uint32_t memLowSeen = 0xFFFFFFFF; unsigned long memLowAt = 0; char memLowWhat[48] = "";
+void memMark(const char *what) {
+  uint32_t f = ESP.getFreeHeap();
+  if (f < memLowSeen) { memLowSeen = f; memLowAt = millis(); strncpy(memLowWhat, what, sizeof(memLowWhat) - 1); memLowWhat[sizeof(memLowWhat) - 1] = 0; }
+}
+uint32_t dashFull = 0, dashCached = 0;      // dashboard page: sent in full / browser's saved copy reused              // this loop's slow moment was a web page (already logged)
 void noteStall(unsigned long ms, const String &what) {
   Stall &s = stalls[stallPos]; s.at = millis(); s.ms = ms;
   strncpy(s.what, what.c_str(), sizeof(s.what) - 1); s.what[sizeof(s.what) - 1] = 0;
@@ -307,6 +315,7 @@ int httpsCall(Conn &c, const char *method, const String &url, const Hdr *hs, int
       if (collect && collected) *collected = h->header(collect);
       if (resp) *resp = h->getString();
     }
+    { char w[48]; int a = url.indexOf("://") + 3, b = url.indexOf('/', a); snprintf(w, sizeof(w), "connecting to %s", url.substring(a, b < 0 ? url.length() : b).c_str()); memMark(w); }
     connEnd(c, tmp);
     // A kept-open connection the server had quietly closed fails straight away (refused / not
     // connected / lost). Retry those once on a fresh connection - only for GETs, so a Spotify

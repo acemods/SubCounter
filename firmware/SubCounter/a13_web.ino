@@ -268,18 +268,47 @@ void handleTouchIcon() { sendIcon("image/png", ICON_PNG180, sizeof(ICON_PNG180))
 // Send a page in small pieces as it's built, instead of building it all in memory first.
 // A 20-30 KB page needs one big free block, and when memory is tight the end of the page
 // was silently lost (settings page cut off part-way). This only ever holds 1 KB.
+// Send to the browser with a hard time limit. The network library retries a stalled send 10 times
+// with a 1 s wait each, so a browser that stops collecting (phone locked, tab in the background)
+// could freeze the board for 10 s; this gives up after maxMs.
+bool netSend(const void *data, size_t len, unsigned long maxMs = 2500) {
+  int fd = server.client().fd();
+  if (fd < 0 || !server.client().connected()) return false;
+  const uint8_t *p = (const uint8_t *)data;
+  unsigned long start = millis();
+  while (len) {
+    fd_set ws; FD_ZERO(&ws); FD_SET(fd, &ws);
+    struct timeval tv = { 0, 100000 };                       // look again every 0.1 s
+    int r = select(fd + 1, NULL, &ws, NULL, &tv);
+    if (r < 0) return false;
+    if (r > 0) {
+      int n = send(fd, p, len, MSG_DONTWAIT);
+      if (n > 0) { p += n; len -= n; continue; }
+      if (n < 0 && errno != EAGAIN && errno != EWOULDBLOCK) return false;
+    }
+    if (millis() - start > maxMs) return false;
+  }
+  return true;
+}
+// One piece of a "chunked" reply (the format used when the length isn't known in advance)
+bool sendChunk(const void *data, size_t len) {
+  char hdr[12]; int h = snprintf(hdr, sizeof(hdr), "%x\r\n", (unsigned)len);
+  return netSend(hdr, h) && netSend(data, len) && netSend("\r\n", 2);
+}
+void giveUpOnClient() { server.client().stop(); }      // the browser has gone: drop it so nothing else waits on it
+
 struct ChunkOut : public Print {
   char buf[1024]; size_t n = 0; bool started = false; const char *type; int code;
   ChunkOut(const char *t, int c = 200) : type(t), code(c) {}
   void begin() { if (!started) { server.setContentLength(CONTENT_LENGTH_UNKNOWN); server.send(code, type, ""); started = true; } }
   size_t write(uint8_t c) override { buf[n++] = (char)c; if (n == sizeof(buf)) flush(); return 1; }
   size_t write(const uint8_t *p, size_t l) override { for (size_t i = 0; i < l; i++) write(p[i]); return l; }
-  bool dead = false;                       // the browser went away: stop sending (each try waits up to 5 s)
+  bool dead = false;                       // the browser went away: stop sending
   void flush() override {
     begin();
     if (n && !dead) {
-      if (!server.client().connected()) dead = true;
-      else { unsigned long t = millis(); server.sendContent(buf, n); if (millis() - t > 3000) dead = true; }
+      memMark("sending a web page");
+      if (!sendChunk(buf, n)) { dead = true; giveUpOnClient(); }
     }
     n = 0;
   }
@@ -582,13 +611,16 @@ void handleDashboard() {
   if (portalMode) { handleSettings(); return; }
   // The browser keeps a copy: if it already has this version, just say "not changed" (no page sent at all)
   String etag = String("\"v") + FW_VERSION + "-" + String((unsigned long)DASH_GZ_SRC_LEN) + "\"";
-  if (server.header("If-None-Match") == etag) { server.send(304); return; }
+  if (server.header("If-None-Match") == etag) { dashCached++; server.send(304); return; }
+  dashFull++;
   server.sendHeader("ETag", etag);
   server.sendHeader("Cache-Control", "no-cache");
   // Send the compressed copy (about a third of the size) - unless it's out of date, then the plain page
   if (strlen_P(DASH_HTML) == DASH_GZ_SRC_LEN) {
     server.sendHeader("Content-Encoding", "gzip");
-    server.send_P(200, "text/html", (const char *)DASH_GZ, sizeof(DASH_GZ));
+    server.setContentLength(sizeof(DASH_GZ));
+    server.send(200, "text/html", "");                    // just the headers...
+    if (!netSend(DASH_GZ, sizeof(DASH_GZ), 4000)) giveUpOnClient();   // ...then the page, with a time limit
   } else server.send_P(200, "text/html", DASH_HTML);
 }
 
@@ -700,10 +732,8 @@ void handleApiData() {
 // [[time, subs], ...] for one channel, streamed in chunks
 // Send one piece of a streamed reply; false if the browser has gone or stopped reading (don't wait 5 s per piece)
 bool sendOrGiveUp(const String &chunk) {
-  if (!server.client().connected()) return false;
-  unsigned long t = millis();
-  server.sendContent(chunk);
-  return millis() - t < 3000 && server.client().connected();
+  if (sendChunk(chunk.c_str(), chunk.length())) return true;
+  giveUpOnClient(); return false;
 }
 void handleApiHistory() {
   int i = server.arg("i").toInt();
@@ -1390,6 +1420,8 @@ void handleDebug() {
   o += "SubCounter v" FW_VERSION "\n";
   o += "Up " + String(millis() / 1000) + " s   free memory " + String(ESP.getFreeHeap()) + " (lowest " + String(ESP.getMinFreeHeap()) + ")\n";
   o += "Last start: " + bootWhy + "\n";
+  if (memLowAt) o += "Lowest memory noticed: " + String(memLowSeen) + " at " + String(memLowAt / 1000) + " s, while " + memLowWhat + "\n";
+  o += "Dashboard page: " + String(dashFull) + " sent in full, " + String(dashCached) + " times the browser's saved copy was reused\n";
   o += "Network task: " + String((const char *)netStage) + (netHolding ? " (busy with data)" : "") + "\n";
   o += "Wi-Fi signal " + String(WiFi.RSSI()) + " dBm\n";
   o += "Clock " + String(timeValid() ? "set" : "NOT set") + "   update check: " + String(updCheckSeq) + " done" +
