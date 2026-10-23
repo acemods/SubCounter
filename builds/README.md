@@ -1,12 +1,12 @@
 # Builds
 
-**Current version: v14.1** in [`latest/`](latest)
+**Current version: v14.2** in [`latest/`](latest)
 
 | File | Use for | How |
 |---|---|---|
-| `SubCounter-v14.1-APP-ONLY.bin` | Updating a running board (v9 or later) | Upload at `http://<board-ip>/update` (v11.1+ can fetch it from GitHub itself) |
-| `SubCounter-v14.1-USB-UPDATE-flash-at-0xE000.bin` | Updating over USB, keeping settings | esptool-js at **0xE000** |
-| `SubCounter-v14.1-FULL-new-board-flash-at-0x0.bin` | New or wiped board | esptool-js at **0x0** (erases settings) |
+| `SubCounter-v14.2-APP-ONLY.bin` | Updating a running board (v9 or later) | Upload at `http://<board-ip>/update` (v11.1+ can fetch it from GitHub itself) |
+| `SubCounter-v14.2-USB-UPDATE-flash-at-0xE000.bin` | Updating over USB, keeping settings | esptool-js at **0xE000** |
+| `SubCounter-v14.2-FULL-new-board-flash-at-0x0.bin` | New or wiped board | esptool-js at **0x0** (erases settings) |
 
 `latest/version.json` is what boards (v11.1 and later) read once a day to see whether there's a newer version; they can then install it themselves from the Device screen or the Update page.
 

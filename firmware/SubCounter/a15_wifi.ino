@@ -55,7 +55,8 @@ bool connectAttempt(bool compat) {
     if (!cfgDns.length() || !dns1.fromString(cfgDns)) dns1 = google;
     WiFi.config(ip, gw, mask, dns1, google);     // 8.8.8.8 as backup DNS
   } else {
-    WiFi.config(INADDR_NONE, INADDR_NONE, INADDR_NONE);
+    const IPAddress automatic((uint32_t)0);     // 0.0.0.0: get the address from the router (DHCP)
+    WiFi.config(automatic, automatic, automatic);
   }
   lastDiscReason = 0;
   staAssociated = false;

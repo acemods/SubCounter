@@ -52,8 +52,13 @@
 #include <nvs.h>       // settings backup: list every saved setting
 #include <ESPmDNS.h>   // http://subcounter.local
 #include <lwip/sockets.h>   // our own time-limited sending to web browsers
+// lwip's sockets header defines INADDR_NONE as 255.255.255.255, hiding Arduino's INADDR_NONE (0.0.0.0 =
+// "get an address from the router"). v14.1 then asked the router for 255.255.255.255 and never got online.
+#ifdef INADDR_NONE
+#undef INADDR_NONE
+#endif
 #define HOSTNAME "subcounter"
-#define FW_VERSION "14.1"     // shown on start-up, home menu, settings, update page and dashboard
+#define FW_VERSION "14.2"     // shown on start-up, home menu, settings, update page and dashboard
 
 // ── Pins (ESP32-C6 version of the board) ────────────────────────────────────
 #define LCD_SCK   1

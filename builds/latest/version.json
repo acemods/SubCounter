@@ -1,7 +1,7 @@
 {
- "version": "14.1",
- "app": "SubCounter-v14.1-APP-ONLY.bin",
- "size": 1820240,
- "md5": "7c1b559f574e308d0d45b7e27f238c62",
- "notes": "Web pages sent with a hard 2.5 s limit (a stalled browser could still freeze the board for 10 s); /debug shows when memory was lowest and what the board was doing, and how often the dashboard page came from the browser's saved copy"
+ "version": "14.2",
+ "app": "SubCounter-v14.2-APP-ONLY.bin",
+ "size": 1820256,
+ "md5": "4b8055bd1e4fc42d9ae5b386438d8daa",
+ "notes": "Fixes v14.1, which couldn't get online (it asked the router for the address 255.255.255.255). Includes everything from v14.1."
 }

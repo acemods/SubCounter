@@ -2,7 +2,11 @@
 
 All builds are in [`builds/`](../builds). Source snapshots for most versions are in the git history.
 
-## v14.1
+## v14.2
+- **Fixes v14.1, which couldn't get online.** The networking code added in v14.1 brought in a different meaning for one setting name (`INADDR_NONE`): to the Wi-Fi code it means "get an address from the router" (0.0.0.0), but the new code defines it as 255.255.255.255. So the board asked for the address 255.255.255.255, appeared connected, and couldn't reach anything (empty main screen, no dashboard). The Wi-Fi code now asks for an automatic address explicitly.
+- Everything from v14.1 is included (below).
+
+## v14.1 (withdrawn: don't install it)
 - **10-second freezes when a browser stopped loading a page:** the network library retries a stalled send 10 times with a 1-second wait each, so the 2.5 s limit in v14.0 didn't take effect. Pages and data are now sent by the board's own routine with a hard limit (2.5 s; 4 s for the dashboard page itself), and a browser that's gone is dropped straight away.
 - `/debug`: **"Lowest memory noticed"**, with when and what the board was doing (to track down the occasional very low reading), and how many times the dashboard page was sent in full versus reused from the browser's saved copy
 
