@@ -149,6 +149,25 @@ void drawHome() {
   if (haErr.length()) { gfx->fillRect(0, 158, RIGHT_EDGE + 4, 14, C_BG); ft(10, 170, fit(haErr, F_XS2, RIGHT_EDGE - 10), F_XS2, C_RED); }
 }
 
+// The idle clock's bottom line, split into groups that each fit the screen: they take turns
+// every few seconds, so every room gets shown however many there are.
+int haClockGroups(String *out, int maxOut, int width) {
+  if (!cfgHaClock || !haOn()) return 0;
+  int n = 0; String cur;
+  for (int i = 0; i < haN && n < maxOut; i++) {
+    HaRoom &r = haRoom[i];
+    if (!r.at || haStale(r)) continue;
+    String one = r.name;
+    if (r.tEnt.length() && !isnan(r.t)) one += " " + haTemp(r.t) + "\xC2\xB0";
+    if (r.hEnt.length() && !isnan(r.h)) one += " " + haHum(r.h);
+    String joined = cur.length() ? cur + "  -  " + one : one;
+    if (cur.length() && tw(joined, F_S) > width) { out[n++] = cur; cur = one; }
+    else cur = joined;
+  }
+  if (cur.length() && n < maxOut) out[n++] = cur;
+  return n;
+}
+
 // One line for the idle clock: "Lounge 21.4° 48%  ·  Bedroom 19.0° 55%"
 String haClockLine() {
   if (!cfgHaClock || !haOn()) return "";

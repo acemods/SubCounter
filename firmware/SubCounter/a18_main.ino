@@ -536,6 +536,8 @@ void loopBody() {
   if (mode == M_CLOCK && timeValid()) {
     time_t n = nowT(); struct tm lt; localtime_r(&n, &lt);
     if (lt.tm_min != lastClockMin) { lastClockMin = lt.tm_min; drawClock(); }
+    static unsigned long lastTurn = 0;
+    if (clockTurns > 1 && millis() - lastTurn > 4000UL) { lastTurn = millis(); clockTurn++; drawClockBottom(); }
   }
   if (mode == M_NORMAL && !menuOpen && app == APP_WX && wxCard == 0 && timeValid()) {   // keep the clock ticking
     time_t n = nowT(); struct tm lt; localtime_r(&n, &lt);

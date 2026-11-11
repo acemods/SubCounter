@@ -33,7 +33,7 @@ The token is saved on the board as a secret. Like your other keys, it's left out
 ## Where the readings appear
 
 - **On the board:** long-press the screen → swipe left → **Home**. With one or two rooms, each gets a big line. With more, there are three to a page: swipe up/down or press BOOT for the next page. Shake to refresh. The outside temperature from the Weather app is shown at the top for comparison.
-- **On the idle clock:** the bottom line shows your rooms (turn this off with *Show the rooms on the idle clock too*). If rain is on the way, the rain warning and the rooms take turns each minute.
+- **On the idle clock:** the bottom line shows your rooms, as many as fit at a time, taking turns every 4 seconds (turn this off with *Show the rooms on the idle clock too*). If rain is on the way, the rain warning is one of the turns.
 - **On the dashboard:** a **Home** card in the side column.
 
 Readings older than 15 minutes (a sensor offline or out of battery) are shown greyed out.

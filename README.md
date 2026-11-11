@@ -6,6 +6,7 @@ A desk gadget built on the **Waveshare ESP32-C6-Touch-LCD-1.47** that shows live
 
 ## What's new
 
+- **v14.5:** the idle clock shows all your Home Assistant rooms, taking turns every 4 seconds
 - **v14.4:** the dashboard's Monthly card shows last month even when the history only covers part of it; history kept long enough that last month no longer disappears mid-month
 - **v14.3:** new **Home** app: room temperature and humidity from Home Assistant, on the board, the idle clock and the dashboard ([setup](docs/HOME-ASSISTANT.md))
 - **v14.2:** web pages can no longer freeze the board for 10 s; more memory detail on /debug (v14.1 was withdrawn: it couldn't get online)
@@ -98,7 +99,7 @@ Full history: [docs/CHANGELOG.md](docs/CHANGELOG.md)
 
 ## Quick start
 
-1. **Flash the board.** Open <https://espressif.github.io/esptool-js/> in Chrome, connect the board, and flash `builds/latest/SubCounter-v14.4-FULL-new-board-flash-at-0x0.bin` at address **0x0**.
+1. **Flash the board.** Open <https://espressif.github.io/esptool-js/> in Chrome, connect the board, and flash `builds/latest/SubCounter-v14.5-FULL-new-board-flash-at-0x0.bin` at address **0x0**.
 2. **Set it up.** The board shows *SETUP MODE*. Join the Wi-Fi network **SubCounter-Setup** from your phone, and the setup page opens by itself (or go to <http://192.168.4.1>). Pick your Wi-Fi, add your YouTube channels and a YouTube Data API key, then save.
 3. **Use it.** The board shows a QR code and its address for a few seconds, then your subscriber count. Scan the code, or open **<http://subcounter.local>**, for the dashboard.
 

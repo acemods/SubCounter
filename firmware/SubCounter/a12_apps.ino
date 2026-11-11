@@ -481,6 +481,7 @@ void spCommandNet(char what) {
   netSpRedraw = true;
 }
 
+void drawClockBottom();
 // Idle clock: big and bright, with date, weather and your channel's count
 void drawClock() {
   gfx->fillScreen(C_BG);
@@ -492,14 +493,22 @@ void drawClock() {
   if (wx.ok) bottom = String(lroundf(wx.temp)) + "\xC2\xB0 " + wxText(wx.code);
   if (numCh && ch[0].subs >= 0) bottom += (bottom.length() ? "   -   " : "") + compact(estimateFor(0)) + " subs";
   if (bottom.length()) ftC(y, fit(bottom, F_S, gfx->width() - 16), F_S, C_GREY, gfx->width());
-  // last line: the rooms from Home Assistant and/or a rain warning (taking turns each minute if both)
-  String home = haClockLine();
+  drawClockBottom();
+}
+
+// Last line of the idle clock: the rooms from Home Assistant, a few at a time, taking turns
+// every 4 s (with a rain warning as one of the turns when rain is on the way)
+int clockTurn = 0, clockTurns = 1;
+void drawClockBottom() {
+  String g[HA_MAX]; int n = haClockGroups(g, HA_MAX, gfx->width() - 16);
   bool rain = wx.ok && wx.rainHour >= 0;
-  struct tm lt; time_t n = nowT(); localtime_r(&n, &lt);
-  if (rain && (!home.length() || lt.tm_min % 2)) {
+  clockTurns = max(1, n + (rain ? 1 : 0));
+  int k = clockTurn % clockTurns;
+  gfx->fillRect(0, 152, gfx->width(), 22, C_BG);
+  if (rain && k == n) {
     char b[40]; snprintf(b, sizeof(b), "Rain around %02d:00", wx.rainHour);
     ftC(168, b, F_S, C_BLUE, gfx->width());
-  } else if (home.length()) ftC(168, fit(home, F_S, gfx->width() - 16), F_S, C_HA, gfx->width());
+  } else if (k < n) ftC(168, fit(g[k], F_S, gfx->width() - 16), F_S, C_HA, gfx->width());
 }
 
 // ── Home menu ───────────────────────────────────────────────────────────────

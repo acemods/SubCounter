@@ -58,7 +58,7 @@
 #undef INADDR_NONE
 #endif
 #define HOSTNAME "subcounter"
-#define FW_VERSION "14.4"     // shown on start-up, home menu, settings, update page and dashboard
+#define FW_VERSION "14.5"     // shown on start-up, home menu, settings, update page and dashboard
 
 // ── Pins (ESP32-C6 version of the board) ────────────────────────────────────
 #define LCD_SCK   1
@@ -473,6 +473,7 @@ void drawMode();
 void drawHome();
 void drawHaIcon(int cx, int cy);
 String haClockLine();
+int haClockGroups(String *out, int maxOut, int width);
 extern int homeCard;
 long vtViews();
 void drawVideoTracker();

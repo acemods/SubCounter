@@ -2,6 +2,9 @@
 
 All builds are in [`builds/`](../builds). Source snapshots for most versions are in the git history.
 
+## v14.5
+- **Idle clock: rooms cut off.** The Home Assistant line at the bottom only fitted two rooms. The rooms are now shown as many as fit at a time, taking turns every 4 seconds. A rain warning, when rain is on the way, is one of the turns.
+
 ## v14.4
 - **Monthly card: last month was blank.** Last month's figure needed history going back to the start of that month. A channel added part-way through the month (or a board that started part-way through) got "–" all month. It now shows the growth from when its history began, marked with \* and a note saying the date.
 - **Last month would have vanished around the 10th of every month:** history was kept for 40 days, but on the 31st last month's start is about 61 days back. History (subscribers and views) is now kept for 70 days. This only fixes things from now on, since older history was already trimmed.
