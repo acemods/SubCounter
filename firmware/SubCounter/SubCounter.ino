@@ -58,7 +58,7 @@
 #undef INADDR_NONE
 #endif
 #define HOSTNAME "subcounter"
-#define FW_VERSION "14.3"     // shown on start-up, home menu, settings, update page and dashboard
+#define FW_VERSION "14.4"     // shown on start-up, home menu, settings, update page and dashboard
 
 // ── Pins (ESP32-C6 version of the board) ────────────────────────────────────
 #define LCD_SCK   1
@@ -92,7 +92,7 @@
 #define RECENT_N           10         // recent uploads ranked on the Top videos card
 #define RECENT_REFRESH_MS  (6UL * 3600000UL)   // 2 units per channel
 #define COMMENT_REFRESH_MS (30UL * 60UL * 1000UL)   // newest comments: 1 unit per channel
-#define HIST_MAX_AGE       (40L * 86400L)        // a little over a month, for the monthly recap
+#define HIST_MAX_AGE       (70L * 86400L)        // enough to still cover all of last month on the 31st (needs ~62 days)
 #define TZ_UK              "GMT0BST,M3.5.0/1,M10.5.0/2"
 int BL_NORMAL = 160;                 // screen brightness (0-255), set from the brightness setting
 int BL_NIGHT  = 18;                  // night clock brightness
@@ -136,7 +136,7 @@ struct Channel {
   float span7Days = 0, span30Days = 0, ratePerDay = 0;
   time_t histStart = 0, lastSampleT = 0; long lastSampleS = -1;
   // monthly
-  long gainMonth = 0, gainLastMonth = 0; bool lastMonthOk = false;
+  long gainMonth = 0, gainLastMonth = 0; bool lastMonthOk = false; time_t lastMonthFrom = 0;   // lastMonthFrom: history began part-way through last month
   // channel views over time (YouTube): saved on the board, about once an hour
   bool vOk = false; long long vToday = 0, v24 = 0, v7 = 0, v30 = 0;
   time_t lastViewT = 0; long long lastViewV = -1; time_t vHistStart = 0;

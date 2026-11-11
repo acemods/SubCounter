@@ -1,7 +1,7 @@
 {
- "version": "14.3",
- "app": "SubCounter-v14.3-APP-ONLY.bin",
- "size": 1852224,
- "md5": "6cb10de699f34a9262428b8d939718a8",
- "notes": "New Home app: room temperature and humidity from Home Assistant (Settings → Home Assistant). Also on the idle clock and the dashboard."
+ "version": "14.4",
+ "app": "SubCounter-v14.4-APP-ONLY.bin",
+ "size": 1852608,
+ "md5": "0a71a8d3d2badf2b3d2aeadb7369cb03",
+ "notes": "Monthly card shows last month even if history started part-way through it (marked *). History now kept 70 days so last month never drops off mid-month. Includes v14.3's Home Assistant app."
 }

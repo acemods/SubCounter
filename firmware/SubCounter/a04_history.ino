@@ -51,6 +51,8 @@ void computeStats(int i) {
   long baseM0 = beforeM0 >= 0 ? beforeM0 : firstS;
   c.gainMonth = c.subs - baseM0;
   long baseM1 = beforeM1 >= 0 ? beforeM1 : ((firstT && firstT <= m1 + 2 * 86400) ? firstS : -1);
+  c.lastMonthFrom = 0;
+  if (baseM1 < 0 && firstT && (time_t)firstT < m0 && beforeM0 >= 0) { baseM1 = firstS; c.lastMonthFrom = firstT; }   // part of last month: from the first sample
   c.lastMonthOk = baseM1 >= 0 && beforeM0 >= 0;
   c.gainLastMonth = c.lastMonthOk ? beforeM0 - baseM1 : 0;
   c.gain24 = c.subs - base24;
@@ -208,7 +210,7 @@ void recordViews(int i) {
   f.close();
   c.lastViewT = now; c.lastViewV = c.views;
   if (!c.vHistStart) c.vHistStart = now;
-  if (now - c.vHistStart > HIST_MAX_AGE + 86400) {            // trim to the last 40 days, about once a day
+  if (now - c.vHistStart > HIST_MAX_AGE + 86400) {            // trim to the last 70 days, about once a day
     File in = LittleFS.open(p, "r"), out = LittleFS.open("/tmpv.bin", "w");
     VSample r; time_t first = 0;
     while (in && out && in.read((uint8_t *)&r, sizeof(r)) == sizeof(r))

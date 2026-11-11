@@ -144,7 +144,7 @@ The pages show the SubCounter badge as their browser tab icon, so they're easy t
 - a card for every channel: live (estimated) count, growth chips, milestone and ETA, a 7 or 30-day graph, and the latest video with thumbnail
 - the new video tracker on your channel's card
 - latest comments and records on each card
-- a **Monthly** table (last month and this month so far)
+- a **Monthly** table (last month and this month so far). If the board only has history for part of last month, that figure is marked \* with the date it starts from
 - a **Compare** chart: pick up to 4 channels and see gains (or % growth) over 7 or 30 days on one chart; hover for exact numbers
 - **CSV downloads** of the history (each card, or everything from the Compare card)
 

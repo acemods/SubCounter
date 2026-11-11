@@ -600,8 +600,8 @@ row.append(h('div',{class:'card race'},h('h2',{text:'Race'}),h('div',{class:'rs'
 // leaderboard
 const lb=[...C].filter(c=>c.subs>=0).sort((a,b)=>b.subs-a.subs);const mixed=C.some(c=>c.tw)&&C.some(c=>!c.tw);
 row.append(h('div',{class:'card'},h('h2',{text:'Leaderboard'}),h('table',{},h('tr',{class:'hd'},h('th',{colspan:'3'}),h('th',{class:'n',text:C.some(c=>c.tw)?'Total':'Subs'}),h('th',{class:'n',text:'Today',title:'Since midnight'})),lb.map((c,k)=>h('tr',{class:c.i==0?'me':''},h('td',{text:k+1+'.'}),h('td',{},av(c)),h('td',{class:'nm2'},mixed?pIcon(c):null,name(c)),h('td',{class:'n',text:cmp(c.subs)}),h('td',{class:'n '+cls(c.today),text:c.statsOk?sg(c.today):''}))))));
-{const mon=t=>new Date(t*1000).toLocaleDateString('en-GB',{month:'short'});const ms=[...C].filter(c=>c.subs>=0).sort((a,b)=>(b.mo||0)-(a.mo||0));
-if(ms.length&&C.some(c=>c.statsOk))row.append(h('div',{class:'card'},h('h2',{text:'Monthly'}),h('table',{},h('tr',{class:'hd'},h('th',{}),h('th',{class:'n',text:mon(D.m1)}),h('th',{class:'n',text:mon(D.m0)+' so far'})),ms.map(c=>h('tr',{class:c.i==0?'me':''},h('td',{class:'nm2',text:name(c)}),h('td',{class:'n '+(c.lm!=null?cls(c.lm):''),text:c.lm!=null?sg(c.lm):'–'}),h('td',{class:'n '+cls(c.mo),text:c.statsOk?sg(c.mo):'–'}))))))}
+{const mon=t=>new Date(t*1000).toLocaleDateString('en-GB',{month:'short'}),day=t=>new Date(t*1000).toLocaleDateString('en-GB',{day:'numeric',month:'short'});const ms=[...C].filter(c=>c.subs>=0).sort((a,b)=>(b.mo||0)-(a.mo||0));
+if(ms.length&&C.some(c=>c.statsOk))row.append(h('div',{class:'card'},h('h2',{text:'Monthly'}),h('table',{},h('tr',{class:'hd'},h('th',{}),h('th',{class:'n',text:mon(D.m1)}),h('th',{class:'n',text:mon(D.m0)+' so far'})),ms.map(c=>h('tr',{class:c.i==0?'me':''},h('td',{class:'nm2',text:name(c)}),h('td',{class:'n '+(c.lm!=null?cls(c.lm):''),title:c.lmFrom?'From '+day(c.lmFrom)+', when the board started keeping history':'',text:c.lm!=null?sg(c.lm)+(c.lmFrom?'*':''):'–'}),h('td',{class:'n '+cls(c.mo),text:c.statsOk?sg(c.mo):'–'})))),(()=>{const p=ms.find(c=>c.lmFrom);return p?h('div',{class:'sub',style:'margin-top:8px',text:'* '+mon(D.m1)+' from '+day(Math.min(...ms.filter(c=>c.lmFrom).map(c=>c.lmFrom)))+', when the board started keeping history'}):null})()))}
 const grid=h('section',{class:'grid'+(ARR?' arranging':'')});ordered(C,ARR?'mine':SORT).forEach(c=>{const el=ARR?h('div',{class:'tile'},h('span',{class:'grip',text:'⠿'}),av(c),h('div',{style:'min-width:0'},h('div',{class:'nm'},c.tw?pIcon(c):null,name(c)),h('div',{class:'sub',text:c.subs>=0?fmt(est(c))+(c.tw?' followers':' subscribers'):''}))):channelCard(c);el.dataset.k=ck(c);el.classList.add('chcard');grid.append(el)});
 if(ARR)arrangeGrid(grid);else if(C.filter(c=>c.subs>=0).length>1)grid.append(compareCard());app.append(h('div',{class:'layout'+(ARR?' arrlay':'')},ARR?null:row,grid));if(ARR)scrollTo(0,0)}
 async function load(){try{const r=await fetch('/api/data');const d=await r.json();if(ARR)return;D=d;render()}catch(e){$('#meta').textContent='Board not reachable'}}
@@ -708,7 +708,7 @@ void handleApiData() {
                     v["live"] = true; v["viewers"] = c.liveViewers; v["thumb"] = c.twThumb; v["game"] = c.twGame; }
     }
     o["mo"] = c.gainMonth;
-    if (c.lastMonthOk) o["lm"] = c.gainLastMonth;
+    if (c.lastMonthOk) { o["lm"] = c.gainLastMonth; if (c.lastMonthFrom) o["lmFrom"] = (long)c.lastMonthFrom; }
     if (!c.pbLoaded) pbLoad(i);
     if (c.pbDay || c.pbWeek || c.pbVid) {
       JsonObject b = o["pb"].to<JsonObject>();

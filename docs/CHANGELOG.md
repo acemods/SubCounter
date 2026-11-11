@@ -2,6 +2,11 @@
 
 All builds are in [`builds/`](../builds). Source snapshots for most versions are in the git history.
 
+## v14.4
+- **Monthly card: last month was blank.** Last month's figure needed history going back to the start of that month. A channel added part-way through the month (or a board that started part-way through) got "–" all month. It now shows the growth from when its history began, marked with \* and a note saying the date.
+- **Last month would have vanished around the 10th of every month:** history was kept for 40 days, but on the 31st last month's start is about 61 days back. History (subscribers and views) is now kept for 70 days. This only fixes things from now on, since older history was already trimmed.
+- The board's 1st-of-the-month recap still only uses whole months
+
 ## v14.3
 - **New Home app: room temperature and humidity from Home Assistant.** Settings → Home Assistant: paste your HA address and a long-lived access token, press **Find sensors**, and the board fills in a room for each sensor device it finds. It asks HA for the readings once a minute over your home network. Shown on the board (Home tile on the second menu page), on the idle clock and in a **Home** card on the dashboard. See [Home Assistant](HOME-ASSISTANT.md).
 - The token is stored as a secret: it's left out of settings backups unless you include keys

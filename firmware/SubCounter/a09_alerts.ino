@@ -247,7 +247,7 @@ bool recapDue() {
   if (!timeValid()) return false;
   time_t n = nowT(); struct tm lt; localtime_r(&n, &lt);
   if (lt.tm_mday != 1) return false;
-  for (int i = 0; i < numCh; i++) if (ch[i].lastMonthOk) return true;
+  for (int i = 0; i < numCh; i++) if (ch[i].lastMonthOk && !ch[i].lastMonthFrom) return true;   // the recap only for a whole month
   return false;
 }
 void drawRecap() {
@@ -257,7 +257,7 @@ void drawRecap() {
   ftR(gfx->width() - 8, 22, dateStr(m1, "%Y"), F_S, C_GREY);
   gfx->drawFastHLine(8, 31, gfx->width() - 16, C_DKGREY);
   int idx[MAX_CH]; int n = 0;
-  for (int i = 0; i < numCh; i++) if (ch[i].lastMonthOk) idx[n++] = i;
+  for (int i = 0; i < numCh; i++) if (ch[i].lastMonthOk && !ch[i].lastMonthFrom) idx[n++] = i;
   for (int a = 0; a < n; a++) for (int b = a + 1; b < n; b++)
     if (ch[idx[b]].gainLastMonth > ch[idx[a]].gainLastMonth) { int t = idx[a]; idx[a] = idx[b]; idx[b] = t; }
   int rank = -1; for (int r = 0; r < n; r++) if (idx[r] == 0) rank = r;
