@@ -1,7 +1,7 @@
 {
- "version": "14.2",
- "app": "SubCounter-v14.2-APP-ONLY.bin",
- "size": 1820256,
- "md5": "4b8055bd1e4fc42d9ae5b386438d8daa",
- "notes": "Fixes v14.1, which couldn't get online (it asked the router for the address 255.255.255.255). Includes everything from v14.1."
+ "version": "14.3",
+ "app": "SubCounter-v14.3-APP-ONLY.bin",
+ "size": 1852224,
+ "md5": "6cb10de699f34a9262428b8d939718a8",
+ "notes": "New Home app: room temperature and humidity from Home Assistant (Settings → Home Assistant). Also on the idle clock and the dashboard."
 }

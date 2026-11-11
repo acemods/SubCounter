@@ -2,6 +2,11 @@
 
 All builds are in [`builds/`](../builds). Source snapshots for most versions are in the git history.
 
+## v14.3
+- **New Home app: room temperature and humidity from Home Assistant.** Settings → Home Assistant: paste your HA address and a long-lived access token, press **Find sensors**, and the board fills in a room for each sensor device it finds. It asks HA for the readings once a minute over your home network. Shown on the board (Home tile on the second menu page), on the idle clock and in a **Home** card on the dashboard. See [Home Assistant](HOME-ASSISTANT.md).
+- The token is stored as a secret: it's left out of settings backups unless you include keys
+- `/debug` shows when Home Assistant last answered
+
 ## v14.2
 - **Fixes v14.1, which couldn't get online.** The networking code added in v14.1 brought in a different meaning for one setting name (`INADDR_NONE`): to the Wi-Fi code it means "get an address from the router" (0.0.0.0), but the new code defines it as 255.255.255.255. So the board asked for the address 255.255.255.255, appeared connected, and couldn't reach anything (empty main screen, no dashboard). The Wi-Fi code now asks for an automatic address explicitly.
 - Everything from v14.1 is included (below).

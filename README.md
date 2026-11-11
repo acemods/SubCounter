@@ -6,6 +6,7 @@ A desk gadget built on the **Waveshare ESP32-C6-Touch-LCD-1.47** that shows live
 
 ## What's new
 
+- **v14.3:** new **Home** app: room temperature and humidity from Home Assistant, on the board, the idle clock and the dashboard ([setup](docs/HOME-ASSISTANT.md))
 - **v14.2:** web pages can no longer freeze the board for 10 s; more memory detail on /debug (v14.1 was withdrawn: it couldn't get online)
 - **v14.0:** dashboard data uses far less memory; shorter waits for browsers that stop loading
 - **v13.9:** more reliable GitHub updates; fixes long freezes from the dashboard graphs
@@ -63,6 +64,7 @@ Full history: [docs/CHANGELOG.md](docs/CHANGELOG.md)
 
 **Apps** (long-press the screen, or hold BOOT for 1 s, for the home menu; swipe left for Device)
 - **Creators:** your YouTube and Twitch channels (the subscriber counter itself)
+- **Home:** room temperature and humidity from your Home Assistant sensors (Matter, Zigbee, Thread...): see [Home Assistant](docs/HOME-ASSISTANT.md)
 - **Weather:** clock, current conditions, next 12 hours, tomorrow, and a rain warning (Open-Meteo, no key needed)
 - **Spotify:** album art, scrolling title and artist, progress bar; tap to play or pause, swipe to skip, swipe up or down for volume. One-click sign-in from the settings page (via a small relay page you host on GitHub Pages)
 
@@ -71,7 +73,7 @@ Full history: [docs/CHANGELOG.md](docs/CHANGELOG.md)
 
 **Web dashboard** (`http://subcounter.local` or `http://<board-ip>/` from any phone or computer on your network)
 - **All / YouTube / Twitch** filter at the top when you follow both
-- Side column with the last 24 hours' top growers, weather, the race and the leaderboard
+- Side column with the last 24 hours' top growers, weather, your rooms from Home Assistant, the race and the leaderboard
 - A card per channel: live (estimated) count, growth chips, milestone progress and predicted date, 7 or 30-day graph, latest video with thumbnail, and the new video tracker on your own channel
 - Monthly table, a compare chart (up to 4 channels) and CSV download of the history
 - Recent uploads per channel, with thumbnails, sortable by views, views per day or likes %
@@ -82,7 +84,7 @@ Full history: [docs/CHANGELOG.md](docs/CHANGELOG.md)
 - Settings at `/settings` and wireless updates at `/update`
 
 **Everyday**
-- **Idle clock:** after 3 minutes without use (adjustable), a large clock with date, weather and your count; pick the board up to go back
+- **Idle clock:** after 3 minutes without use (adjustable), a large clock with date, weather, your count and your rooms' temperatures; pick the board up to go back
 - Daily summary (9 am, or the time you choose) on the board, kept on the dashboard all day as **This morning**, plus a dim night clock overnight
 - **Device screen** (home menu, swipe left): QR code for the dashboard, and check for / install updates right on the touch screen
 - **Phone notifications** via the free ntfy app: milestones, going live, records, overtakes
@@ -95,7 +97,7 @@ Full history: [docs/CHANGELOG.md](docs/CHANGELOG.md)
 
 ## Quick start
 
-1. **Flash the board.** Open <https://espressif.github.io/esptool-js/> in Chrome, connect the board, and flash `builds/latest/SubCounter-v14.2-FULL-new-board-flash-at-0x0.bin` at address **0x0**.
+1. **Flash the board.** Open <https://espressif.github.io/esptool-js/> in Chrome, connect the board, and flash `builds/latest/SubCounter-v14.3-FULL-new-board-flash-at-0x0.bin` at address **0x0**.
 2. **Set it up.** The board shows *SETUP MODE*. Join the Wi-Fi network **SubCounter-Setup** from your phone, and the setup page opens by itself (or go to <http://192.168.4.1>). Pick your Wi-Fi, add your YouTube channels and a YouTube Data API key, then save.
 3. **Use it.** The board shows a QR code and its address for a few seconds, then your subscriber count. Scan the code, or open **<http://subcounter.local>**, for the dashboard.
 

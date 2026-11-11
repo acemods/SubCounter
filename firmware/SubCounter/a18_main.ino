@@ -143,6 +143,11 @@ void netCycle() {
     netStage = "weather"; memMark("network: " "weather"); fetchWeather();
     netWxRefreshed = true;
   }
+  // Home Assistant: once a minute (it's on the local network, so this is quick)
+  if (haOn() && (lastHaFetch == 0 || millis() - lastHaFetch > 60000UL)) {
+    lastHaFetch = millis();
+    netStage = "Home Assistant"; memMark("network: " "Home Assistant"); haPoll();
+  }
   // Spotify: every 3 s while it's on screen
   if (mode == M_NORMAL && !menuOpen && app == APP_SP && cfgSpRefresh.length() &&
       (lastSpPoll == 0 || millis() - lastSpPoll > spWait)) {
@@ -376,8 +381,8 @@ void loopBody() {
       if (swipe == 'T') {
         int a = menuPage * MENU_PER_PAGE + constrain(tapX * MENU_PER_PAGE / gfx->width(), 0, MENU_PER_PAGE - 1);
         if (a < NUM_APPS) openApp(a);
-        else if (a == 3) openDevice();
-        else if (a == 4) {                                    // Summary: today's summary for 10 minutes
+        else if (a == MENU_DEVICE) openDevice();
+        else if (a == MENU_SUMMARY) {                                    // Summary: today's summary for 10 minutes
           menuOpen = false; deviceOpen = false; lastInteract = millis();
           summaryActive = true; summaryShownAt = millis();
         }
@@ -418,6 +423,15 @@ void loopBody() {
       if (shake && cfgShake) { lastWxFetch = 0; }
       if (wxCard != old) { wipe(0, wxCard > old ? 1 : -1); drawWeather(); }
       if (wxCard != 0 && millis() - lastInteract > IDLE_RETURN_MS) { wxCard = 0; drawWeather(); }
+    }
+    else if (app == APP_HA) {
+      int old = homeCard;
+      if (swipe == 'U' || swipe == 'L') homeCard = min(homeCard + 1, homePages() - 1);
+      if (swipe == 'D' || swipe == 'R') homeCard = max(homeCard - 1, 0);
+      if (bootShort) homeCard = (homeCard + 1) % homePages();
+      if (shake && cfgShake) lastHaFetch = 0;
+      if (homeCard != old) { wipe(0, homeCard > old ? 1 : -1); drawHome(); }
+      if (homeCard != 0 && millis() - lastInteract > IDLE_RETURN_MS) { homeCard = 0; drawHome(); }
     }
     else if (app == APP_SP) {
       if (cfgSpRefresh.length() && (swipe == 'T' || swipe == 'L' || swipe == 'R' || swipe == 'U' || swipe == 'D')) spPendingCmd = swipe;
@@ -490,6 +504,10 @@ void loopBody() {
     else if (ytVisible() || mode != M_NORMAL) drawMode();
   }
   if (wxRefreshed && mode == M_NORMAL && !menuOpen && app == APP_WX) drawWeather();
+  if (netHaRefreshed) {
+    netHaRefreshed = false;
+    if (mode == M_NORMAL && !menuOpen && !deviceOpen && app == APP_HA) drawHome();
+  }
 
   // ── animation / periodic redraws ──────────────────────────────────────────
   static unsigned long lastAnim = 0;

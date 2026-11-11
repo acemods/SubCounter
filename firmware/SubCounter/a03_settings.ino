@@ -153,9 +153,14 @@ void loadSettings() {
   cfgSpRefresh = prefs.getString("spref", "");
   cfgSpRedirect = prefs.getString("spredir", "");
   cfgIdleClock = prefs.getInt("idleclk", 3);
+  cfgHaUrl    = prefs.getString("haurl", "");
+  cfgHaToken  = prefs.getString("hatok", "");
+  cfgHaRooms  = prefs.getString("harooms", "");
+  cfgHaClock  = prefs.getBool("haclk", true);
   g0Saved     = prefs.isKey("g0z");
   prefs.end();
   parseChannels();
+  haParse();
 }
 
 void saveSettings() {
@@ -214,5 +219,9 @@ void saveSettings() {
   prefs.putString("spref", cfgSpRefresh);
   prefs.putString("spredir", cfgSpRedirect);
   prefs.putInt("idleclk", cfgIdleClock);
+  prefs.putString("haurl", cfgHaUrl);
+  prefs.putString("hatok", cfgHaToken);
+  prefs.putString("harooms", cfgHaRooms);
+  prefs.putBool("haclk", cfgHaClock);
   prefs.end();
 }

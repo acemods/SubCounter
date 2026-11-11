@@ -58,7 +58,7 @@
 #undef INADDR_NONE
 #endif
 #define HOSTNAME "subcounter"
-#define FW_VERSION "14.2"     // shown on start-up, home menu, settings, update page and dashboard
+#define FW_VERSION "14.3"     // shown on start-up, home menu, settings, update page and dashboard
 
 // ── Pins (ESP32-C6 version of the board) ────────────────────────────────────
 #define LCD_SCK   1
@@ -110,6 +110,7 @@ uint16_t C_DKGREY = 0x39E7;
 uint16_t C_GOLD   = 0xFEA0;          // accent colour (headings, highlights)
 #define C_PURPLE  0x901F
 #define C_TWITCH  0x923F   // Twitch purple #9146FF
+#define C_HA      0x1DFE   // Home Assistant blue #18BCF2
 #define C_GREEN   0x07E0
 #define C_BLUE    0x4D7F
 
@@ -429,6 +430,33 @@ bool   cfgAutoUpd = false;                       // install new versions from Gi
 String cfgUpdUrl = "https://raw.githubusercontent.com/acemods/SubCounter/main/builds/latest/";   // where to look for updates
 String cfgSpRedirect;                            // https address registered with Spotify (e.g. GitHub Pages relay)
 
+// Home Assistant: room temperature / humidity from sensors HA already knows about
+String cfgHaUrl, cfgHaToken;                     // e.g. http://192.168.1.20:8123 + a long-lived access token
+String cfgHaRooms;                               // one room per line: name|temperature sensor|humidity sensor
+bool   cfgHaClock = true;                        // show the rooms on the idle clock too
+#define HA_MAX 6
+struct HaRoom { String name, tEnt, hEnt; float t = NAN, h = NAN; String unit; unsigned long at = 0; };
+HaRoom haRoom[HA_MAX]; int haN = 0;
+String haErr; unsigned long haOkAt = 0, lastHaFetch = 0;
+void haParse() {
+  haN = 0;
+  String l = cfgHaRooms + "\n"; l.replace("\r", "");
+  int st = 0;
+  while (haN < HA_MAX) {
+    int nl = l.indexOf('\n', st); if (nl < 0) break;
+    String x = l.substring(st, nl); st = nl + 1; x.trim();
+    if (!x.length()) continue;
+    int a = x.indexOf('|'), b = a >= 0 ? x.indexOf('|', a + 1) : -1;
+    HaRoom &r = haRoom[haN];
+    r = HaRoom();
+    r.name = a >= 0 ? x.substring(0, a) : x; r.name.trim();
+    r.tEnt = a >= 0 ? (b >= 0 ? x.substring(a + 1, b) : x.substring(a + 1)) : ""; r.tEnt.trim();
+    r.hEnt = b >= 0 ? x.substring(b + 1) : ""; r.hEnt.trim();
+    if (r.tEnt.length() || r.hEnt.length()) haN++;
+  }
+}
+bool haOn() { return cfgHaUrl.length() && cfgHaToken.length() && haN > 0; }
+
 #define VT_MAX 110
 struct VideoTrack {
   String vid; time_t pub = 0; bool active = false;
@@ -442,6 +470,10 @@ unsigned long lastVtFetch = 0, lastTypicalFetch = 0, lastCommentFetch = 0, lastR
 
 // Forward declarations (functions used before they're defined)
 void drawMode();
+void drawHome();
+void drawHaIcon(int cx, int cy);
+String haClockLine();
+extern int homeCard;
 long vtViews();
 void drawVideoTracker();
 extern const char PAGE_HEAD[];

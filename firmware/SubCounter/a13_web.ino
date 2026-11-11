@@ -363,7 +363,7 @@ header{display:flex;align-items:center;gap:12px;padding:16px 20px;border-bottom:
 @container (max-width:540px){.rvt td.nm2 img{width:48px;height:27px}.rvt td.nm2 a{gap:6px}.rvt td,.rvt th{padding:6px 3px}.rvt td.er{font-size:12px}}
 @container (max-width:440px){.rvt td.nm2 img{display:none}}
 @media(max-width:520px){.rvt .lkc{display:none}.rvt td.nm2 img{width:48px;height:27px}.rvt td.nm2 a{gap:6px}.rvt td,.rvt th{padding:6px 3px}.rvt td.er{font-size:12px}}details.earn>.sub{margin-top:2px;font-size:12px}.vchips>.sub{margin-right:2px}.vb{color:var(--blue)}.tsep{width:1px;height:20px;background:var(--line);margin:0 4px}.lvbox{margin-top:14px;padding:12px;border-radius:12px;background:#17202b}
-.side{min-width:0}.morning{min-width:0;overflow:hidden}.morning .me span{color:var(--gold)}.morning .mv{display:flex;gap:10px;align-items:flex-start;margin-top:8px;color:var(--text);text-decoration:none}.morning .mv img{width:96px;height:54px;border-radius:6px;object-fit:cover;flex:none;background:var(--line)}.morning .mv>div{min-width:0}.morning .mv .t{font-weight:600;font-size:14px;line-height:1.3;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}.morning .mv .sub{margin-top:2px}.morning .list .pi{margin-right:5px}
+.home .hum{color:var(--blue);font-weight:600;margin-left:6px}.home .old{opacity:.5}.side{min-width:0}.morning{min-width:0;overflow:hidden}.morning .me span{color:var(--gold)}.morning .mv{display:flex;gap:10px;align-items:flex-start;margin-top:8px;color:var(--text);text-decoration:none}.morning .mv img{width:96px;height:54px;border-radius:6px;object-fit:cover;flex:none;background:var(--line)}.morning .mv>div{min-width:0}.morning .mv .t{font-weight:600;font-size:14px;line-height:1.3;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}.morning .mv .sub{margin-top:2px}.morning .list .pi{margin-right:5px}
 header h1{font-size:18px;margin:0;flex:1}header .meta{color:var(--muted);font-size:13px}
 .btn{border:1px solid var(--line);border-radius:9px;padding:7px 12px;font-size:13px;color:var(--text);background:var(--card);cursor:pointer}
 main{max-width:1500px;margin:0 auto;padding:20px}
@@ -592,6 +592,8 @@ row.append(h('div',{class:'card'},h('h2',{text:'Last 24 hours'}),h('div',{class:
 {const mv=C.filter(c=>c.vw&&!c.tw).sort((a,b)=>b.vw.d1-a.vw.d1);if(mv.length>1)row.append(h('div',{class:'card'},h('h2',{text:'Most viewed · 24 h'}),h('div',{class:'sub',style:'margin:-8px 0 8px',text:'Channel views gained (YouTube updates these every few hours)'}),h('div',{class:'list'},mv.slice(0,5).map(c=>h('div',{},h('span',{text:name(c)}),h('b',{class:'vb',text:'+'+cmp(Math.max(0,c.vw.d1))}))))))}
 // weather
 if(D.wx){const w=D.wx;row.append(h('div',{class:'card'},h('h2',{text:'Weather · '+w.place}),h('div',{class:'big',text:w.temp+'°'}),h('div',{text:w.text+' · feels '+w.feels+'°'}),h('div',{class:'sub',text:`High ${w.hi}° · Low ${w.lo}° · Wind ${w.wind} mph`}),w.rainHour>=0?h('div',{style:'margin-top:8px;color:var(--blue)',text:`Rain likely around ${String(w.rainHour).padStart(2,'0')}:00 (${w.rainPct}%)`}):null))}
+// Home Assistant rooms
+if(D.home){const H=D.home,rs=H.rooms||[];row.append(h('div',{class:'card home'},h('h2',{text:'Home'}),h('div',{class:'list'},rs.map(r=>h('div',{class:r.ago<0||r.ago>900?'old':''},h('span',{text:r.n}),h('b',{},r.t!=null?r.t.toFixed(1)+(r.u||'°C'):'',r.h!=null?h('span',{class:'hum',text:' 💧'+r.h+'%'}):null)))),H.err?h('div',{class:'sub',style:'margin-top:8px;color:var(--red)',text:H.err}):null))}
 // race
 if(D.race&&kindOk(D.channels[D.race[0]])&&kindOk(D.channels[D.race[1]])){const A=D.channels[D.race[0]],B=D.channels[D.race[1]],ea=est(A),eb=est(B),fa=ea+eb?ea/(ea+eb):.5;const lead=ea>=eb?A:B,ch=lead===A?B:A,closing=(ch.rate||0)-(lead.rate||0),gap=Math.abs(ea-eb);
 row.append(h('div',{class:'card race'},h('h2',{text:'Race'}),h('div',{class:'rs'},h('span',{},av(A),pIcon(A),h('b',{style:'color:var(--red)',text:name(A)})),h('b',{text:fmt(ea)})),h('div',{class:'rs'},h('span',{},av(B),pIcon(B),h('b',{style:'color:var(--blue)',text:name(B)})),h('b',{text:fmt(eb)})),h('div',{class:'tug'},h('div',{class:'a',style:`width:${fa*100}%`}),h('div',{class:'b',style:`width:${(1-fa)*100}%`})),h('div',{text:`Gap ${fmt(gap)}`}),h('div',{class:'sub',text:closing>0.01?`${name(ch)} is catching up by ${fmt(Math.round(closing))}/day – could pass in about ${Math.max(1,Math.round(gap/closing))} days`:(lead.rate||ch.rate)?`${name(lead)} is pulling away`:'Trend: need more data'})))}
@@ -648,6 +650,19 @@ void handleApiData() {
     JsonObject w = doc["wx"].to<JsonObject>();
     w["place"] = cfgWxName; w["temp"] = lroundf(wx.temp); w["feels"] = lroundf(wx.feels); w["text"] = wxText(wx.code);
     w["hi"] = wx.hi; w["lo"] = wx.lo; w["rainHour"] = wx.rainHour; w["rainPct"] = wx.rainPct; w["wind"] = lroundf(wx.wind);
+  }
+  if (haOn()) {
+    JsonObject ho = doc["home"].to<JsonObject>();
+    if (haErr.length()) ho["err"] = haErr;
+    JsonArray rs = ho["rooms"].to<JsonArray>();
+    for (int i = 0; i < haN; i++) {
+      HaRoom &r = haRoom[i]; JsonObject o = rs.add<JsonObject>();
+      o["n"] = r.name;
+      if (r.tEnt.length() && !isnan(r.t)) o["t"] = roundf(r.t * 10) / 10;
+      if (r.hEnt.length() && !isnan(r.h)) o["h"] = lroundf(r.h);
+      o["u"] = r.unit.length() ? r.unit : String("\xC2\xB0" "C");
+      o["ago"] = r.at ? (long)((millis() - r.at) / 1000) : -1;
+    }
   }
   String head; serializeJson(doc, head);           // {"now":...,"wx":{...}} - reopen it to add the channels
   head.remove(head.length() - 1);
@@ -810,7 +825,7 @@ void handleApiCsv() {
 // sign-ins are left out unless asked for. History and records aren't included.
 bool secretKey(const char *k) {
   String s = k;
-  return s == "apikey" || s == "pin" || s == "spsec" || s == "spref" || s == "twsec" || s.endsWith("pass");
+  return s == "apikey" || s == "pin" || s == "spsec" || s == "spref" || s == "twsec" || s == "hatok" || s.endsWith("pass");
 }
 void handleNtfyTest() {
   if (!authed()) return;
@@ -995,7 +1010,7 @@ void handleSettings() {
   h += "<h1>&#9654; SubCounter settings</h1><p>Saved on the board only. v" FW_VERSION;
   if (!portalMode) h += " &middot; <a href='/'>&larr; Dashboard</a>";
   h += "</p><nav class='jump'><a href='#channels'>YouTube</a><a href='#twitch'>Twitch</a><a href='#display'>Display</a><a href='#alerts'>Alerts</a>"
-       "<a href='#phone'>Phone</a><a href='#weather'>Weather</a><a href='#spotify'>Spotify</a><a href='#motion'>Motion</a><a href='#wifi'>Wi-Fi</a>"
+       "<a href='#phone'>Phone</a><a href='#weather'>Weather</a><a href='#home'>Home Assistant</a><a href='#spotify'>Spotify</a><a href='#motion'>Motion</a><a href='#wifi'>Wi-Fi</a>"
        "<a href='#updates'>Updates</a><a href='#security'>Security</a>" + String(portalMode ? "" : "<a href='#firmware'>Firmware</a>") + "</nav>";
   if (wifiFailReason.length()) {
     h += "<div style='background:#3a1210;border:1px solid #e62117;border-radius:10px;padding:12px;margin-bottom:8px;font-size:14px'>"
@@ -1102,6 +1117,44 @@ void handleSettings() {
   h += sec("weather", "Weather");
   h += "<label>Town or city</label><input name='wxtown' value='" + htmlEscape(cfgWxName) + "' placeholder='e.g. Glasgow'>";
   h += "<small>Long-press the board's screen and pick Weather. Forecasts from Open-Meteo.</small>";
+
+  // ── Home Assistant ──
+  h += sec("home", "Home Assistant");
+  h += "<small>Room temperature and humidity from sensors in your Home Assistant (Matter, Zigbee, Thread &ndash; anything HA shows). "
+       "Make a token in Home Assistant: click your name (bottom left) &rarr; <b>Security</b> &rarr; <b>Long-lived access tokens</b> &rarr; <b>Create token</b>. "
+       "A separate, non-admin HA user for the board is safest.</small>";
+  if (haOn()) h += haErr.length() ? "<p style='color:#ff453a'>" + htmlEscape(haErr) + "</p>" : (haOkAt ? String("<p class='ok'>Connected &#10003;</p>") : String(""));
+  h += "<label>Home Assistant address</label><input name='haurl' id='haurl' value='" + htmlEscape(cfgHaUrl) +
+       "' autocapitalize='off' autocomplete='off' spellcheck='false' placeholder='http://192.168.1.20:8123'>";
+  h += "<small>Use the IP address and port you open Home Assistant with (usually <b>:8123</b>), not homeassistant.local.</small>";
+  h += "<label>Long-lived access token</label><input name='hatoken' id='hatoken' type='text' class='secret' autocapitalize='off' autocomplete='off' spellcheck='false' placeholder='" +
+       String(cfgHaToken.length() ? "(saved — leave blank to keep)" : "paste the token here") + "'>";
+  if (!portalMode) h += "<button type='button' class='b2' onclick='haFind()'>Find sensors</button><small id='hamsg'></small>";
+  h += "<datalist id='hadt'></datalist><datalist id='hadh'></datalist>";
+  h += "<style>.har{display:grid;grid-template-columns:1fr 1fr;gap:6px;margin:4px 0 14px}.har .nm{grid-column:1/3}.har input{margin:0}</style>";
+  { int show = max(haN + 1, 2);
+    for (int k = 0; k < HA_MAX; k++) {
+      HaRoom *r = k < haN ? &haRoom[k] : nullptr;
+      String ks = String(k);
+      h += "<div class='har' id='har" + ks + "'" + String(k >= show ? " style='display:none'" : "") + ">"
+           "<input class='nm' name='han" + ks + "' placeholder='Room " + String(k + 1) + " name, e.g. Lounge' value='" + (r ? htmlEscape(r->name) : String("")) + "'>"
+           "<input name='hat" + ks + "' list='hadt' autocapitalize='off' spellcheck='false' placeholder='Temperature sensor' value='" + (r ? htmlEscape(r->tEnt) : String("")) + "'>"
+           "<input name='hah" + ks + "' list='hadh' autocapitalize='off' spellcheck='false' placeholder='Humidity sensor' value='" + (r ? htmlEscape(r->hEnt) : String("")) + "'></div>";
+    } }
+  h += "<button type='button' class='b2' onclick='haMore()'>+ Add a room</button>";
+  h += "<small>Clear a room's sensors to remove it. Long-press the board's screen and pick <b>Home</b>.</small>";
+  h += checkbox("haclk", cfgHaClock, "Show the rooms on the idle clock too");
+  h += F("<script>function haMore(){for(let k=0;k<6;k++){const r=document.getElementById('har'+k);if(r.style.display=='none'){r.style.display='';return}}}"
+       "function haFind(){const m=document.getElementById('hamsg'),u=document.getElementById('haurl'),t=document.getElementById('hatoken');m.textContent='Asking Home Assistant...';"
+       "fetch('/ha/find',{method:'POST',body:new URLSearchParams({url:u.value,token:t.value})}).then(r=>r.json()).then(j=>{if(j.err){m.textContent=j.err;return}"
+       "if(j.url&&j.url!=u.value.replace(/\\/+$/,''))u.value=j.url;const s=j.s||[],dt=document.getElementById('hadt'),dh=document.getElementById('hadh');dt.textContent='';dh.textContent='';"
+       "for(const x of s){const o=document.createElement('option');o.value=x.e;o.label=x.n+' ('+x.v+(x.u||'')+')';(x.c=='t'?dt:dh).append(o)}"
+       "const used=new Set([...document.querySelectorAll('.har input:not(.nm)')].map(i=>i.value).filter(Boolean)),g={};"
+       "for(const x of s){if(used.has(x.e))continue;const k=x.e.replace(/_(temperature|humidity)(_\\d+)?$/,'$2');if(!g[k]){let n=x.n.replace(/ (temperature|humidity)$/i,''),q=n,c=2;while(Object.values(g).some(v=>v.n==q))q=n+' '+c++;g[k]={n:q}}g[k][x.c]=x.e}"
+       "let added=0;for(const k in g){for(let i=0;i<6;i++){const r=document.getElementById('har'+i),[n,a,b]=r.querySelectorAll('input');if(n.value||a.value||b.value)continue;"
+       "n.value=g[k].n;a.value=g[k].t||'';b.value=g[k].h||'';r.style.display='';added++;break}}"
+       "m.textContent=`Found ${j.nT} temperature and ${j.nH} humidity sensor${j.nH==1?'':'s'}.`+(added?` Filled in ${added} room${added>1?'s':''} below \u2013 rename them if you like, then press Save.`:(s.length?' Pick them in the boxes below (tap a box for the list), then press Save.':''))})"
+       ".catch(()=>m.textContent='No answer from the board.')}</script>");
 
   // ── Spotify ──
   h += sec("spotify", "Spotify");
@@ -1350,6 +1403,21 @@ void handleSave() {
     if (geocode(town, la, lo, label)) { cfgWxLat = la; cfgWxLon = lo; cfgWxName = label; }
     else { sendMessage(400, "Town not found", "Couldn't find \"" + htmlEscape(town) + "\". Try a nearby town or add the country, e.g. \"Paisley, UK\"."); return; }
   } else if (town.length() && portalMode && town != cfgWxName) { cfgWxName = town; cfgWxLat = cfgWxLon = 0; }   // looked up once online
+  if (server.hasArg("haurl")) {
+    cfgHaUrl = haBase(server.arg("haurl"));
+    String tk = server.arg("hatoken"); tk.trim(); if (tk.length()) cfgHaToken = tk;
+    if (!cfgHaUrl.length()) cfgHaToken = "";              // address cleared: forget the token too
+    cfgHaClock = server.arg("haclk") == "1";
+    String rooms;
+    for (int k = 0; k < HA_MAX; k++) {
+      String ks = String(k), n = server.arg("han" + ks), t = server.arg("hat" + ks), hu = server.arg("hah" + ks);
+      n.trim(); t.trim(); hu.trim(); n.replace("|", "/"); t.replace("|", ""); hu.replace("|", "");
+      if (!t.length() && !hu.length()) continue;
+      if (!n.length()) { n = t.length() ? t : hu; if (n.startsWith("sensor.")) n = n.substring(7); n.replace("_temperature", ""); n.replace("_humidity", ""); n.replace("_", " "); }
+      rooms += n + "|" + t + "|" + hu + "\n";
+    }
+    cfgHaRooms = rooms;
+  }
   String spid = server.arg("spid"); spid.trim();
   String spsec = server.arg("spsecret"); spsec.trim();
   if (spid != cfgSpId) { cfgSpId = spid; cfgSpRefresh = ""; }
@@ -1441,6 +1509,8 @@ void handleDebug() {
   }
   o += "\nOpen connections: YouTube " + String(connYT.cli ? "yes" : "no") + ", Twitch " + String(connTW.cli ? "yes" : "no") +
        ", Spotify " + String(connSP.cli ? "yes" : "no") + "\nBiggest free block now " + String(ESP.getMaxAllocHeap()) + "\n";
+  if (haOn()) o += "Home Assistant: " + String(haN) + " room(s), " + (haOkAt ? "last answer " + String((millis() - haOkAt) / 1000) + " s ago" : String("no answer yet")) +
+                   (haErr.length() ? ", " + haErr : String("")) + "\n";
   server.send(200, "text/plain; charset=utf-8", o);
 }
 
@@ -1466,6 +1536,7 @@ void registerRoutes() {
     return r;
   });
   server.on("/debug", HTTP_GET, handleDebug);
+  server.on("/ha/find", HTTP_POST, handleHaFind);
   server.on("/", HTTP_GET, handleDashboard);
   server.on("/settings", HTTP_GET, handleSettings);
   server.on("/save", HTTP_POST, handleSave);

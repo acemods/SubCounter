@@ -1,7 +1,7 @@
 // ════════════════════════════════════════════════════════════════════════════
 //  Apps: home menu, Weather, Spotify
 // ════════════════════════════════════════════════════════════════════════════
-enum AppId { APP_YT = 0, APP_WX = 1, APP_SP = 2, NUM_APPS = 3 };
+enum AppId { APP_YT = 0, APP_WX = 1, APP_SP = 2, APP_HA = 3, NUM_APPS = 4 };
 int app = APP_YT;
 bool menuOpen = false;
 int wxCard = 0;              // 0 now, 1 next hours, 2 tomorrow
@@ -492,10 +492,14 @@ void drawClock() {
   if (wx.ok) bottom = String(lroundf(wx.temp)) + "\xC2\xB0 " + wxText(wx.code);
   if (numCh && ch[0].subs >= 0) bottom += (bottom.length() ? "   -   " : "") + compact(estimateFor(0)) + " subs";
   if (bottom.length()) ftC(y, fit(bottom, F_S, gfx->width() - 16), F_S, C_GREY, gfx->width());
-  if (wx.ok && wx.rainHour >= 0) {
+  // last line: the rooms from Home Assistant and/or a rain warning (taking turns each minute if both)
+  String home = haClockLine();
+  bool rain = wx.ok && wx.rainHour >= 0;
+  struct tm lt; time_t n = nowT(); localtime_r(&n, &lt);
+  if (rain && (!home.length() || lt.tm_min % 2)) {
     char b[40]; snprintf(b, sizeof(b), "Rain around %02d:00", wx.rainHour);
     ftC(168, b, F_S, C_BLUE, gfx->width());
-  }
+  } else if (home.length()) ftC(168, fit(home, F_S, gfx->width() - 16), F_S, C_HA, gfx->width());
 }
 
 // ── Home menu ───────────────────────────────────────────────────────────────
@@ -508,13 +512,16 @@ void drawAppIcon(int a, int cx, int cy) {
     gfx->fillRect(cx + 8, cy - 8, 4, 11, C_WHITE); gfx->fillRect(cx + 16, cy - 8, 4, 11, C_WHITE); // Twitch bars
   }
   if (a == APP_WX) { drawWxIcon(2, cx, cy, 30, true); }
+  if (a == APP_HA) drawHaIcon(cx, cy);
   if (a == APP_SP) {
     gfx->fillCircle(cx, cy, 26, 0x1EE9);
     for (int k = 0; k < 3; k++) { gfx->drawFastHLine(cx - 13 + k * 2, cy - 8 + k * 8, 26 - k * 4, C_BG); gfx->drawFastHLine(cx - 13 + k * 2, cy - 7 + k * 8, 26 - k * 4, C_BG); }
   }
 }
 
-#define MENU_TILES 5            // the three apps + Device + Summary
+#define MENU_TILES 6            // the four apps + Device + Summary
+#define MENU_DEVICE NUM_APPS
+#define MENU_SUMMARY (NUM_APPS + 1)
 #define MENU_PER_PAGE 3         // three big tiles per page; swipe left/right for the next page
 int menuPage = 0;
 int menuPages() { return (MENU_TILES + MENU_PER_PAGE - 1) / MENU_PER_PAGE; }
@@ -543,7 +550,7 @@ void drawMenu() {
   gfx->fillScreen(C_BG);
   ftR(gfx->width() - 6, 14, "v" FW_VERSION, F_XS, C_DKGREY);
   if (updAvail) ft(6, 14, "v" + updVer + " available - swipe to Device", F_XS, C_GOLD);
-  const char *names[MENU_TILES] = { "Creators", "Weather", "Spotify", "Device", "Summary" };
+  const char *names[MENU_TILES] = { "Creators", "Weather", "Spotify", "Home", "Device", "Summary" };
   menuPage = constrain(menuPage, 0, menuPages() - 1);
   int w = gfx->width() / MENU_PER_PAGE;
   for (int s = 0; s < MENU_PER_PAGE; s++) {
@@ -552,7 +559,7 @@ void drawMenu() {
     int cx = s * w + w / 2;
     if (a == app) gfx->drawRoundRect(s * w + 6, 22, w - 12, 116, 12, C_DKGREY);
     if (a < NUM_APPS) drawAppIcon(a, cx, 70);
-    else if (a == 3) { drawDeviceIcon(cx, 70, updAvail ? C_GOLD : C_WHITE); if (updAvail) gfx->fillCircle(cx + 18, 44, 6, C_RED); }
+    else if (a == MENU_DEVICE) { drawDeviceIcon(cx, 70, updAvail ? C_GOLD : C_WHITE); if (updAvail) gfx->fillCircle(cx + 18, 44, 6, C_RED); }
     else drawSummaryIcon(cx, 70);
     ft(cx - tw(names[a], F_S) / 2, 130, names[a], F_S, a == app ? C_WHITE : C_GREY);
   }
@@ -561,7 +568,7 @@ void drawMenu() {
   if (np > 1) {
     int x0 = gfx->width() / 2 - (np - 1) * 7;
     for (int p = 0; p < np; p++) {
-      bool hasUpd = updAvail && p != menuPage && p == (NUM_APPS / MENU_PER_PAGE);
+      bool hasUpd = updAvail && p != menuPage && p == (MENU_DEVICE / MENU_PER_PAGE);
       if (p == menuPage) gfx->fillCircle(x0 + p * 14, 146, 3, C_WHITE);
       else gfx->fillCircle(x0 + p * 14, 146, 3, hasUpd ? C_RED : C_DKGREY);
     }
@@ -617,6 +624,7 @@ void drawApp() {
   if (menuOpen) { drawMenu(); return; }
   if (app == APP_WX) drawWeather();
   else if (app == APP_SP) drawSpotify();
+  else if (app == APP_HA) drawHome();
   else drawView();
 }
 
@@ -625,6 +633,7 @@ void openApp(int a) {
   prefs.begin("subcounter", false); prefs.putInt("app", app); prefs.end();
   if (app == APP_SP) { lastSpPoll = 0; spFails = 0; spWait = 3000; }
   if (app == APP_WX && !wx.ok) lastWxFetch = 0;
+  if (app == APP_HA) { homeCard = 0; if (!haOkAt) lastHaFetch = 0; }
   gfx->fillScreen(C_BG);
   drawApp();
 }

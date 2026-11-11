@@ -105,7 +105,7 @@ Each can be switched off in settings, and desk-tap sensitivity can be set to Low
 
 ## Idle clock
 
-After **3 minutes** with no touch, button press or movement (change it, or turn it off, in settings), the board shows a **large clock** with the date, the weather, any rain warning and your channel's count. It goes back to what you were looking at as soon as you touch it, press BOOT or pick it up. It doesn't appear while Spotify is playing, and overnight the dim night clock is used instead. Alerts still pop up over it.
+After **3 minutes** with no touch, button press or movement (change it, or turn it off, in settings), the board shows a **large clock** with the date, the weather, any rain warning, your channel's count and your rooms from Home Assistant. It goes back to what you were looking at as soon as you touch it, press BOOT or pick it up. It doesn't appear while Spotify is playing, and overnight the dim night clock is used instead. Alerts still pop up over it.
 
 ## Daily summary and night clock
 
@@ -122,6 +122,10 @@ After **3 minutes** with no touch, button press or movement (change it, or turn 
 - **Now:** clock, temperature, conditions, high and low, and a blue rain warning if rain is likely within 3 hours
 - **Next hours:** every 2 hours for the next 12, with rain chance
 - **Tomorrow:** forecast, sunrise and sunset
+
+## Home app
+
+Room temperature and humidity from Home Assistant. Long-press → swipe left → **Home**. One or two rooms get big numbers; with more, there are three to a page (swipe up/down or press BOOT). Shake to refresh. Readings over 15 minutes old are greyed out. The rooms also appear on the idle clock and in a **Home** card on the dashboard. Setup: [Home Assistant](HOME-ASSISTANT.md).
 
 ## Web dashboard
 
