@@ -2,6 +2,11 @@
 
 All builds are in [`builds/`](../builds). Source snapshots for most versions are in the git history.
 
+## v14.6
+- **Room graphs on the dashboard.** The Home card now has a graph of each room's temperature or humidity over the last 24 hours, 7 days or 30 days. Hover over it, or touch it on a phone, to see the readings at any time. Below the graph is each room's lowest and highest reading over that period.
+- The board saves a reading from each room every 10 minutes and keeps 31 days (about 36 KB a room). Renaming a room keeps its history; changing its sensors starts a new one, and the old file is removed.
+- `/debug` shows how much of the board's storage is used
+
 ## v14.5
 - **Idle clock: rooms cut off.** The Home Assistant line at the bottom only fitted two rooms. The rooms are now shown as many as fit at a time, taking turns every 4 seconds. A rain warning, when rain is on the way, is one of the turns.
 

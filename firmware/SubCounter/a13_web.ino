@@ -363,7 +363,7 @@ header{display:flex;align-items:center;gap:12px;padding:16px 20px;border-bottom:
 @container (max-width:540px){.rvt td.nm2 img{width:48px;height:27px}.rvt td.nm2 a{gap:6px}.rvt td,.rvt th{padding:6px 3px}.rvt td.er{font-size:12px}}
 @container (max-width:440px){.rvt td.nm2 img{display:none}}
 @media(max-width:520px){.rvt .lkc{display:none}.rvt td.nm2 img{width:48px;height:27px}.rvt td.nm2 a{gap:6px}.rvt td,.rvt th{padding:6px 3px}.rvt td.er{font-size:12px}}details.earn>.sub{margin-top:2px;font-size:12px}.vchips>.sub{margin-right:2px}.vb{color:var(--blue)}.tsep{width:1px;height:20px;background:var(--line);margin:0 4px}.lvbox{margin-top:14px;padding:12px;border-radius:12px;background:#17202b}
-.home .hum{color:var(--blue);font-weight:600;margin-left:6px}.home .old{opacity:.5}.side{min-width:0}.morning{min-width:0;overflow:hidden}.morning .me span{color:var(--gold)}.morning .mv{display:flex;gap:10px;align-items:flex-start;margin-top:8px;color:var(--text);text-decoration:none}.morning .mv img{width:96px;height:54px;border-radius:6px;object-fit:cover;flex:none;background:var(--line)}.morning .mv>div{min-width:0}.morning .mv .t{font-weight:600;font-size:14px;line-height:1.3;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}.morning .mv .sub{margin-top:2px}.morning .list .pi{margin-right:5px}
+.home .hum{color:var(--blue);font-weight:600;margin-left:6px}.home .hd{display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:8px;vertical-align:1px}.hg{position:relative}.hsvg{width:100%;height:170px;display:block;touch-action:pan-y}.hleg{display:flex;flex-wrap:wrap;gap:4px 14px;margin-top:6px}.home .old{opacity:.5}.side{min-width:0}.morning{min-width:0;overflow:hidden}.morning .me span{color:var(--gold)}.morning .mv{display:flex;gap:10px;align-items:flex-start;margin-top:8px;color:var(--text);text-decoration:none}.morning .mv img{width:96px;height:54px;border-radius:6px;object-fit:cover;flex:none;background:var(--line)}.morning .mv>div{min-width:0}.morning .mv .t{font-weight:600;font-size:14px;line-height:1.3;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}.morning .mv .sub{margin-top:2px}.morning .list .pi{margin-right:5px}
 header h1{font-size:18px;margin:0;flex:1}header .meta{color:var(--muted);font-size:13px}
 .btn{border:1px solid var(--line);border-radius:9px;padding:7px 12px;font-size:13px;color:var(--text);background:var(--card);cursor:pointer}
 main{max-width:1500px;margin:0 auto;padding:20px}
@@ -538,6 +538,27 @@ tip.textContent='';tip.append(h('div',{class:'sub',text:new Date(t*1000).toLocal
 ser.forEach(s=>{let v=s.pts[0][1];for(const p of s.pts){if(p[0]>t)break;v=p[1]}tip.append(h('div',{},h('i',{style:'background:'+colFor(s.c.i)}),name(s.c)+' ',h('b',{text:fv(v)})))});
 tip.style.display='block';const px=ev.clientX-r.left;tip.style.left=Math.min(px+12,r.width-tip.offsetWidth-4)+'px';tip.style.top='10px'};
 svg.onmouseleave=()=>{cross.setAttribute('visibility','hidden');tip.style.display='none'}}
+const HCOL=['#ffb300','#4da3ff','#30d158','#ff6b6b','#bf5af2','#64d2ff'];let HG={k:'t',days:1};try{Object.assign(HG,JSON.parse(localStorage.getItem('hg')||'{}'))}catch(e){}
+const HHC={};function hh(r,days){const k=r+':'+days;if(HHC[k]&&Date.now()-HHC[k].at<300000)return HHC[k].p;const p=fetch('/api/homehist?r='+r+'&days='+days).then(x=>x.json());HHC[k]={at:Date.now(),p};p.catch(()=>delete HHC[k]);return p}
+async function homePlot(box,rs){const k=HG.k,days=HG.days,gap=(days<=1?600:days<=7?1800:7200)*3+60,ser=[];
+try{for(let r=0;r<rs.length;r++){const p=(await hh(r,days)).filter(q=>q[k=='t'?1:2]!=null).map(q=>[q[0],q[k=='t'?1:2]/10]);if(p.length>1)ser.push({r,n:rs[r].n,c:HCOL[r%HCOL.length],p})}}catch(e){box.textContent='';box.append(h('div',{class:'sub',text:'Graph not available right now'}));return}
+box.textContent='';if(!ser.length){box.append(h('div',{class:'sub',style:'padding:14px 0',text:'Collecting data – a reading is saved every 10 minutes, so the graph fills in over the next hour or so'}));return}
+const W=Math.max(240,box.clientWidth||300),H=170,L=36,R=8,T=8,B=22,ns='http://www.w3.org/2000/svg',mk=(t,a)=>{const e=document.createElementNS(ns,t);for(const x in a)e.setAttribute(x,a[x]);return e};
+const now=Date.now()/1000,t0=now-days*86400;let mn=1e9,mx=-1e9;ser.forEach(s=>s.p.forEach(([,v])=>{mn=Math.min(mn,v);mx=Math.max(mx,v)}));if(mx-mn<1){mn-=.5;mx+=.5}
+const st=(()=>{const r=(mx-mn)/4,m=Math.pow(10,Math.floor(Math.log10(r))),f=r/m;return (f<=1?1:f<=2?2:f<=2.5?2.5:f<=5?5:10)*m})();mn=Math.floor(mn/st)*st;mx=Math.ceil(mx/st)*st;const nT=Math.round((mx-mn)/st);
+const X=t=>L+(Math.max(t,t0)-t0)/(now-t0)*(W-L-R),Y=v=>T+(mx-v)/(mx-mn)*(H-T-B),u=k=='t'?'°':'%',fv=v=>(st<1?v.toFixed(1):Math.round(v))+u,lv=v=>(k=='t'?v.toFixed(1):Math.round(v))+u;
+const svg=mk('svg',{viewBox:`0 0 ${W} ${H}`,class:'hsvg'});
+for(let q=0;q<=nT;q++){const v=mn+st*q,y=Y(v);svg.append(mk('line',{x1:L,x2:W-R,y1:y,y2:y,stroke:'#2a2a2e','stroke-width':1}));const tx=mk('text',{x:L-6,y:y+4,'text-anchor':'end','font-size':11,fill:'#8d8d95'});tx.textContent=fv(v);svg.append(tx)}
+const tl=t=>days<=1?new Date(t*1000).toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'}):new Date(t*1000).toLocaleDateString('en-GB',{day:'numeric',month:'short'});
+[0,.5,1].forEach(f=>{const t=t0+(now-t0)*f,tx=mk('text',{x:L+(W-L-R)*f,y:H-6,'text-anchor':f==0?'start':f==1?'end':'middle','font-size':11,fill:'#8d8d95'});tx.textContent=f==1?'now':tl(t);svg.append(tx)});
+ser.forEach(s=>{const d=s.p.map((q,i)=>(i&&q[0]-s.p[i-1][0]<=gap?'L':'M')+X(q[0]).toFixed(1)+' '+Y(q[1]).toFixed(1)).join(' ');svg.append(mk('path',{d,fill:'none',stroke:s.c,'stroke-width':2,'stroke-linejoin':'round'}))});
+const cross=mk('line',{y1:T,y2:H-B,stroke:'#8d8d95','stroke-width':1,visibility:'hidden'});svg.append(cross);const tip=h('div',{class:'tip'});
+box.append(svg,tip,h('div',{class:'sub hleg'},ser.map(s=>{const vs=s.p.map(q=>q[1]);return h('span',{},h('i',{class:'hd',style:'background:'+s.c}),s.n+' '+lv(Math.min(...vs))+' – '+lv(Math.max(...vs)))})));
+const hide=()=>{cross.setAttribute('visibility','hidden');tip.style.display='none'};
+svg.onpointermove=ev=>{const r=svg.getBoundingClientRect(),sx=(ev.clientX-r.left)/r.width*W;if(sx<L||sx>W-R){hide();return}const t=t0+(sx-L)/(W-L-R)*(now-t0);
+cross.setAttribute('x1',sx);cross.setAttribute('x2',sx);cross.setAttribute('visibility','visible');tip.textContent='';tip.append(h('div',{class:'sub',text:new Date(t*1000).toLocaleString('en-GB',{weekday:days>1?'short':undefined,day:days>1?'numeric':undefined,month:days>1?'short':undefined,hour:'2-digit',minute:'2-digit'})}));
+ser.forEach(s=>{let b=null;for(const q of s.p){if(Math.abs(q[0]-t)<=gap&&(!b||Math.abs(q[0]-t)<Math.abs(b[0]-t)))b=q}if(b)tip.append(h('div',{},h('i',{style:'background:'+s.c}),s.n+' ',h('b',{text:(k=='t'?b[1].toFixed(1):Math.round(b[1]))+u})))});
+tip.style.display='block';const px=ev.clientX-r.left;tip.style.left=Math.max(0,Math.min(px+12,r.width-tip.offsetWidth-4))+'px';tip.style.top='4px'};svg.onpointerleave=hide}
 const GK={};let PF='all';try{PF=localStorage.getItem('pf')||'all'}catch(e){}
 const PIC={yt:'<svg width="18" height="13" viewBox="0 0 20 14"><rect width="20" height="14" rx="4" fill="#ff0033"/><path d="M8 4v6l5-3z" fill="#fff"/></svg>',tw:'<svg width="15" height="15" viewBox="0 0 16 16"><path d="M2 1h13v9l-4 4H8l-2 2H4v-2H1V4z" fill="#9146ff"/><path d="M7 4h1.5v4H7zM10.5 4H12v4h-1.5z" fill="#fff"/></svg>'};
 function pIcon(c){const s=document.createElement('span');s.className='pi';s.title=c.tw?'Twitch':'YouTube';s.innerHTML=PIC[c.tw?'tw':'yt'];return s}
@@ -592,8 +613,11 @@ row.append(h('div',{class:'card'},h('h2',{text:'Last 24 hours'}),h('div',{class:
 {const mv=C.filter(c=>c.vw&&!c.tw).sort((a,b)=>b.vw.d1-a.vw.d1);if(mv.length>1)row.append(h('div',{class:'card'},h('h2',{text:'Most viewed · 24 h'}),h('div',{class:'sub',style:'margin:-8px 0 8px',text:'Channel views gained (YouTube updates these every few hours)'}),h('div',{class:'list'},mv.slice(0,5).map(c=>h('div',{},h('span',{text:name(c)}),h('b',{class:'vb',text:'+'+cmp(Math.max(0,c.vw.d1))}))))))}
 // weather
 if(D.wx){const w=D.wx;row.append(h('div',{class:'card'},h('h2',{text:'Weather · '+w.place}),h('div',{class:'big',text:w.temp+'°'}),h('div',{text:w.text+' · feels '+w.feels+'°'}),h('div',{class:'sub',text:`High ${w.hi}° · Low ${w.lo}° · Wind ${w.wind} mph`}),w.rainHour>=0?h('div',{style:'margin-top:8px;color:var(--blue)',text:`Rain likely around ${String(w.rainHour).padStart(2,'0')}:00 (${w.rainPct}%)`}):null))}
-// Home Assistant rooms
-if(D.home){const H=D.home,rs=H.rooms||[];row.append(h('div',{class:'card home'},h('h2',{text:'Home'}),h('div',{class:'list'},rs.map(r=>h('div',{class:r.ago<0||r.ago>900?'old':''},h('span',{text:r.n}),h('b',{},r.t!=null?r.t.toFixed(1)+(r.u||'°C'):'',r.h!=null?h('span',{class:'hum',text:' 💧'+r.h+'%'}):null)))),H.err?h('div',{class:'sub',style:'margin-top:8px;color:var(--red)',text:H.err}):null))}
+// Home Assistant rooms, with a graph of the saved readings
+if(D.home){const H=D.home,rs=H.rooms||[],ctl=h('div',{class:'ctl',style:'margin:12px 0 4px'}),box=h('div',{class:'hg'});
+row.append(h('div',{class:'card home'},h('h2',{text:'Home'}),h('div',{class:'list'},rs.map((r,k)=>h('div',{class:r.ago<0||r.ago>900?'old':''},h('span',{},h('i',{class:'hd',style:'background:'+HCOL[k%HCOL.length]}),r.n),h('b',{},r.t!=null?r.t.toFixed(1)+(r.u||'°C'):'',r.h!=null?h('span',{class:'hum',text:' 💧'+r.h+'%'}):null)))),H.err?h('div',{class:'sub',style:'margin-top:8px;color:var(--red)',text:H.err}):null,ctl,box));
+const draw=()=>{ctl.textContent='';const seg=(o,key)=>h('div',{class:'seg'},o.map(([v,t])=>h('button',{class:HG[key]==v?'on':'',text:t,onclick:()=>{HG[key]=v;try{localStorage.setItem('hg',JSON.stringify(HG))}catch(e){}draw()}})));
+ctl.append(seg([['t','Temperature'],['h','Humidity']],'k'),seg([[1,'24 h'],[7,'7 days'],[30,'30 days']],'days'));homePlot(box,rs)};draw()}
 // race
 if(D.race&&kindOk(D.channels[D.race[0]])&&kindOk(D.channels[D.race[1]])){const A=D.channels[D.race[0]],B=D.channels[D.race[1]],ea=est(A),eb=est(B),fa=ea+eb?ea/(ea+eb):.5;const lead=ea>=eb?A:B,ch=lead===A?B:A,closing=(ch.rate||0)-(lead.rate||0),gap=Math.abs(ea-eb);
 row.append(h('div',{class:'card race'},h('h2',{text:'Race'}),h('div',{class:'rs'},h('span',{},av(A),pIcon(A),h('b',{style:'color:var(--red)',text:name(A)})),h('b',{text:fmt(ea)})),h('div',{class:'rs'},h('span',{},av(B),pIcon(B),h('b',{style:'color:var(--blue)',text:name(B)})),h('b',{text:fmt(eb)})),h('div',{class:'tug'},h('div',{class:'a',style:`width:${fa*100}%`}),h('div',{class:'b',style:`width:${(1-fa)*100}%`})),h('div',{text:`Gap ${fmt(gap)}`}),h('div',{class:'sub',text:closing>0.01?`${name(ch)} is catching up by ${fmt(Math.round(closing))}/day – could pass in about ${Math.max(1,Math.round(gap/closing))} days`:(lead.rate||ch.rate)?`${name(lead)} is pulling away`:'Trend: need more data'})))}
@@ -1509,6 +1533,7 @@ void handleDebug() {
   }
   o += "\nOpen connections: YouTube " + String(connYT.cli ? "yes" : "no") + ", Twitch " + String(connTW.cli ? "yes" : "no") +
        ", Spotify " + String(connSP.cli ? "yes" : "no") + "\nBiggest free block now " + String(ESP.getMaxAllocHeap()) + "\n";
+  if (fsOk) o += "Storage used " + String(LittleFS.usedBytes() / 1024) + " of " + String(LittleFS.totalBytes() / 1024) + " KB\n";
   if (haOn()) o += "Home Assistant: " + String(haN) + " room(s), " + (haOkAt ? "last answer " + String((millis() - haOkAt) / 1000) + " s ago" : String("no answer yet")) +
                    (haErr.length() ? ", " + haErr : String("")) + "\n";
   server.send(200, "text/plain; charset=utf-8", o);
@@ -1537,6 +1562,7 @@ void registerRoutes() {
   });
   server.on("/debug", HTTP_GET, handleDebug);
   server.on("/ha/find", HTTP_POST, handleHaFind);
+  server.on("/api/homehist", HTTP_GET, handleHomeHist);
   server.on("/", HTTP_GET, handleDashboard);
   server.on("/settings", HTTP_GET, handleSettings);
   server.on("/save", HTTP_POST, handleSave);

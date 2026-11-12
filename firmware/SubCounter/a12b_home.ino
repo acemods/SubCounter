@@ -36,6 +36,62 @@ float haNum(const char *s) {                      // "21.4" -> 21.4; "unavailabl
 }
 
 volatile bool netHaRefreshed = false;
+
+// ── History: one small file per room, a reading every 10 minutes, kept 31 days ──
+// Named after the room's sensors, so renaming a room keeps its history and changing
+// its sensors starts a new one. 8 bytes a reading: about 36 KB a room for 31 days.
+struct HaSample { uint32_t t; int16_t t10; uint16_t h10; };   // tenths of a degree / of a %; NA = no reading
+#define HA_NA_T  INT16_MIN
+#define HA_NA_H  0xFFFF
+#define HA_HIST_AGE (31L * 86400L)
+#define HA_REC_EVERY 600
+String haHistPath(const HaRoom &r) {
+  uint32_t h = 2166136261UL; String k = r.tEnt + "|" + r.hEnt;
+  for (size_t i = 0; i < k.length(); i++) { h ^= (uint8_t)k[i]; h *= 16777619UL; }
+  char b[20]; snprintf(b, sizeof(b), "/ha_%08lx.bin", (unsigned long)h); return b;
+}
+// Files of rooms that have been removed or changed: delete them (once after start-up)
+void haCleanFiles() {
+  if (!fsOk) return;
+  File dir = LittleFS.open("/"); if (!dir) return;
+  String gone[12]; int ng = 0;
+  for (File f = dir.openNextFile(); f && ng < 12; f = dir.openNextFile()) {
+    String n = f.name(); if (!n.startsWith("/")) n = "/" + n; f.close();
+    if (!n.startsWith("/ha_") || !n.endsWith(".bin")) continue;
+    bool keep = false; for (int i = 0; i < haN; i++) if (haHistPath(haRoom[i]) == n) keep = true;
+    if (!keep) gone[ng++] = n;
+  }
+  dir.close();
+  for (int k = 0; k < ng; k++) LittleFS.remove(gone[k]);
+}
+time_t haLastRec = 0;
+void haRecord() {
+  if (!fsOk || !timeValid()) return;
+  time_t now = nowT();
+  if (haLastRec && now - haLastRec < HA_REC_EVERY) return;
+  static bool cleaned = false; if (!cleaned) { cleaned = true; haCleanFiles(); }
+  haLastRec = now;
+  for (int i = 0; i < haN; i++) {
+    HaRoom &r = haRoom[i];
+    if (!r.at || millis() - r.at > 120000UL) continue;          // nothing fresh from this room
+    HaSample s = { (uint32_t)now, isnan(r.t) || !r.tEnt.length() ? (int16_t)HA_NA_T : (int16_t)lroundf(r.t * 10),
+                   isnan(r.h) || !r.hEnt.length() ? (uint16_t)HA_NA_H : (uint16_t)lroundf(r.h * 10) };
+    if (s.t10 == HA_NA_T && s.h10 == HA_NA_H) continue;
+    String p = haHistPath(r);
+    File f = LittleFS.open(p, "a"); if (!f) continue;
+    f.write((uint8_t *)&s, sizeof(s)); f.close();
+    // about once a day, drop readings older than 31 days
+    File rf = LittleFS.open(p, "r"); HaSample first; bool old = false;
+    if (rf) { old = rf.read((uint8_t *)&first, sizeof(first)) == sizeof(first) && now - (time_t)first.t > HA_HIST_AGE + 86400; rf.close(); }
+    if (old) {
+      File in = LittleFS.open(p, "r"), out = LittleFS.open("/hatmp.bin", "w"); HaSample q;
+      while (in && out && in.read((uint8_t *)&q, sizeof(q)) == sizeof(q)) if (now - (time_t)q.t <= HA_HIST_AGE) out.write((uint8_t *)&q, sizeof(q));
+      if (in) in.close(); if (out) out.close();
+      LittleFS.remove(p); LittleFS.rename("/hatmp.bin", p);
+    }
+  }
+}
+
 void haPoll() {
   if (!haOn()) return;
   String base = haBase(cfgHaUrl), auth = "Bearer " + cfgHaToken;
@@ -78,7 +134,7 @@ void haPoll() {
     }
   }
   haErr = err;
-  if (any) haOkAt = millis();
+  if (any) { haOkAt = millis(); haRecord(); }
   netHaRefreshed = true;
 }
 
@@ -218,6 +274,37 @@ int haFindAt(const String &base, const String &token, JsonArray out, int &nT, in
   }
   http.end();
   return code;
+}
+
+// /api/homehist?r=0&days=7 -> [[time, tenths of a degree or null, tenths of a % or null], ...]
+// thinned to one reading per 10 min (1 day), 30 min (7 days) or 2 h (30 days)
+void handleHomeHist() {
+  int r = server.arg("r").toInt();
+  int days = constrain(server.arg("days").toInt(), 1, 31);
+  long bucket = days <= 1 ? 600 : (days <= 7 ? 1800 : 7200);
+  server.setContentLength(CONTENT_LENGTH_UNKNOWN);
+  server.send(200, "application/json", "");
+  server.sendContent("[");
+  if (r >= 0 && r < haN && fsOk) {
+    File f = LittleFS.open(haHistPath(haRoom[r]), "r");
+    if (f) {
+      time_t from = nowT() - (time_t)days * 86400; long lastB = -1;
+      String chunk; bool first = true; HaSample s;
+      BufRd br(f);
+      while (br.read(&s, sizeof(s))) {
+        if ((time_t)s.t < from || (long)(s.t / bucket) == lastB) continue;
+        lastB = s.t / bucket;
+        chunk += (first ? "[" : ",[") + String(s.t) + "," + (s.t10 == HA_NA_T ? String("null") : String(s.t10)) + "," +
+                 (s.h10 == HA_NA_H ? String("null") : String(s.h10)) + "]";
+        first = false;
+        if (chunk.length() > 2800) { if (!sendOrGiveUp(chunk)) break; chunk = ""; }
+      }
+      f.close();
+      if (chunk.length()) server.sendContent(chunk);
+    }
+  }
+  server.sendContent("]");
+  server.sendContent("");
 }
 
 void handleHaFind() {

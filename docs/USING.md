@@ -125,7 +125,7 @@ After **3 minutes** with no touch, button press or movement (change it, or turn 
 
 ## Home app
 
-Room temperature and humidity from Home Assistant. Long-press → swipe left → **Home**. One or two rooms get big numbers; with more, there are three to a page (swipe up/down or press BOOT). Shake to refresh. Readings over 15 minutes old are greyed out. The rooms also appear on the idle clock and in a **Home** card on the dashboard. Setup: [Home Assistant](HOME-ASSISTANT.md).
+Room temperature and humidity from Home Assistant. Long-press → swipe left → **Home**. One or two rooms get big numbers; with more, there are three to a page (swipe up/down or press BOOT). Shake to refresh. Readings over 15 minutes old are greyed out. The rooms also appear on the idle clock and in a **Home** card on the dashboard, with a temperature and humidity graph for the last 24 hours, 7 days or 30 days. Setup: [Home Assistant](HOME-ASSISTANT.md).
 
 ## Web dashboard
 

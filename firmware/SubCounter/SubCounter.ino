@@ -58,7 +58,7 @@
 #undef INADDR_NONE
 #endif
 #define HOSTNAME "subcounter"
-#define FW_VERSION "14.5"     // shown on start-up, home menu, settings, update page and dashboard
+#define FW_VERSION "14.6"     // shown on start-up, home menu, settings, update page and dashboard
 
 // ── Pins (ESP32-C6 version of the board) ────────────────────────────────────
 #define LCD_SCK   1
@@ -470,6 +470,7 @@ unsigned long lastVtFetch = 0, lastTypicalFetch = 0, lastCommentFetch = 0, lastR
 
 // Forward declarations (functions used before they're defined)
 void drawMode();
+bool sendOrGiveUp(const String &chunk);
 void drawHome();
 void drawHaIcon(int cx, int cy);
 String haClockLine();

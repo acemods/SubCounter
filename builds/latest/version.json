@@ -1,7 +1,7 @@
 {
- "version": "14.5",
- "app": "SubCounter-v14.5-APP-ONLY.bin",
- "size": 1853056,
- "md5": "25217b424e8a72838c6ff8185510b13f",
- "notes": "Idle clock: all your Home Assistant rooms now get shown, a few at a time, taking turns every 4 seconds."
+ "version": "14.6",
+ "app": "SubCounter-v14.6-APP-ONLY.bin",
+ "size": 1860176,
+ "md5": "20c07da586cdd53fe7cd2118a0c37437",
+ "notes": "Room temperature and humidity graphs on the dashboard's Home card (24 h, 7 days, 30 days). The board saves a reading every 10 minutes for 31 days."
 }

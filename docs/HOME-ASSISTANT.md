@@ -34,7 +34,9 @@ The token is saved on the board as a secret. Like your other keys, it's left out
 
 - **On the board:** long-press the screen → swipe left → **Home**. With one or two rooms, each gets a big line. With more, there are three to a page: swipe up/down or press BOOT for the next page. Shake to refresh. The outside temperature from the Weather app is shown at the top for comparison.
 - **On the idle clock:** the bottom line shows your rooms, as many as fit at a time, taking turns every 4 seconds (turn this off with *Show the rooms on the idle clock too*). If rain is on the way, the rain warning is one of the turns.
-- **On the dashboard:** a **Home** card in the side column.
+- **On the dashboard:** a **Home** card in the side column, with a graph of temperature or humidity for each room over the last 24 hours, 7 days or 30 days. Hover over the graph, or touch it on a phone, to see the readings at that time.
+
+The board saves a reading from each room every 10 minutes and keeps 31 days. The graph starts empty after you update and fills in from then. Renaming a room keeps its history; changing a room's sensors starts a fresh graph for it.
 
 Readings older than 15 minutes (a sensor offline or out of battery) are shown greyed out.
 
