@@ -1,7 +1,7 @@
 {
- "version": "14.6",
- "app": "SubCounter-v14.6-APP-ONLY.bin",
- "size": 1860176,
- "md5": "20c07da586cdd53fe7cd2118a0c37437",
- "notes": "Room temperature and humidity graphs on the dashboard's Home card (24 h, 7 days, 30 days). The board saves a reading every 10 minutes for 31 days."
+ "version": "14.7",
+ "app": "SubCounter-v14.7-APP-ONLY.bin",
+ "size": 1863328,
+ "md5": "4f1d800e3212ad128570991675afc86b",
+ "notes": "Home Assistant: Find sensors now lists every sensor with a tick box, rooms can be removed with ×, and up to 10 rooms."
 }

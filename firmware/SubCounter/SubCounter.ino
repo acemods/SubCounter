@@ -58,7 +58,7 @@
 #undef INADDR_NONE
 #endif
 #define HOSTNAME "subcounter"
-#define FW_VERSION "14.6"     // shown on start-up, home menu, settings, update page and dashboard
+#define FW_VERSION "14.7"     // shown on start-up, home menu, settings, update page and dashboard
 
 // ── Pins (ESP32-C6 version of the board) ────────────────────────────────────
 #define LCD_SCK   1
@@ -434,7 +434,7 @@ String cfgSpRedirect;                            // https address registered wit
 String cfgHaUrl, cfgHaToken;                     // e.g. http://192.168.1.20:8123 + a long-lived access token
 String cfgHaRooms;                               // one room per line: name|temperature sensor|humidity sensor
 bool   cfgHaClock = true;                        // show the rooms on the idle clock too
-#define HA_MAX 6
+#define HA_MAX 10
 struct HaRoom { String name, tEnt, hEnt; float t = NAN, h = NAN; String unit; unsigned long at = 0; };
 HaRoom haRoom[HA_MAX]; int haN = 0;
 String haErr; unsigned long haOkAt = 0, lastHaFetch = 0;

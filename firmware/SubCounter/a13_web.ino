@@ -538,7 +538,7 @@ tip.textContent='';tip.append(h('div',{class:'sub',text:new Date(t*1000).toLocal
 ser.forEach(s=>{let v=s.pts[0][1];for(const p of s.pts){if(p[0]>t)break;v=p[1]}tip.append(h('div',{},h('i',{style:'background:'+colFor(s.c.i)}),name(s.c)+' ',h('b',{text:fv(v)})))});
 tip.style.display='block';const px=ev.clientX-r.left;tip.style.left=Math.min(px+12,r.width-tip.offsetWidth-4)+'px';tip.style.top='10px'};
 svg.onmouseleave=()=>{cross.setAttribute('visibility','hidden');tip.style.display='none'}}
-const HCOL=['#ffb300','#4da3ff','#30d158','#ff6b6b','#bf5af2','#64d2ff'];let HG={k:'t',days:1};try{Object.assign(HG,JSON.parse(localStorage.getItem('hg')||'{}'))}catch(e){}
+const HCOL=['#ffb300','#4da3ff','#30d158','#ff6b6b','#bf5af2','#64d2ff','#ff9f0a','#ffd60a','#ac8e68','#ff375f'];let HG={k:'t',days:1};try{Object.assign(HG,JSON.parse(localStorage.getItem('hg')||'{}'))}catch(e){}
 const HHC={};function hh(r,days){const k=r+':'+days;if(HHC[k]&&Date.now()-HHC[k].at<300000)return HHC[k].p;const p=fetch('/api/homehist?r='+r+'&days='+days).then(x=>x.json());HHC[k]={at:Date.now(),p};p.catch(()=>delete HHC[k]);return p}
 async function homePlot(box,rs){const k=HG.k,days=HG.days,gap=(days<=1?600:days<=7?1800:7200)*3+60,ser=[];
 try{for(let r=0;r<rs.length;r++){const p=(await hh(r,days)).filter(q=>q[k=='t'?1:2]!=null).map(q=>[q[0],q[k=='t'?1:2]/10]);if(p.length>1)ser.push({r,n:rs[r].n,c:HCOL[r%HCOL.length],p})}}catch(e){box.textContent='';box.append(h('div',{class:'sub',text:'Graph not available right now'}));return}
@@ -1154,31 +1154,25 @@ void handleSettings() {
   h += "<label>Long-lived access token</label><input name='hatoken' id='hatoken' type='text' class='secret' autocapitalize='off' autocomplete='off' spellcheck='false' placeholder='" +
        String(cfgHaToken.length() ? "(saved — leave blank to keep)" : "paste the token here") + "'>";
   if (!portalMode) h += "<button type='button' class='b2' onclick='haFind()'>Find sensors</button><small id='hamsg'></small>";
-  h += "<datalist id='hadt'></datalist><datalist id='hadh'></datalist>";
-  h += "<style>.har{display:grid;grid-template-columns:1fr 1fr;gap:6px;margin:4px 0 14px}.har .nm{grid-column:1/3}.har input{margin:0}</style>";
-  { int show = max(haN + 1, 2);
+  h += "<div id='halist'></div>";
+  h += "<style>.har{display:grid;grid-template-columns:1fr 44px;gap:6px;margin:4px 0 16px}.har [data-e]{grid-column:1/3}"
+       ".har input,.har select{margin:0}.har .hx{padding:0;margin:0;background:#2a2a2e;color:#aaa;border:0;border-radius:10px;font-size:18px}"
+       ".hal{display:flex;align-items:center;gap:10px;margin:8px 0;color:#eee;font-size:15px}.hal input{width:auto;margin:0}.hal .hav{margin-left:auto;color:#8d8d95;font-size:13px;white-space:nowrap}</style>";
+  h += "<label>Rooms on the board</label>";
+  { int show = max(haN, 1);
     for (int k = 0; k < HA_MAX; k++) {
       HaRoom *r = k < haN ? &haRoom[k] : nullptr;
       String ks = String(k);
       h += "<div class='har' id='har" + ks + "'" + String(k >= show ? " style='display:none'" : "") + ">"
-           "<input class='nm' name='han" + ks + "' placeholder='Room " + String(k + 1) + " name, e.g. Lounge' value='" + (r ? htmlEscape(r->name) : String("")) + "'>"
-           "<input name='hat" + ks + "' list='hadt' autocapitalize='off' spellcheck='false' placeholder='Temperature sensor' value='" + (r ? htmlEscape(r->tEnt) : String("")) + "'>"
-           "<input name='hah" + ks + "' list='hadh' autocapitalize='off' spellcheck='false' placeholder='Humidity sensor' value='" + (r ? htmlEscape(r->hEnt) : String("")) + "'></div>";
+           "<input class='nm' name='han" + ks + "' placeholder='Room name, e.g. Lounge' value='" + (r ? htmlEscape(r->name) : String("")) + "'>"
+           "<button type='button' class='hx' title='Remove this room' onclick='haDel(this)'>&times;</button>"
+           "<input name='hat" + ks + "' data-e='t' autocapitalize='off' spellcheck='false' placeholder='Temperature sensor' value='" + (r ? htmlEscape(r->tEnt) : String("")) + "'>"
+           "<input name='hah" + ks + "' data-e='h' autocapitalize='off' spellcheck='false' placeholder='Humidity sensor' value='" + (r ? htmlEscape(r->hEnt) : String("")) + "'></div>";
     } }
   h += "<button type='button' class='b2' onclick='haMore()'>+ Add a room</button>";
-  h += "<small>Clear a room's sensors to remove it. Long-press the board's screen and pick <b>Home</b>.</small>";
+  h += "<small>Up to " + String(HA_MAX) + " rooms. Press <b>Find sensors</b> to tick the ones you want from a list; &times; removes a room. Long-press the board's screen and pick <b>Home</b>.</small>";
   h += checkbox("haclk", cfgHaClock, "Show the rooms on the idle clock too");
-  h += F("<script>function haMore(){for(let k=0;k<6;k++){const r=document.getElementById('har'+k);if(r.style.display=='none'){r.style.display='';return}}}"
-       "function haFind(){const m=document.getElementById('hamsg'),u=document.getElementById('haurl'),t=document.getElementById('hatoken');m.textContent='Asking Home Assistant...';"
-       "fetch('/ha/find',{method:'POST',body:new URLSearchParams({url:u.value,token:t.value})}).then(r=>r.json()).then(j=>{if(j.err){m.textContent=j.err;return}"
-       "if(j.url&&j.url!=u.value.replace(/\\/+$/,''))u.value=j.url;const s=j.s||[],dt=document.getElementById('hadt'),dh=document.getElementById('hadh');dt.textContent='';dh.textContent='';"
-       "for(const x of s){const o=document.createElement('option');o.value=x.e;o.label=x.n+' ('+x.v+(x.u||'')+')';(x.c=='t'?dt:dh).append(o)}"
-       "const used=new Set([...document.querySelectorAll('.har input:not(.nm)')].map(i=>i.value).filter(Boolean)),g={};"
-       "for(const x of s){if(used.has(x.e))continue;const k=x.e.replace(/_(temperature|humidity)(_\\d+)?$/,'$2');if(!g[k]){let n=x.n.replace(/ (temperature|humidity)$/i,''),q=n,c=2;while(Object.values(g).some(v=>v.n==q))q=n+' '+c++;g[k]={n:q}}g[k][x.c]=x.e}"
-       "let added=0;for(const k in g){for(let i=0;i<6;i++){const r=document.getElementById('har'+i),[n,a,b]=r.querySelectorAll('input');if(n.value||a.value||b.value)continue;"
-       "n.value=g[k].n;a.value=g[k].t||'';b.value=g[k].h||'';r.style.display='';added++;break}}"
-       "m.textContent=`Found ${j.nT} temperature and ${j.nH} humidity sensor${j.nH==1?'':'s'}.`+(added?` Filled in ${added} room${added>1?'s':''} below \u2013 rename them if you like, then press Save.`:(s.length?' Pick them in the boxes below (tap a box for the list), then press Save.':''))})"
-       ".catch(()=>m.textContent='No answer from the board.')}</script>");
+  h += FPSTR(HA_JS);
 
   // ── Spotify ──
   h += sec("spotify", "Spotify");

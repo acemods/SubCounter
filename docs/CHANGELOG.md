@@ -2,6 +2,13 @@
 
 All builds are in [`builds/`](../builds). Source snapshots for most versions are in the git history.
 
+## v14.7
+- **Adding more Home Assistant sensors was awkward.** Find sensors only filled empty rows with sensors that weren't used yet, and the boxes only suggested sensors matching what was already typed. Find sensors now shows **every** temperature and humidity sensor in Home Assistant with a tick box (rooms you already have show their room name). Tick to add a room, untick to remove it.
+- The sensor boxes become dropdowns after Find sensors, showing each sensor's current reading and ID, so identical-looking sensors can be told apart
+- **×** next to a room removes it
+- Up to **10 rooms** (was 6), and Find sensors lists up to 100 sensors (was 40)
+- Find sensors only ticks sensors automatically the first time (no rooms yet), and then only devices with both temperature and humidity, so NAS disk temperatures and the like aren't added unasked
+
 ## v14.6
 - **Room graphs on the dashboard.** The Home card now has a graph of each room's temperature or humidity over the last 24 hours, 7 days or 30 days. Hover over it, or touch it on a phone, to see the readings at any time. Below the graph is each room's lowest and highest reading over that period.
 - The board saves a reading from each room every 10 minutes and keeps 31 days (about 36 KB a room). Renaming a room keeps its history; changing its sensors starts a new one, and the old file is removed.

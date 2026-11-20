@@ -239,6 +239,46 @@ String haClockLine() {
   return s;
 }
 
+// The settings page's script for Find sensors, the tick-list and the room rows
+const char HA_JS[] PROGMEM = R"JS(<script>
+let HAS=[];
+const haRows=()=>[...document.querySelectorAll('.har')],haVals=r=>[...r.querySelectorAll('input,select')],haEmpty=r=>!haVals(r).some(i=>i.value);
+function haMsg(t){document.getElementById('hamsg').textContent=t}
+function haMore(){const r=haRows().find(r=>r.style.display=='none');if(!r){haMsg('That\'s the most rooms the board can show. Remove one first.');return}r.style.display='';r.querySelector('.nm').focus()}
+function haClear(r){haVals(r).forEach(i=>i.value='');r.style.display='none'}
+function haDel(b){haClear(b.closest('.har'));if(!haRows().some(r=>r.style.display!='none'))haRows()[0].style.display='';haList()}
+function haGroups(){const g={};for(const x of HAS){const k=x.e.replace(/_(temperature|humidity)(_\d+)?$/,'$2');if(!g[k])g[k]={n:x.n.replace(/ (temperature|humidity)$/i,'')};g[k][x.c]=x}
+ const L=Object.values(g),seen={};for(const v of L){const c=seen[v.n]=(seen[v.n]||0)+1;if(c>1)v.n+=' '+c}return L}
+function haUsed(){return new Set(haRows().flatMap(r=>[...r.querySelectorAll('[data-e]')].map(i=>i.value)).filter(Boolean))}
+function haSel(r){r.querySelectorAll('[data-e]').forEach(i=>{if(i.tagName=='SELECT')return;const c=i.dataset.e,s=document.createElement('select');s.name=i.name;s.dataset.e=c;
+ s.append(new Option(c=='t'?'No temperature sensor':'No humidity sensor',''));const list=HAS.filter(x=>x.c==c);
+ if(i.value&&!list.some(x=>x.e==i.value))s.append(new Option(i.value+' (not in Home Assistant now)',i.value));
+ for(const x of list)s.append(new Option(x.v+(x.u||'')+'  ·  '+x.e.replace(/^sensor\./,''),x.e));s.value=i.value;s.onchange=haList;i.replaceWith(s)})}
+function haList(){const box=document.getElementById('halist');box.textContent='';if(!HAS.length)return;const used=haUsed();
+ const hd=document.createElement('label');hd.textContent='Sensors in Home Assistant (tick to show on the board)';box.append(hd);
+ for(const g of haGroups()){const l=document.createElement('label');l.className='hal';const cb=document.createElement('input');cb.type='checkbox';
+  cb.checked=[g.t,g.h].some(x=>x&&used.has(x.e));cb.onchange=()=>haTick(g,cb.checked);
+  const v=document.createElement('span');v.className='hav';v.textContent=[g.t?g.t.v+(g.t.u||''):'',g.h?g.h.v+(g.h.u||''):''].filter(Boolean).join(' · ');
+  const room=haRows().find(r=>[...r.querySelectorAll('[data-e]')].some(i=>i.value&&[g.t&&g.t.e,g.h&&g.h.e].includes(i.value))),nm=document.createElement('span');
+  nm.textContent=room?room.querySelector('.nm').value||g.n:g.n;if(room&&nm.textContent!=g.n){const d=document.createElement('small');d.style.cssText='display:block;margin:0;color:#8d8d95';d.textContent=g.n;nm.append(d)}
+  l.append(cb,nm,v);box.append(l)}}
+function haTick(g,on){const rows=haRows();
+ if(on){const r=rows.find(r=>haEmpty(r));if(!r){haMsg('All the rooms are used. Untick or remove one first.');haList();return}
+  const names=rows.map(x=>x.querySelector('.nm').value);let n=g.n,c=2;while(names.includes(n))n=g.n+' '+c++;
+  r.querySelector('.nm').value=n;r.querySelector('[data-e=t]').value=g.t?g.t.e:'';r.querySelector('[data-e=h]').value=g.h?g.h.e:'';r.style.display=''}
+ else for(const r of rows){const t=r.querySelector('[data-e=t]').value,h=r.querySelector('[data-e=h]').value;if((g.t&&t==g.t.e)||(g.h&&h==g.h.e))haClear(r)}
+ if(!rows.some(r=>r.style.display!='none'))rows[0].style.display='';
+ haList()}
+function haFind(){const u=document.getElementById('haurl'),t=document.getElementById('hatoken');haMsg('Asking Home Assistant...');
+ fetch('/ha/find',{method:'POST',body:new URLSearchParams({url:u.value,token:t.value})}).then(r=>r.json()).then(j=>{if(j.err){haMsg(j.err);return}
+  if(j.url&&j.url!=u.value.replace(/\/+$/,''))u.value=j.url;HAS=j.s||[];haRows().forEach(haSel);
+  let auto=0;if(!haUsed().size)for(const g of haGroups())if(g.t&&g.h&&haRows().some(haEmpty)){haTick(g,true);auto++}
+  haList();
+  haMsg(`Found ${j.nT} temperature and ${j.nH} humidity sensor${j.nH==1?'':'s'}`+(HAS.length<j.nT+j.nH?` (listing the first ${HAS.length})`:'')+'. '+
+   (auto?`Ticked ${auto} that have both temperature and humidity. `:'')+'Tick the ones you want, rename the rooms if you like, then press Save.')})
+ .catch(()=>haMsg('No answer from the board.'))}
+</script>)JS";
+
 // ── Settings: "Find sensors" ────────────────────────────────────────────────
 // Reads /api/states one entity at a time (a big house can have thousands of entities, far
 // more than fits in memory at once) and keeps only temperature and humidity sensors.
@@ -264,7 +304,7 @@ int haFindAt(const String &base, const String &token, JsonArray out, int &nT, in
         String dc = e["attributes"]["device_class"] | "";
         if (!id.startsWith("sensor.") || (dc != "temperature" && dc != "humidity")) continue;
         if (dc == "temperature") nT++; else nH++;
-        if (out.size() >= 40) continue;
+        if (out.size() >= 100) continue;
         JsonObject o = out.add<JsonObject>();
         o["e"] = id; o["c"] = dc == "temperature" ? "t" : "h";
         o["n"] = String((const char *)(e["attributes"]["friendly_name"] | id.c_str()));

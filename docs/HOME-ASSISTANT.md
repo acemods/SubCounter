@@ -24,8 +24,8 @@ A non-admin user can read sensor values but can't change your Home Assistant set
 
 1. Open the board's **Settings** page → **Home Assistant**.
 2. Paste the address and the token.
-3. Press **Find sensors**. The board lists every temperature and humidity sensor in Home Assistant and fills in a room for each device it finds, pairing each temperature sensor with the humidity sensor from the same device.
-4. Rename the rooms (for example "Lounge" or "Bedroom"). To pick sensors yourself, tap a sensor box to choose from the list. **+ Add a room** adds another row, up to 6. Clear a room's sensors to remove it.
+3. Press **Find sensors**. The board lists every temperature and humidity sensor in Home Assistant, one line per device, with its current reading. The first time, it ticks the devices that have both temperature and humidity (like the TIMMERFLOTTE).
+4. Tick the sensors you want on the board and untick any you don't. Each ticked one becomes a room below. Rename the rooms (for example "Lounge" or "Bedroom"). To change a room's sensors, use its dropdowns, which show each sensor's reading and ID so you can tell identical sensors apart. **×** removes a room. Up to 10 rooms.
 5. Press **Save**. The board restarts.
 
 The token is saved on the board as a secret. Like your other keys, it's left out of settings backups unless you choose *Download including passwords, keys and sign-ins*.
